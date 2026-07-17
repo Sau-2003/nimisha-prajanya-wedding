@@ -16,7 +16,7 @@ interface VendorCategory {
 
 function CriticalBookingTracker() {
   const bookings: VendorCategory[] = [
-    { name: "Venue", status: "Confirmed", urgencyStatus: "bg-emerald-100 text-emerald-700", assignedVendor: "Taj Lakefront, Bhopal" },
+    { name: "Venue", status: "Confirmed", urgencyStatus: "bg-emerald-100 text-emerald-700", assignedVendor: "Safal,Bhopal" },
     { name: "Catering", status: "Booked", urgencyStatus: "bg-emerald-100 text-emerald-700", assignedVendor: "Royal Feasts" },
     { name: "Makeup Artist", status: "Not Booked", urgencyStatus: "bg-red-100 text-red-700" },
     { name: "Photographer", status: "Negotiating", urgencyStatus: "bg-orange-100 text-orange-700" },
