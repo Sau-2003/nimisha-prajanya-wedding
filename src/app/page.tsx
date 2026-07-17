@@ -108,22 +108,8 @@ export default function Dashboard() {
           </Card>
         </motion.div>
 
-        {/* Budget Snapshot */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <Card className="shadow-sm hover:shadow-md transition-shadow h-full border-gold-200">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg flex items-center gap-2 text-gold-600">
-                <IndianRupee className="w-5 h-5" />
-                Budget Overview
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4 mt-2">
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
-    </div>
-  );
-}
+            {/* Budget Snapshot */}
+          </div>
+        </div>
+      );
+    }
