@@ -18,14 +18,14 @@ import {
 
 const EVENTS_DATA = [
   { name: 'Puja', color: 'bg-purple-500', p: 100, date: 'Jan 27, 2027', link: '/events/puja' },
-  { name: 'Mehendi', color: 'bg-emerald-500', p: 80, date: 'Jan 28, 2027', link: '/events/mehendi' },
-  { name: 'Haldi', color: 'bg-yellow-500', p: 45, date: 'Jan 29, 2027', link: '/events/haldi' },
-  { name: 'Sangeet', color: 'bg-blue-500', p: 60, date: 'Jan 29, 2027', link: '/events/sangeet' },
-  { name: 'Reception', color: 'bg-champagne', p: 20, date: 'Jan 30, 2027', link: '/events/reception' }
+  { name: 'Mehendi', color: 'bg-emerald-500', p: 80, date: 'Jan 29, 2027', link: '/events/mehendi' },
+  { name: 'Haldi', color: 'bg-yellow-500', p: 45, date: 'Jan 31, 2027', link: '/events/haldi' },
+  { name: 'Sangeet', color: 'bg-blue-500', p: 60, date: 'Jan 30, 2027', link: '/events/sangeet' },
+  { name: 'Reception', color: 'bg-champagne', p: 20, date: 'Jan 31, 2027', link: '/events/reception' }
 ];
 
 export default function Dashboard() {
-  const weddingDate = new Date('2027-01-30');
+  const weddingDate = new Date('2027-01-31');
   const [daysRemaining, setDaysRemaining] = useState(0);
   const [weeksRemaining, setWeeksRemaining] = useState(0);
 
@@ -42,7 +42,7 @@ export default function Dashboard() {
         <div>
           <h1 className="font-serif text-4xl md:text-5xl font-bold text-emerald-900">Nimisha & Prajanya</h1>
           <p className="text-lg text-slate-500 mt-2 flex items-center gap-2">
-            <CalendarHeart className="w-5 h-5 text-gold-500" /> January 30, 2027
+            <CalendarHeart className="w-5 h-5 text-gold-500" /> January 31, 2027
           </p>
         </div>
         <div className="flex items-center gap-6 bg-white p-4 rounded-2xl shadow-sm border border-emerald-100">
@@ -119,14 +119,6 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4 mt-2">
-                <div>
-                  <p className="text-sm text-slate-500">Total Spent / Advanced</p>
-                  <p className="text-2xl font-serif font-bold text-slate-800">₹ 4,50,000</p>
-                </div>
-                <div>
-                  <p className="text-sm text-slate-500">Pending Payments</p>
-                  <p className="text-xl font-serif text-orange-500">₹ 1,25,000</p>
-                </div>
               </div>
             </CardContent>
           </Card>
