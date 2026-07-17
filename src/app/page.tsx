@@ -107,8 +107,6 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </motion.div>
-
-            {/* Budget Snapshot */}
           </div>
         </div>
       );
