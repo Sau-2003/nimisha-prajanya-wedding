@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { differenceInDays, differenceInWeeks } from 'date-fns';
-import { CalendarHeart, CheckCircle2, AlertCircle, IndianRupee, ArrowRight } from 'lucide-react';
+import { CalendarHeart, CheckCircle2, IndianRupee, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -71,14 +71,15 @@ export default function Dashboard() {
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
               {EVENTS_DATA.map((evt) => (
                 <Dialog key={evt.name}>
-                  <DialogTrigger asChild>
-                    <div className="p-4 rounded-xl border border-slate-100 hover:border-emerald-300 hover:bg-emerald-50/50 transition-all cursor-pointer group">
+                  <DialogTrigger>
+                    {/* The button wraps the entire interactive block now */}
+                    <button className="w-full text-left p-4 rounded-xl border border-slate-100 hover:border-emerald-300 hover:bg-emerald-50/50 transition-all cursor-pointer group">
                       <div className="flex justify-between items-center mb-2">
                         <span className="font-medium text-slate-800">{evt.name}</span>
                         <span className="text-sm font-bold text-slate-600 group-hover:text-emerald-600">{evt.p}%</span>
                       </div>
                       <Progress value={evt.p} className="h-2" indicatorColor={evt.color} />
-                    </div>
+                    </button>
                   </DialogTrigger>
                   <DialogContent className="sm:max-w-md">
                     <DialogHeader>
