@@ -12,7 +12,7 @@ import {
 
 const mainNav = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { name: 'Task Board', href: '/tasks', icon: CheckSquare },
+  { name: 'Global Task Board', href: '/tasks', icon: CheckSquare },
   { name: 'Vendor Tracker', href: '/vendors', icon: ShoppingBag },
   { name: 'Budget', href: '/budget', icon: IndianRupee },
   { name: 'Guests', href: '/guests', icon: Users },

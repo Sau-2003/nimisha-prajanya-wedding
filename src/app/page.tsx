@@ -8,11 +8,11 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 const EVENTS_DATA = [
-  { name: 'Puja', date: 'Jan 27, 2027', link: '/events/puja' },
-  { name: 'Mehendi', date: 'Jan 29, 2027', link: '/events/mehendi' },
-  { name: 'Haldi', date: 'Jan 31, 2027', link: '/events/haldi' },
-  { name: 'Sangeet', date: 'Jan 30, 2027', link: '/events/sangeet' },
-  { name: 'Reception', date: 'Jan 31, 2027', link: '/events/reception' }
+  { name: 'Puja', date: 'Jan 27, 2027', link: '/events/puja', color: 'bg-purple-500' },
+  { name: 'Mehendi', date: 'Jan 29, 2027', link: '/events/mehendi', color: 'bg-emerald-500' },
+  { name: 'Haldi', date: 'Jan 31, 2027', link: '/events/haldi', color: 'bg-yellow-500' },
+  { name: 'Sangeet', date: 'Jan 30, 2027', link: '/events/sangeet', color: 'bg-blue-500' },
+  { name: 'Reception', date: 'Jan 31, 2027', link: '/events/reception', color: 'bg-red-500' }
 ];
 
 export default function Dashboard() {
