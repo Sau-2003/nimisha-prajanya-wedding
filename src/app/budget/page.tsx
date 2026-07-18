@@ -12,10 +12,8 @@ export default function BudgetPage() {
         <p className="text-slate-500 mt-1">Manage your wedding budget and track expenses in real-time.</p>
       </div>
 
-      {/* The Google Sheet Embed Container */}
       <Card className="flex-1 w-full overflow-hidden border-slate-200 shadow-sm rounded-xl relative">
         <iframe
-          {/* Notice the rm=minimal added to the URL below */}
           src="https://docs.google.com/spreadsheets/d/1o5cCLpPLm38YauUIZbmayh4ywXIFiMGCIhi85fQpnag/edit?rm=minimal&gid=1406821983"
           width="100%"
           height="100%"
