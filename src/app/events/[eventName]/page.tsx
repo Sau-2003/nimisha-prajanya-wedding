@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { motion } from 'framer-motion';
+import { supabase } from '@/lib/supabase'; // <-- Our new Cloud Connection!
 import { 
   ClipboardList, ShoppingBag, Flame, Gamepad2, 
   Briefcase, Lightbulb, Shirt, StickyNote, IndianRupee, Plus, Trash2
@@ -35,35 +36,39 @@ const DEFAULT_ENTRIES = {
 
 export default function SingleEventPage() {
   const params = useParams();
-  const rawName = (params?.eventName as string) || 'Event';
+  const rawName = (params?.eventName as string) || 'event';
   const title = rawName.charAt(0).toUpperCase() + rawName.slice(1);
 
   const [entries, setEntries] = useState<Record<string, string[]>>(DEFAULT_ENTRIES);
-  const [isLoaded, setIsLoaded] = useState(false); // Prevents the invisible crash!
+  const [isLoaded, setIsLoaded] = useState(false);
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [newItem, setNewItem] = useState('');
 
-  // 1. Safe Load
+  // 1. FETCH DATA FROM CLOUD ON LOAD
   useEffect(() => {
-    const savedData = localStorage.getItem(`wedding_app_${rawName}`);
-    if (savedData) {
-      try {
-        setEntries(JSON.parse(savedData));
-      } catch (e) {
-        console.error("Failed to parse saved data");
+    async function loadCloudData() {
+      const { data, error } = await supabase
+        .from('event_workspaces')
+        .select('entries')
+        .eq('event_name', rawName)
+        .single();
+
+      if (data && data.entries) {
+        setEntries(data.entries);
       }
+      setIsLoaded(true);
     }
-    setIsLoaded(true); // Now we are safe to show the page
+    loadCloudData();
   }, [rawName]);
 
-  // 2. Safe Save
-  useEffect(() => {
-    if (isLoaded) {
-      localStorage.setItem(`wedding_app_${rawName}`, JSON.stringify(entries));
-    }
-  }, [entries, isLoaded, rawName]);
+  // 2. HELPER FUNCTION TO SAVE TO CLOUD
+  const syncToCloud = async (updatedEntries: Record<string, string[]>) => {
+    await supabase
+      .from('event_workspaces')
+      .upsert({ event_name: rawName, entries: updatedEntries });
+  };
 
   const activeModule = CATEGORIES.find(c => c.id === activeCategory);
   const activeEntries = activeCategory ? (entries[activeCategory] || []) : [];
@@ -71,19 +76,27 @@ export default function SingleEventPage() {
 
   const handleAddEntry = () => {
     if (!activeCategory || !newItem.trim()) return;
-    setEntries(prev => ({
-      ...prev,
-      [activeCategory]: [...(prev[activeCategory] || []), newItem]
-    }));
+    
+    const updatedEntries = {
+      ...entries,
+      [activeCategory]: [...(entries[activeCategory] || []), newItem]
+    };
+    
+    setEntries(updatedEntries);
+    syncToCloud(updatedEntries); // Save instantly to cloud!
     setNewItem(''); 
   };
 
   const handleDeleteEntry = (index: number) => {
     if (!activeCategory) return;
-    setEntries(prev => ({
-      ...prev,
-      [activeCategory]: (prev[activeCategory] || []).filter((_, i) => i !== index)
-    }));
+    
+    const updatedEntries = {
+      ...entries,
+      [activeCategory]: (entries[activeCategory] || []).filter((_, i) => i !== index)
+    };
+
+    setEntries(updatedEntries);
+    syncToCloud(updatedEntries); // Save instantly to cloud!
   };
 
   const openModal = (categoryId: string) => {
@@ -92,11 +105,10 @@ export default function SingleEventPage() {
     setIsDialogOpen(true);
   };
 
-  // Prevent crash by showing a loader until it safely mounts on the browser
   if (!isLoaded) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <p className="text-emerald-600 font-serif text-xl animate-pulse">Loading {title} Workspace...</p>
+        <p className="text-emerald-600 font-serif text-xl animate-pulse">Syncing with cloud...</p>
       </div>
     );
   }
