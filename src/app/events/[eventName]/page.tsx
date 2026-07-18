@@ -1,240 +1,121 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { supabase } from '@/lib/supabase';
 import { 
   ClipboardList, ShoppingBag, Flame, Gamepad2, 
-  Briefcase, Lightbulb, Shirt, StickyNote, IndianRupee, Plus, Trash2
+  Briefcase, Lightbulb, Shirt, StickyNote, IndianRupee, Plus, Trash2,
+  Check, Image as ImageIcon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const CATEGORIES = [
-  { id: 'tasks', name: 'Tasks', icon: ClipboardList, color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-900/20' },
-  { id: 'items', name: 'Items Needed', icon: ShoppingBag, color: 'text-pink-500', bg: 'bg-pink-50 dark:bg-pink-900/20' },
-  { id: 'puja', name: 'Puja Items', icon: Flame, color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-900/20' },
-  { id: 'games', name: 'Games', icon: Gamepad2, color: 'text-purple-500', bg: 'bg-purple-50 dark:bg-purple-900/20' },
-  { id: 'vendors', name: 'Vendors', icon: Briefcase, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-900/20' },
-  { id: 'ideas', name: 'Ideas', icon: Lightbulb, color: 'text-yellow-500', bg: 'bg-yellow-50 dark:bg-yellow-900/20' },
-  { id: 'outfit', name: 'Outfit', icon: Shirt, color: 'text-rose-500', bg: 'bg-rose-50 dark:bg-rose-900/20' },
-  { id: 'notes', name: 'Notes', icon: StickyNote, color: 'text-slate-500', bg: 'bg-slate-100 dark:bg-slate-800' },
-  { id: 'expenses', name: 'Expenses', icon: IndianRupee, color: 'text-gold-600', bg: 'bg-yellow-50 dark:bg-yellow-900/20' },
+  { id: 'tasks', name: 'Tasks', icon: ClipboardList, color: 'text-blue-500', bg: 'bg-blue-50' },
+  { id: 'taskdone', name: 'Task Done', icon: Check, color: 'text-green-600', bg: 'bg-green-50' },
+  { id: 'items', name: 'Items Needed', icon: ShoppingBag, color: 'text-pink-500', bg: 'bg-pink-50' },
+  { id: 'puja', name: 'Puja Items', icon: Flame, color: 'text-orange-500', bg: 'bg-orange-50' },
+  { id: 'games', name: 'Games', icon: Gamepad2, color: 'text-purple-500', bg: 'bg-purple-50' },
+  { id: 'vendors', name: 'Vendors', icon: Briefcase, color: 'text-emerald-500', bg: 'bg-emerald-50' },
+  { id: 'ideas', name: 'Ideas', icon: Lightbulb, color: 'text-yellow-500', bg: 'bg-yellow-50' },
+  { id: 'outfit', name: 'Outfit', icon: Shirt, color: 'text-rose-500', bg: 'bg-rose-50' },
+  { id: 'notes', name: 'Notes', icon: StickyNote, color: 'text-slate-500', bg: 'bg-slate-100' },
+  { id: 'expenses', name: 'Expenses', icon: IndianRupee, color: 'text-gold-600', bg: 'bg-yellow-50' },
 ];
-
-// Fallback data if the database is completely empty
-const DEFAULT_ENTRIES: Record<string, string[]> = {
-  tasks: ['Book venue', 'Finalize guest list'],
-  items: ['Return gifts (x50)'],
-  expenses: ['₹25,000 - Advance for decor']
-};
 
 export default function SingleEventPage() {
   const params = useParams();
-  const rawName = params?.eventName ? String(params.eventName) : 'Event';
+  const rawName = params?.eventName ? String(params.eventName) : 'event';
   const title = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [entries, setEntries] = useState<Record<string, string[]>>(DEFAULT_ENTRIES);
+  const [entries, setEntries] = useState<Record<string, string[]>>({});
   const [isLoaded, setIsLoaded] = useState(false);
-  
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [newItem, setNewItem] = useState('');
 
-  // 1. SAFELY FETCH DATA
   useEffect(() => {
-    let isMounted = true;
-
-    async function loadCloudData() {
-      try {
-        const { data, error } = await supabase
-          .from('event_workspaces')
-          .select('entries')
-          .eq('event_name', rawName)
-          .maybeSingle();
-
-        if (error) throw error;
-
-        // Ensure we only update state if the data is a real object
-        if (data && data.entries && typeof data.entries === 'object') {
-          if (isMounted) setEntries(data.entries);
-        }
-      } catch (err) {
-        console.error("Database load error safely caught:", err);
-      } finally {
-        if (isMounted) setIsLoaded(true);
-      }
+    async function loadData() {
+      const { data } = await supabase.from('event_workspaces').select('entries').eq('event_name', rawName).maybeSingle();
+      if (data?.entries) setEntries(data.entries);
+      setIsLoaded(true);
     }
-    
-    loadCloudData();
-
-    return () => { isMounted = false; };
+    loadData();
   }, [rawName]);
 
-  // 2. SAFELY SAVE DATA
-  const syncToCloud = async (updatedEntries: Record<string, string[]>) => {
-    try {
-      await supabase
-        .from('event_workspaces')
-        .upsert({ event_name: rawName, entries: updatedEntries });
-    } catch (err) {
-      console.error("Failed to save safely:", err);
-    }
+  const syncToCloud = async (updatedEntries: any) => {
+    setEntries(updatedEntries);
+    await supabase.from('event_workspaces').upsert({ event_name: rawName, entries: updatedEntries });
   };
-
-  const activeModule = CATEGORIES.find(c => c.id === activeCategory);
-  
-  // CRITICAL SAFETY CHECK: Forces activeEntries to ALWAYS be an Array, preventing crashes
-  const rawActiveEntries = activeCategory ? entries[activeCategory] : [];
-  const activeEntries = Array.isArray(rawActiveEntries) ? rawActiveEntries : [];
-  const ActiveIcon = activeModule?.icon; 
 
   const handleAddEntry = () => {
     if (!activeCategory || !newItem.trim()) return;
-    
-    const updatedEntries = {
-      ...entries,
-      [activeCategory]: [...activeEntries, newItem]
-    };
-    
-    setEntries(updatedEntries);
-    syncToCloud(updatedEntries); 
-    setNewItem(''); 
+    const updatedEntries = { ...entries, [activeCategory]: [...(entries[activeCategory] || []), newItem] };
+    syncToCloud(updatedEntries);
+    setNewItem('');
   };
 
-  const handleDeleteEntry = (index: number) => {
-    if (!activeCategory) return;
-    
-    const updatedEntries = {
-      ...entries,
-      [activeCategory]: activeEntries.filter((_, i) => i !== index)
+  const completeTask = (index: number) => {
+    const task = entries['tasks'][index];
+    const updatedEntries = { 
+      ...entries, 
+      tasks: entries['tasks'].filter((_, i) => i !== index),
+      taskdone: [...(entries['taskdone'] || []), task]
     };
-
-    setEntries(updatedEntries);
     syncToCloud(updatedEntries);
   };
 
-  const openModal = (categoryId: string) => {
-    setActiveCategory(categoryId);
-    setNewItem('');
-    setIsDialogOpen(true);
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeCategory) return;
+    const { data } = await supabase.storage.from('task-images').upload(`${Date.now()}_${file.name}`, file);
+    if (data?.path) {
+      const { data: url } = supabase.storage.from('task-images').getPublicUrl(data.path);
+      const updatedEntries = { ...entries, [activeCategory]: [...(entries[activeCategory] || []), `Image: ${url.publicUrl}`] };
+      syncToCloud(updatedEntries);
+    }
   };
 
-  if (!isLoaded) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center">
-        <p className="text-emerald-600 font-serif text-xl animate-pulse">Loading Workspace...</p>
-      </div>
-    );
-  }
+  if (!isLoaded) return <div className="p-12 text-center text-emerald-600">Loading...</div>;
 
   return (
-    <div className="p-6 md:p-12 max-w-[1600px] mx-auto space-y-8 h-full flex flex-col">
-      <div className="flex justify-between items-center border-b border-emerald-100 pb-6">
-        <div>
-          <h1 className="font-serif text-4xl font-bold text-emerald-900 dark:text-emerald-50">
-            {title} Workspace
-          </h1>
-          <p className="text-slate-500 mt-2">Manage all details, items, and vendors for {title}.</p>
-        </div>
+    <div className="p-6 md:p-12 max-w-6xl mx-auto">
+      <h1 className="text-4xl font-bold text-emerald-900 mb-8">{title} Workspace</h1>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {CATEGORIES.map(cat => (
+          <button key={cat.id} onClick={() => { setActiveCategory(cat.id); setIsDialogOpen(true); }} className="p-6 rounded-2xl border bg-white hover:shadow-lg transition-all text-left">
+            <cat.icon className={`w-8 h-8 ${cat.color} mb-4`} />
+            <h3 className="font-bold text-lg">{cat.name}</h3>
+            <p className="text-sm text-slate-500">{(entries[cat.id] || []).length} items</p>
+          </button>
+        ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6 mt-8">
-        {CATEGORIES.map((module, i) => {
-          const Icon = module.icon;
-          // CRITICAL SAFETY CHECK 2: Prevents mapping crashes on the grid cards
-          const rawEntries = entries[module.id];
-          const currentEntries = Array.isArray(rawEntries) ? rawEntries : [];
-
-          return (
-            <motion.div key={module.id} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-              <button 
-                type="button"
-                onClick={() => openModal(module.id)}
-                className="w-full text-left bg-white dark:bg-slate-950 p-4 lg:p-6 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-emerald-300 hover:shadow-md transition-all group cursor-pointer block"
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <div className={`p-3 rounded-xl ${module.bg} transition-colors`}>
-                    <Icon className={`w-6 h-6 ${module.color}`} />
-                  </div>
-                  <span className="text-xs font-medium px-2 py-1 bg-slate-50 dark:bg-slate-900 text-slate-500 rounded-full">
-                    {currentEntries.length} items
-                  </span>
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Manage {activeCategory}</DialogTitle></DialogHeader>
+          <div className="flex gap-2">
+            <input className="border p-2 flex-1 rounded" value={newItem} onChange={e => setNewItem(e.target.value)} placeholder="Add new..." />
+            <Button onClick={handleAddEntry}><Plus /></Button>
+            <input type="file" ref={fileInputRef} className="hidden" onChange={handleImageUpload} />
+            <Button variant="outline" onClick={() => fileInputRef.current?.click()}><ImageIcon /></Button>
+          </div>
+          <div className="mt-4 space-y-2">
+            {(entries[activeCategory || ''] || []).map((item, idx) => (
+              <div key={idx} className="flex justify-between items-center p-2 border rounded">
+                {item.startsWith('Image:') ? <a href={item.replace('Image: ', '')} target="_blank" className="text-blue-600 underline">View Image</a> : <span>{item}</span>}
+                <div className="flex gap-2">
+                  {activeCategory === 'tasks' && <button onClick={() => completeTask(idx)} className="text-green-600"><Check /></button>}
+                  <button onClick={() => { const u = {...entries, [activeCategory!]: entries[activeCategory!].filter((_,i)=>i!==idx)}; syncToCloud(u); }} className="text-red-500"><Trash2 /></button>
                 </div>
-                <h3 className="font-serif text-xl font-bold text-slate-800 dark:text-slate-100 mb-1">{module.name}</h3>
-                <p className="text-sm text-slate-500 line-clamp-1">
-                  {currentEntries.length > 0 ? currentEntries[0] : 'Click to add items...'}
-                </p>
-              </button>
-            </motion.div>
-          );
-        })}
-      </div>
-
-      {activeModule && ActiveIcon && (
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle className="font-serif text-2xl flex items-center gap-2">
-                <ActiveIcon className={`w-6 h-6 ${activeModule.color}`} />
-                Manage {activeModule.name}
-              </DialogTitle>
-            </DialogHeader>
-            
-            <div className="py-4 space-y-4">
-              <div className="flex gap-2">
-                <input 
-                  type="text"
-                  placeholder={`Add new to ${activeModule.name}...`}
-                  value={newItem}
-                  onChange={(e) => setNewItem(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleAddEntry();
-                    }
-                  }}
-                  className="flex-1 px-4 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                />
-                <Button type="button" onClick={handleAddEntry} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-                  <Plus className="w-4 h-4" />
-                </Button>
               </div>
-
-              <div className="max-h-[300px] overflow-y-auto space-y-2 pr-2">
-                {activeEntries.length === 0 ? (
-                  <p className="text-center text-sm text-slate-400 py-8 italic">No entries yet. Add one above!</p>
-                ) : (
-                  activeEntries.map((item, index) => (
-                    <div key={index} className="flex justify-between items-center p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 group">
-                      <span className="text-sm text-slate-700 dark:text-slate-300">{item}</span>
-                      
-                      <button 
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault(); 
-                          e.stopPropagation();
-                          handleDeleteEntry(index);
-                        }}
-                        className="text-slate-400 hover:text-red-500 p-2 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                      
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
