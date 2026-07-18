@@ -23,8 +23,8 @@ export default function GuestsPage() {
     "Reception": [],
   });
 
-  // 2. UI State
-  const [activeTab, setActiveTab] = useState("Nimisha's Staying");
+  // 2. UI State - FIXED TYPO HERE (Added "Side")
+  const [activeTab, setActiveTab] = useState("Nimisha's Side Staying");
   const [addToEvents, setAddToEvents] = useState(false); // Checkbox state
   
   // 3. Form State
@@ -52,14 +52,14 @@ export default function GuestsPage() {
     const newGuestsState = { ...guests };
 
     // Add to the currently selected tab
-    newGuestsState[activeTab] = [...newGuestsState[activeTab], newEntry];
+    newGuestsState[activeTab] = [...(newGuestsState[activeTab] || []), newEntry];
 
     // If checkbox is checked, copy them to the 3 main events
     if (addToEvents && isStayingTab) {
       const eventTabs = ["Sangeet", "Haldi", "Reception"];
       eventTabs.forEach((evt) => {
         newGuestsState[evt] = [
-          ...newGuestsState[evt], 
+          ...(newGuestsState[evt] || []), 
           { id: baseId + evt, family: newFamily.trim(), count: countNum } // Room No excluded
         ];
       });
@@ -76,7 +76,7 @@ export default function GuestsPage() {
   const handleDelete = (id: string) => {
     setGuests({
       ...guests,
-      [activeTab]: guests[activeTab].filter((g) => g.id !== id),
+      [activeTab]: (guests[activeTab] || []).filter((g) => g.id !== id),
     });
   };
 
@@ -84,7 +84,7 @@ export default function GuestsPage() {
   const handleUpdateGuest = (id: string, field: keyof GuestEntry, value: string | number) => {
     setGuests({
       ...guests,
-      [activeTab]: guests[activeTab].map((g) => 
+      [activeTab]: (guests[activeTab] || []).map((g) => 
         g.id === id ? { ...g, [field]: value } : g
       ),
     });
@@ -98,7 +98,8 @@ export default function GuestsPage() {
     { id: "Reception", name: "Reception", icon: Utensils, color: "text-rose-500" },
   ];
 
-  const currentList = guests[activeTab];
+  // Added || [] fallback so it can never be undefined and crash the build
+  const currentList = guests[activeTab] || [];
   const totalPeople = currentList.reduce((sum, g) => sum + (Number(g.count) || 0), 0);
 
   return (
@@ -129,7 +130,7 @@ export default function GuestsPage() {
               <tab.icon className={`w-4 h-4 ${isActive ? tab.color : "text-slate-400"}`} />
               {tab.name}
               <span className={`ml-2 text-xs py-0.5 px-2 rounded-full ${isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
-                {guests[tab.id].length}
+                {(guests[tab.id] || []).length}
               </span>
             </button>
           );
