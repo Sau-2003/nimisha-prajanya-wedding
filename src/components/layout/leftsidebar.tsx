@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
 import { 
   LayoutDashboard, CheckSquare, CalendarHeart, 
   ShoppingBag, Users, IndianRupee, ChevronRight,
-  Menu, X
+  Menu, X, ImageIcon // Added ImageIcon here
 } from 'lucide-react';
 
 const mainNav = [
@@ -16,6 +16,7 @@ const mainNav = [
   { name: 'Vendor Tracker', href: '/vendors', icon: ShoppingBag },
   { name: 'Budget', href: '/budget', icon: IndianRupee },
   { name: 'Guests & RSVP', href: '/guests', icon: Users },
+  { name: 'Outfit Gallery', href: '/outfit-gallery', icon: ImageIcon }, // Added this
 ];
 
 const eventNav = [
@@ -32,7 +33,7 @@ export function Sidebar() {
 
   return (
     <>
-      {/* 3-Line Hamburger Button (Visible only on Mobile) */}
+      {/* Mobile Hamburger Button */}
       <button 
         onClick={() => setIsOpen(true)}
         className="fixed top-4 left-4 z-40 p-2 bg-white border border-slate-200 rounded-lg shadow-sm md:hidden"
@@ -40,23 +41,12 @@ export function Sidebar() {
         <Menu className="w-6 h-6 text-emerald-900" />
       </button>
 
-      {/* Dark Background Overlay when menu is open */}
-      {isOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-40 md:hidden" 
-          onClick={() => setIsOpen(false)}
-        />
-      )}
+      {isOpen && <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setIsOpen(false)} />}
 
-      {/* The Sidebar Itself (Slides in on mobile, fixed on desktop) */}
       <div className={`fixed top-0 left-0 h-screen w-64 bg-white dark:bg-slate-950 border-r border-slate-100 dark:border-slate-800 z-50 transform transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 overflow-y-auto`}>
         
         <div className="p-6">
-          {/* Close 'X' Button for Mobile */}
-          <button 
-            onClick={() => setIsOpen(false)}
-            className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 md:hidden"
-          >
+          <button onClick={() => setIsOpen(false)} className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 md:hidden">
             <X className="w-5 h-5" />
           </button>
 
@@ -75,9 +65,9 @@ export function Sidebar() {
                 <Link key={item.name} href={item.href} onClick={() => setIsOpen(false)}>
                   <div className={`relative flex items-center gap-3 px-3 py-2 rounded-lg transition-colors group ${isActive ? 'text-emerald-700 font-medium' : 'text-slate-600 hover:text-emerald-600 hover:bg-emerald-50'}`}>
                     {isActive && (
-                      <motion.div layoutId="active-nav" className="absolute inset-0 bg-emerald-50 rounded-lg" transition={{ type: "spring", stiffness: 300, damping: 30 }} />
+                      <motion.div layoutId="active-nav" className="absolute inset-0 bg-emerald-50 rounded-lg" />
                     )}
-                    <Icon className={`w-5 h-5 relative z-10 ${isActive ? 'text-emerald-600' : 'text-slate-400 group-hover:text-emerald-500'}`} />
+                    <Icon className={`w-5 h-5 relative z-10 ${isActive ? 'text-emerald-600' : 'text-slate-400'}`} />
                     <span className="relative z-10 text-sm">{item.name}</span>
                   </div>
                 </Link>
@@ -91,20 +81,16 @@ export function Sidebar() {
               <CalendarHeart className="w-4 h-4" /> Wedding Events
             </div>
             <nav className="space-y-1">
-              {eventNav.map((item) => {
-                const isActive = pathname === item.href;
-                return (
-                  <Link key={item.name} href={item.href} onClick={() => setIsOpen(false)}>
-                    <div className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors group ${isActive ? 'bg-slate-50 font-medium text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}>
-                      <div className="flex items-center gap-3">
-                        <div className={`w-2 h-2 rounded-full ${item.color}`} />
-                        <span className="text-sm">{item.name}</span>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+              {eventNav.map((item) => (
+                <Link key={item.name} href={item.href} onClick={() => setIsOpen(false)}>
+                  <div className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors ${pathname === item.href ? 'bg-slate-50 font-medium' : ''}`}>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-2 h-2 rounded-full ${item.color}`} />
+                      <span className="text-sm text-slate-600">{item.name}</span>
                     </div>
-                  </Link>
-                );
-              })}
+                  </div>
+                </Link>
+              ))}
             </nav>
           </div>
         </div>

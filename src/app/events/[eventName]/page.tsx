@@ -79,17 +79,23 @@ export default function SingleEventPage() {
     syncToCloud(updatedEntries);
   };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !activeCategory) return;
-    
-    const { data, error } = await supabase.storage.from('task-images').upload(`${Date.now()}_${file.name}`, file);
-    if (error) { alert("Upload failed: " + error.message); return; }
-    
+const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
+  if (!file || !activeCategory) return;
+  
+  // Prompt the user for a caption
+  const caption = prompt("Enter a caption for this outfit:", "Beautiful Outfit");
+  if (caption === null) return; // User cancelled
+
+  const { data } = await supabase.storage.from('task-images').upload(`${Date.now()}_${file.name}`, file);
+  if (data?.path) {
     const { data: url } = supabase.storage.from('task-images').getPublicUrl(data.path);
-    const updatedEntries = { ...entries, [activeCategory]: [...(entries[activeCategory] || []), `ImageLink: ${url.publicUrl}`] };
+    // Save as: ImageLink: [URL] | Caption: [TEXT]
+    const entry = `ImageLink: ${url.publicUrl} | Caption: ${caption}`;
+    const updatedEntries = { ...entries, [activeCategory]: [...(entries[activeCategory] || []), entry] };
     syncToCloud(updatedEntries);
-  };
+  }
+};
 
   if (!isLoaded) return <div className="p-12 text-center text-emerald-600">Loading Workspace...</div>;
 
@@ -107,7 +113,15 @@ export default function SingleEventPage() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent>
+          {activeCategory === 'outfit' && 
+          (
+            <div className="mt-4 border-t pt-4">
+              <a href="/outfit-gallery" className="text-emerald-600 font-bold underline flex items-center gap-2">
+              <ImageIcon className="w-4 h-4" /> View All Outfit Photos
+              </a>
+              </div>
+          )}
           <DialogHeader><DialogTitle>Manage {activeCategory}</DialogTitle></DialogHeader>
           
           <div className="space-y-3">
