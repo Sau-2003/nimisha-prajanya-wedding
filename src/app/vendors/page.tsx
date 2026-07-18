@@ -19,7 +19,7 @@ const initialVendors = [
 ];
 
 export default function VendorsPage() {
-  const { data: dbVendors } = useWeddingData('vendors');
+  const { data: dbVendors, fetchData } = useWeddingData('vendors');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingName, setEditingName] = useState("");
   const [vendorName, setVendorName] = useState("");
@@ -36,15 +36,38 @@ export default function VendorsPage() {
     setIsDialogOpen(true);
   };
 
-  const handleSave = async () => {
-    const existing = dbVendors.find(v => v.name === editingName);
-    if (existing) {
-      await supabase.from('vendors').update({ assigned_vendor: vendorName, status: vendorStatus }).eq('id', existing.id);
-    } else {
-      await supabase.from('vendors').insert({ name: editingName, assigned_vendor: vendorName, status: vendorStatus });
-    }
-    setIsDialogOpen(false);
-  };
+const handleSave = async () => {
+  // 1. Find the vendor record in our database list
+  const existingVendor = dbVendors.find(v => v.name === editingName);
+
+  if (existingVendor) {
+    // 2. If it exists, UPDATE it
+    const { error } = await supabase
+      .from('vendors')
+      .update({ 
+        assigned_vendor: vendorName, 
+        status: vendorStatus 
+      })
+      .eq('id', existingVendor.id); // Target by ID
+    
+    if (error) console.error("Update error:", error);
+  } else {
+    // 3. If it doesn't exist, INSERT it
+    const { error } = await supabase
+      .from('vendors')
+      .insert({ 
+        name: editingName, 
+        assigned_vendor: vendorName, 
+        status: vendorStatus 
+      });
+      
+    if (error) console.error("Insert error:", error);
+  }
+
+  // 4. Force a refresh so the UI updates immediately
+  fetchData(); 
+  setIsDialogOpen(false);
+};
 
   return (
     <div className="p-6 md:p-12 max-w-[1600px] mx-auto space-y-8">
