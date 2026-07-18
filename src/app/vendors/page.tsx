@@ -7,28 +7,25 @@ import { MapPin } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
-type BookingStatus = 'Not Booked' | 'Enquired' | 'Negotiating' | 'Booked' | 'Confirmed';
-type LeadTimeColor = 'bg-red-100 text-red-700' | 'bg-orange-100 text-orange-700' | 'bg-emerald-100 text-emerald-700';
+type BookingStatus = 'Not Started' | 'Not Booked' | 'Enquired' | 'Negotiating' | 'Booked' | 'Confirmed';
+type LeadTimeColor = 'bg-white-100 text-black-700' |'bg-red-100 text-red-700' | 'bg-orange-100 text-orange-700' | 'bg-emerald-100 text-emerald-700';
 
 interface VendorCategory {
   name: string;
-  status: BookingStatus;
-  urgencyStatus: LeadTimeColor;
-  assignedVendor?: string;
 }
 
 // Moved the initial list outside the component so it acts as default state
 const initialBookings: VendorCategory[] = [
-  { name: "Venue", status: "Confirmed", urgencyStatus: "bg-emerald-100 text-emerald-700", assignedVendor: "Safal, Bhopal" },
-  { name: "Makeup Artist", status: "Not Booked", urgencyStatus: "bg-red-100 text-red-700" },
-  { name: "Photographer", status: "Negotiating", urgencyStatus: "bg-orange-100 text-orange-700" },
-  { name: "Mehendi Artist", status: "Not Booked", urgencyStatus: "bg-orange-100 text-orange-700" },
-  { name: "Wedding Planner", status: "Enquired", urgencyStatus: "bg-orange-100 text-orange-700" },
-  { name: "Decorator", status: "Booked", urgencyStatus: "bg-emerald-100 text-emerald-700", assignedVendor: "DecorPlus, Bhopal" },
-  { name: "DJ / Music", status: "Not Booked", urgencyStatus: "bg-red-100 text-red-700" },
-  { name: "Transport / Cars", status: "Enquired", urgencyStatus: "bg-orange-100 text-orange-700" },
-  { name: "Invitations", status: "Booked", urgencyStatus: "bg-emerald-100 text-emerald-700", assignedVendor: "PrintWorks, Bhopal" },
-  { name: "Wedding Favors", status: "Not Booked", urgencyStatus: "bg-red-100 text-red-700" },
+  { name: "Venue" },
+  { name: "Wedding Planner"},
+  { name: "Decorator" },
+  { name: "Makeup Artist" },
+  { name: "Photographer" },
+  { name: "Mehendi Artist" },
+  { name: "DJ / Music" },
+  { name: "Transport / Cars" },
+  { name: "Invitations"\},
+  { name: "Wedding Favors" }
 ];
 
 function CriticalBookingTracker() {
