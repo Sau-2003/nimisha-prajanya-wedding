@@ -39,22 +39,26 @@ export default function SingleEventPage() {
   const title = rawName.charAt(0).toUpperCase() + rawName.slice(1);
 
   const [entries, setEntries] = useState<Record<string, string[]>>(DEFAULT_ENTRIES);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false); // Prevents the invisible crash!
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [newItem, setNewItem] = useState('');
 
-  // Load from Storage
+  // 1. Safe Load
   useEffect(() => {
     const savedData = localStorage.getItem(`wedding_app_${rawName}`);
     if (savedData) {
-      setEntries(JSON.parse(savedData));
+      try {
+        setEntries(JSON.parse(savedData));
+      } catch (e) {
+        console.error("Failed to parse saved data");
+      }
     }
-    setIsLoaded(true);
+    setIsLoaded(true); // Now we are safe to show the page
   }, [rawName]);
 
-  // Save to Storage
+  // 2. Safe Save
   useEffect(() => {
     if (isLoaded) {
       localStorage.setItem(`wedding_app_${rawName}`, JSON.stringify(entries));
@@ -63,8 +67,6 @@ export default function SingleEventPage() {
 
   const activeModule = CATEGORIES.find(c => c.id === activeCategory);
   const activeEntries = activeCategory ? (entries[activeCategory] || []) : [];
-  
-  // React requires components to start with a Capital Letter!
   const ActiveIcon = activeModule?.icon; 
 
   const handleAddEntry = () => {
@@ -90,6 +92,15 @@ export default function SingleEventPage() {
     setIsDialogOpen(true);
   };
 
+  // Prevent crash by showing a loader until it safely mounts on the browser
+  if (!isLoaded) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <p className="text-emerald-600 font-serif text-xl animate-pulse">Loading {title} Workspace...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 md:p-12 max-w-[1600px] mx-auto space-y-8 h-full flex flex-col">
       <div className="flex justify-between items-center border-b border-emerald-100 pb-6">
@@ -109,6 +120,7 @@ export default function SingleEventPage() {
           return (
             <motion.div key={module.id} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
               <button 
+                type="button"
                 onClick={() => openModal(module.id)}
                 className="w-full text-left bg-white dark:bg-slate-950 p-4 lg:p-6 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-emerald-300 hover:shadow-md transition-all group cursor-pointer block"
               >
@@ -147,7 +159,12 @@ export default function SingleEventPage() {
                   placeholder={`Add new to ${activeModule.name}...`}
                   value={newItem}
                   onChange={(e) => setNewItem(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleAddEntry()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddEntry();
+                    }
+                  }}
                   className="flex-1 px-4 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
                 <Button type="button" onClick={handleAddEntry} className="bg-emerald-600 hover:bg-emerald-700 text-white">
