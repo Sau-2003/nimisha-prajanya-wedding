@@ -38,25 +38,23 @@ export default function SingleEventPage() {
   const rawName = (params?.eventName as string) || 'Event';
   const title = rawName.charAt(0).toUpperCase() + rawName.slice(1);
 
-  // App State
   const [entries, setEntries] = useState<Record<string, string[]>>(DEFAULT_ENTRIES);
   const [isLoaded, setIsLoaded] = useState(false);
   
-  // Dialog State 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [newItem, setNewItem] = useState('');
 
-  // 1. LOAD SAVED DATA (Runs once when page loads)
+  // Load from Storage
   useEffect(() => {
     const savedData = localStorage.getItem(`wedding_app_${rawName}`);
     if (savedData) {
       setEntries(JSON.parse(savedData));
     }
-    setIsLoaded(true); // Tells the app we finished loading
+    setIsLoaded(true);
   }, [rawName]);
 
-  // 2. SAVE DATA AUTOMATICALLY (Runs every time you add or delete something)
+  // Save to Storage
   useEffect(() => {
     if (isLoaded) {
       localStorage.setItem(`wedding_app_${rawName}`, JSON.stringify(entries));
@@ -65,6 +63,9 @@ export default function SingleEventPage() {
 
   const activeModule = CATEGORIES.find(c => c.id === activeCategory);
   const activeEntries = activeCategory ? (entries[activeCategory] || []) : [];
+  
+  // React requires components to start with a Capital Letter!
+  const ActiveIcon = activeModule?.icon; 
 
   const handleAddEntry = () => {
     if (!activeCategory || !newItem.trim()) return;
@@ -129,12 +130,12 @@ export default function SingleEventPage() {
         })}
       </div>
 
-      {activeModule && (
+      {activeModule && ActiveIcon && (
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle className="font-serif text-2xl flex items-center gap-2">
-                <activeModule.icon className={`w-6 h-6 ${activeModule.color}`} />
+                <ActiveIcon className={`w-6 h-6 ${activeModule.color}`} />
                 Manage {activeModule.name}
               </DialogTitle>
             </DialogHeader>
@@ -159,7 +160,7 @@ export default function SingleEventPage() {
                   <p className="text-center text-sm text-slate-400 py-8 italic">No entries yet. Add one above!</p>
                 ) : (
                   activeEntries.map((item, index) => (
-                    <div key={`${item}-${index}`} className="flex justify-between items-center p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 group">
+                    <div key={index} className="flex justify-between items-center p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 group">
                       <span className="text-sm text-slate-700 dark:text-slate-300">{item}</span>
                       
                       <button 
