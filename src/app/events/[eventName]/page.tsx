@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { 
   ClipboardList, ShoppingBag, Flame, Gamepad2, 
   Briefcase, Lightbulb, Shirt, StickyNote, IndianRupee, Plus, Trash2,
-  Check, Image as ImageIcon
+  Check, Image as ImageIcon, RotateCcw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -53,7 +53,8 @@ export default function SingleEventPage() {
 
   const handleAddEntry = () => {
     if (!activeCategory || !newItem.trim()) return;
-    const updatedEntries = { ...entries, [activeCategory]: [...(entries[activeCategory] || []), newItem] };
+    const lines = newItem.split('\n').filter(line => line.trim() !== '');
+    const updatedEntries = { ...entries, [activeCategory]: [...(entries[activeCategory] || []), ...lines] };
     syncToCloud(updatedEntries);
     setNewItem('');
   };
@@ -68,18 +69,29 @@ export default function SingleEventPage() {
     syncToCloud(updatedEntries);
   };
 
+  const revertTask = (index: number) => {
+    const task = entries['taskdone'][index];
+    const updatedEntries = { 
+      ...entries, 
+      taskdone: entries['taskdone'].filter((_, i) => i !== index),
+      tasks: [...(entries['tasks'] || []), task]
+    };
+    syncToCloud(updatedEntries);
+  };
+
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !activeCategory) return;
-    const { data } = await supabase.storage.from('task-images').upload(`${Date.now()}_${file.name}`, file);
-    if (data?.path) {
-      const { data: url } = supabase.storage.from('task-images').getPublicUrl(data.path);
-      const updatedEntries = { ...entries, [activeCategory]: [...(entries[activeCategory] || []), `Image: ${url.publicUrl}`] };
-      syncToCloud(updatedEntries);
-    }
+    
+    const { data, error } = await supabase.storage.from('task-images').upload(`${Date.now()}_${file.name}`, file);
+    if (error) { alert("Upload failed: " + error.message); return; }
+    
+    const { data: url } = supabase.storage.from('task-images').getPublicUrl(data.path);
+    const updatedEntries = { ...entries, [activeCategory]: [...(entries[activeCategory] || []), `ImageLink: ${url.publicUrl}`] };
+    syncToCloud(updatedEntries);
   };
 
-  if (!isLoaded) return <div className="p-12 text-center text-emerald-600">Loading...</div>;
+  if (!isLoaded) return <div className="p-12 text-center text-emerald-600">Loading Workspace...</div>;
 
   return (
     <div className="p-6 md:p-12 max-w-6xl mx-auto">
@@ -95,20 +107,30 @@ export default function SingleEventPage() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>Manage {activeCategory}</DialogTitle></DialogHeader>
-          <div className="flex gap-2">
-            <input className="border p-2 flex-1 rounded" value={newItem} onChange={e => setNewItem(e.target.value)} placeholder="Add new..." />
-            <Button onClick={handleAddEntry}><Plus /></Button>
-            <input type="file" ref={fileInputRef} className="hidden" onChange={handleImageUpload} />
-            <Button variant="outline" onClick={() => fileInputRef.current?.click()}><ImageIcon /></Button>
+          
+          <div className="space-y-3">
+            <textarea 
+              className="w-full border p-3 rounded-lg min-h-[100px]"
+              placeholder="• Add tasks&#10;• New line for next item"
+              value={newItem}
+              onChange={e => setNewItem(e.target.value)}
+            />
+            <div className="flex gap-2">
+              <Button onClick={handleAddEntry} className="flex-1 bg-emerald-600">Add</Button>
+              <input type="file" ref={fileInputRef} className="hidden" onChange={handleImageUpload} />
+              <Button variant="outline" onClick={() => fileInputRef.current?.click()}><ImageIcon /></Button>
+            </div>
           </div>
-          <div className="mt-4 space-y-2">
+
+          <div className="mt-4 max-h-[300px] overflow-y-auto space-y-2">
             {(entries[activeCategory || ''] || []).map((item, idx) => (
-              <div key={idx} className="flex justify-between items-center p-2 border rounded">
-                {item.startsWith('Image:') ? <a href={item.replace('Image: ', '')} target="_blank" className="text-blue-600 underline">View Image</a> : <span>{item}</span>}
+              <div key={idx} className="flex justify-between items-center p-3 border rounded bg-white">
+                {item.startsWith('ImageLink:') ? <a href={item.replace('ImageLink: ', '')} target="_blank" className="text-blue-600 underline">View Image</a> : <span>{item}</span>}
                 <div className="flex gap-2">
                   {activeCategory === 'tasks' && <button onClick={() => completeTask(idx)} className="text-green-600"><Check /></button>}
+                  {activeCategory === 'taskdone' && <button onClick={() => revertTask(idx)} className="text-amber-600"><RotateCcw /></button>}
                   <button onClick={() => { const u = {...entries, [activeCategory!]: entries[activeCategory!].filter((_,i)=>i!==idx)}; syncToCloud(u); }} className="text-red-500"><Trash2 /></button>
                 </div>
               </div>
