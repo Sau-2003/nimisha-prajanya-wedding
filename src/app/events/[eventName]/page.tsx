@@ -102,9 +102,42 @@ export default function SingleEventPage() {
 
   if (!isLoaded) return <div className="p-12 text-center text-emerald-600">Loading Workspace...</div>;
 
+  // --- PROGRESS CALCULATION LOGIC ---
+  const pendingCount = entries.tasks?.length || 0;
+  const doneCount = entries.taskdone?.length || 0;
+  const totalTasks = pendingCount + doneCount;
+  const progressPercentage = totalTasks === 0 ? 0 : Math.round((doneCount / totalTasks) * 100);
+
   return (
     <div className="p-6 md:p-12 max-w-6xl mx-auto">
-      <h1 className="text-4xl font-bold text-emerald-900 mb-8">{title} Workspace</h1>
+      
+      {/* UPDATED HEADER WITH PERCENTAGE & PROGRESS BAR */}
+      <div className="mb-8">
+        <div className="flex flex-col md:flex-row md:items-center gap-4 mb-4">
+          <h1 className="text-4xl font-bold text-emerald-900">{title} Workspace</h1>
+          
+          {totalTasks > 0 && (
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-semibold text-emerald-800 bg-emerald-100 px-3 py-1 rounded-full border border-emerald-200">
+                {progressPercentage}% Completed
+              </span>
+              <span className="text-sm font-medium text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                {doneCount} / {totalTasks} Tasks
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Visual Progress Bar */}
+        {totalTasks > 0 && (
+          <div className="w-full max-w-md bg-slate-200 rounded-full h-2.5 shadow-inner">
+            <div 
+              className="bg-emerald-500 h-2.5 rounded-full transition-all duration-500 ease-out" 
+              style={{ width: `${progressPercentage}%` }}
+            ></div>
+          </div>
+        )}
+      </div>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {CATEGORIES.map(cat => {
@@ -127,7 +160,6 @@ export default function SingleEventPage() {
                 <h3 className="font-bold text-lg">{cat.name}</h3>
               </div>
               
-              {/* Preview Section on the Tab */}
               <div className="text-sm text-slate-500 flex-1 space-y-1">
                 {items.length === 0 ? (
                   <span className="italic text-slate-400">Empty</span>

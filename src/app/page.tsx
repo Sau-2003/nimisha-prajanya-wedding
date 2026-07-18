@@ -3,17 +3,9 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { differenceInDays, differenceInWeeks } from 'date-fns';
-import { CalendarHeart, CheckCircle2, ArrowRight, CalendarDays } from 'lucide-react';
+import { CalendarHeart, CheckCircle2, CalendarDays } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 
 const EVENTS_DATA = [
   { name: 'Puja', date: 'Jan 27, 2027', link: '/events/puja' },
@@ -69,32 +61,17 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
               {EVENTS_DATA.map((evt) => (
-                <Dialog key={evt.name}>
-                  <DialogTrigger asChild>
-                    <button className="w-full text-left p-4 rounded-xl border border-slate-100 hover:border-emerald-300 hover:bg-emerald-50/50 transition-all cursor-pointer group">
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium text-slate-800">{evt.name}</span>
-                        <div className="flex items-center text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
-                          <CalendarDays className="w-3 h-3 mr-1" />
-                          {evt.date}
-                        </div>
+                <Link key={evt.name} href={evt.link} className="block w-full group">
+                  <div className="w-full text-left p-4 rounded-xl border border-slate-100 group-hover:border-emerald-300 group-hover:bg-emerald-50/50 transition-all cursor-pointer shadow-sm group-hover:shadow">
+                    <div className="flex justify-between items-center">
+                      <span className="font-medium text-slate-800 group-hover:text-emerald-800 transition-colors">{evt.name}</span>
+                      <div className="flex items-center text-xs text-slate-500 bg-slate-100 group-hover:bg-emerald-100 group-hover:text-emerald-700 transition-colors px-2 py-1 rounded-full">
+                        <CalendarDays className="w-3 h-3 mr-1" />
+                        {evt.date}
                       </div>
-                    </button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                      <DialogTitle className="font-serif text-2xl text-emerald-900">{evt.name} Details</DialogTitle>
-                    </DialogHeader>
-                    <div className="py-4">
-                      <p className="text-slate-600">Prepare for the {evt.name} on {evt.date}.</p>
                     </div>
-                    <Link href={evt.link} className="w-full">
-                      <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white group">
-                        Go to {evt.name} Workspace <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                      </Button>
-                    </Link>
-                  </DialogContent>
-                </Dialog>
+                  </div>
+                </Link>
               ))}
             </CardContent>
           </Card>

@@ -15,7 +15,7 @@ const mainNav = [
   { name: 'Task Board', href: '/tasks', icon: CheckSquare },
   { name: 'Vendor Tracker', href: '/vendors', icon: ShoppingBag },
   { name: 'Budget', href: '/budget', icon: IndianRupee },
-  { name: 'Guests & RSVP', href: '/guests', icon: Users },
+  { name: 'Guests', href: '/guests', icon: Users },
 ];
 
 const eventNav = [
