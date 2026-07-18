@@ -7,7 +7,8 @@ import { motion } from 'framer-motion';
 import { 
   LayoutDashboard, CheckSquare, CalendarHeart, 
   ShoppingBag, Users, IndianRupee, ChevronRight,
-  Menu, X, ImageIcon // Added ImageIcon here
+  Menu, X, ImageIcon, // Added ImageIcon here
+  BookIcon
 } from 'lucide-react';
 
 const mainNav = [
@@ -16,6 +17,7 @@ const mainNav = [
   { name: 'Vendor Tracker', href: '/vendors', icon: ShoppingBag },
   { name: 'Budget', href: '/budget', icon: IndianRupee },
   { name: 'Guests', href: '/guests', icon: Users },
+  { name: 'Notes', href: '/notes', icon: BookIcon } // Added Notes link here
 ];
 
 const eventNav = [
