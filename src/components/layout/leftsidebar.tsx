@@ -23,11 +23,11 @@ const mainNav = [
 ];
 
 const eventNav = [
-  { name: 'Puja', href: '/events/puja', color: 'text-purple-500' },
-  { name: 'Mehendi', href: '/events/mehendi', color: 'text-emerald-500' },
-  { name: 'Haldi', href: '/events/haldi', color: 'text-yellow-500' },
-  { name: 'Sangeet', href: '/events/sangeet', color: 'text-blue-500' },
-  { name: 'Reception', href: '/events/reception', color: 'text-gold-500' },
+  { name: 'Puja', href: '/events/puja', color: 'bg-purple-500' },
+  { name: 'Mehendi', href: '/events/mehendi', color: 'bg-emerald-500' },
+  { name: 'Haldi', href: '/events/haldi', color: 'bg-yellow-500' },
+  { name: 'Sangeet', href: '/events/sangeet', color: 'bg-blue-500' },
+  { name: 'Reception', href: '/events/reception', color: 'bg-gold-500' },
 ];
 
 export function Sidebar() {
