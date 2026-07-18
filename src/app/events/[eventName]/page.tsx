@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { 
@@ -27,24 +27,42 @@ const CATEGORIES = [
   { id: 'expenses', name: 'Expenses', icon: IndianRupee, color: 'text-gold-600', bg: 'bg-yellow-50 dark:bg-yellow-900/20' },
 ];
 
+const DEFAULT_ENTRIES = {
+  tasks: ['Book venue', 'Finalize guest list'],
+  items: ['Return gifts (x50)'],
+  expenses: ['₹25,000 - Advance for decor']
+};
+
 export default function SingleEventPage() {
   const params = useParams();
   const rawName = (params?.eventName as string) || 'Event';
   const title = rawName.charAt(0).toUpperCase() + rawName.slice(1);
 
   // App State
-  const [entries, setEntries] = useState<Record<string, string[]>>({
-    tasks: ['Book venue', 'Finalize guest list'],
-    items: ['Return gifts (x50)'],
-    expenses: ['₹25,000 - Advance for decor']
-  });
+  const [entries, setEntries] = useState<Record<string, string[]>>(DEFAULT_ENTRIES);
+  const [isLoaded, setIsLoaded] = useState(false);
   
-  // Dialog State (One smart dialog instead of 9)
+  // Dialog State 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [newItem, setNewItem] = useState('');
 
-  // Find the currently active module data
+  // 1. LOAD SAVED DATA (Runs once when page loads)
+  useEffect(() => {
+    const savedData = localStorage.getItem(`wedding_app_${rawName}`);
+    if (savedData) {
+      setEntries(JSON.parse(savedData));
+    }
+    setIsLoaded(true); // Tells the app we finished loading
+  }, [rawName]);
+
+  // 2. SAVE DATA AUTOMATICALLY (Runs every time you add or delete something)
+  useEffect(() => {
+    if (isLoaded) {
+      localStorage.setItem(`wedding_app_${rawName}`, JSON.stringify(entries));
+    }
+  }, [entries, isLoaded, rawName]);
+
   const activeModule = CATEGORIES.find(c => c.id === activeCategory);
   const activeEntries = activeCategory ? (entries[activeCategory] || []) : [];
 
@@ -82,7 +100,6 @@ export default function SingleEventPage() {
         </div>
       </div>
 
-      {/* The Grid of Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6 mt-8">
         {CATEGORIES.map((module, i) => {
           const Icon = module.icon;
@@ -112,7 +129,6 @@ export default function SingleEventPage() {
         })}
       </div>
 
-      {/* The Single Smart Pop-up */}
       {activeModule && (
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogContent className="sm:max-w-md">
