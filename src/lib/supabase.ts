@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 
-// The "||" fallbacks prevent the app from crashing if Vercel acts up!
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key';
+// Hardcoding these temporarily to bypass the Vercel variable sync issue
+const supabaseUrl = 'https://tgjlwdpszubxzdocthgx.supabase.co'; 
+const supabaseAnonKey = 'sb_publishable_AXjNvDjUT0jVGdo5_aofaw_YmL0Pale';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
