@@ -11,6 +11,47 @@ import { useWeddingData } from "@/hooks/useWeddingData";
 import { supabase } from "@/lib/supabase";
 
 type BookingStatus = 'Not Started' | 'Not Booked' | 'Enquired' | 'Negotiating' | 'Booked' | 'Confirmed';
+type LeadTimeColor = 'bg-white-100 text-black-700' | 'bg-red-100 text-red-700' | 'bg-orange-100 text-orange-700' | 'bg-emerald-100 text-emerald-700';
+
+interface VendorCategory {
+
+  name: string;
+
+  assignedVendor?: string;
+
+  status: BookingStatus;
+
+  urgencyStatus: LeadTimeColor;
+
+}
+
+
+
+const initialVendors: VendorCategory[] = [
+
+  { name: "Venue", status: "Not Started", urgencyStatus: "bg-white-100 text-black-700" },
+
+  { name: "Wedding Planner", status: "Not Started", urgencyStatus: "bg-white-100 text-black-700" },
+
+  { name: "Decorator", status: "Not Started", urgencyStatus: "bg-white-100 text-black-700" },
+
+  { name: "Makeup Artist", status: "Not Started", urgencyStatus: "bg-white-100 text-black-700" },
+
+  { name: "Photographer", status: "Not Started", urgencyStatus: "bg-white-100 text-black-700" },
+
+  { name: "Mehendi Artist", status: "Not Started", urgencyStatus: "bg-white-100 text-black-700" },
+
+  { name: "DJ / Music", status: "Not Started", urgencyStatus: "bg-white-100 text-black-700" },
+
+  { name: "Transport / Cars", status: "Not Started", urgencyStatus: "bg-white-100 text-black-700" },
+
+  { name: "Invitations", status: "Not Started", urgencyStatus: "bg-white-100 text-black-700" },
+
+  { name: "Wedding Favors", status: "Not Started", urgencyStatus: "bg-white-100 text-black-700" }
+
+];
+
+
 
 export default function VendorsPage() {
   const { data: vendors, loading } = useWeddingData('vendors');
