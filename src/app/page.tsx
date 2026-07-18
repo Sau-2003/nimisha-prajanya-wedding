@@ -31,41 +31,43 @@ export default function Dashboard() {
       {/* Header Section */}
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="font-serif text-4xl md:text-5xl font-bold text-emerald-900">Nimisha & Prajanya</h1>
+          <h1 className="font-serif text-4xl md:text-5xl font-bold text-slate-900">Nimisha & Prajanya</h1>
           <p className="text-lg text-slate-500 mt-2 flex items-center gap-2">
-            <CalendarHeart className="w-5 h-5 text-gold-500" /> January 31, 2027
+            <CalendarHeart className="w-5 h-5 text-slate-400" /> January 31, 2027
           </p>
         </div>
-        <div className="flex items-center gap-6 bg-white p-4 rounded-2xl shadow-sm border border-emerald-100">
+        <div className="flex items-center gap-6 bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
           <div className="text-center">
-            <p className="text-3xl font-serif font-bold text-emerald-600">{daysRemaining}</p>
+            <p className="text-3xl font-serif font-bold text-slate-700">{daysRemaining}</p>
             <p className="text-xs text-slate-400 uppercase tracking-wider">Days to go</p>
           </div>
           <div className="w-px h-12 bg-slate-200"></div>
           <div className="text-center">
-            <p className="text-3xl font-serif font-bold text-gold-500">{weeksRemaining}</p>
+            <p className="text-3xl font-serif font-bold text-slate-700">{weeksRemaining}</p>
             <p className="text-xs text-slate-400 uppercase tracking-wider">Weeks to go</p>
           </div>
         </div>
       </motion.div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Dynamic Events Summary */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="md:col-span-2">
-          <Card className="shadow-sm hover:shadow-md transition-shadow h-full border-emerald-100">
+          <Card className="shadow-sm hover:shadow-md transition-shadow h-full border-slate-200">
             <CardHeader className="pb-2">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+              <CardTitle className="text-lg flex items-center gap-2 text-slate-700">
+                <CheckCircle2 className="w-5 h-5 text-slate-400" />
                 Event Schedule
               </CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
               {EVENTS_DATA.map((evt) => (
-                <Link key={evt.name} href={evt.link} className="block w-full group">
-                  <div className="w-full text-left p-4 rounded-xl border border-slate-100 group-hover:border-emerald-300 group-hover:bg-emerald-50/50 transition-all cursor-pointer shadow-sm group-hover:shadow">
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium text-slate-800 group-hover:text-emerald-800 transition-colors">{evt.name}</span>
-                      <div className="flex items-center text-xs text-slate-500 bg-slate-100 group-hover:bg-emerald-100 group-hover:text-emerald-700 transition-colors px-2 py-1 rounded-full">
+                <Link key={evt.name} href={evt.link} className="block w-full">
+                  <div className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-slate-300 transition-all cursor-pointer shadow-sm flex items-center gap-3">
+                    {/* Color indicator bar */}
+                    <div className={`w-1.5 h-12 rounded-full ${evt.color}`}></div>
+                    
+                    <div className="flex-1 flex justify-between items-center">
+                      <span className="font-medium text-slate-800">{evt.name}</span>
+                      <div className="flex items-center text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
                         <CalendarDays className="w-3 h-3 mr-1" />
                         {evt.date}
                       </div>
