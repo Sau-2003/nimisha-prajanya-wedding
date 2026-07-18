@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { supabase } from '@/lib/supabase'; // <-- Our new Cloud Connection!
+import { supabase } from '@/lib/supabase';
 import { 
   ClipboardList, ShoppingBag, Flame, Gamepad2, 
   Briefcase, Lightbulb, Shirt, StickyNote, IndianRupee, Plus, Trash2
@@ -49,25 +49,39 @@ export default function SingleEventPage() {
   // 1. FETCH DATA FROM CLOUD ON LOAD
   useEffect(() => {
     async function loadCloudData() {
-      const { data, error } = await supabase
-        .from('event_workspaces')
-        .select('entries')
-        .eq('event_name', rawName)
-        .single();
+      try {
+        const { data, error } = await supabase
+          .from('event_workspaces')
+          .select('entries')
+          .eq('event_name', rawName)
+          .maybeSingle(); // <--- This prevents the crash if the table is empty!
 
-      if (data && data.entries) {
-        setEntries(data.entries);
+        if (data && data.entries) {
+          setEntries(data.entries);
+        }
+      } catch (err) {
+        console.error("Supabase Error:", err);
+      } finally {
+        setIsLoaded(true);
       }
+    }
+    
+    if (rawName !== 'event') {
+      loadCloudData();
+    } else {
       setIsLoaded(true);
     }
-    loadCloudData();
   }, [rawName]);
 
   // 2. HELPER FUNCTION TO SAVE TO CLOUD
   const syncToCloud = async (updatedEntries: Record<string, string[]>) => {
-    await supabase
-      .from('event_workspaces')
-      .upsert({ event_name: rawName, entries: updatedEntries });
+    try {
+      await supabase
+        .from('event_workspaces')
+        .upsert({ event_name: rawName, entries: updatedEntries });
+    } catch (err) {
+      console.error("Failed to save:", err);
+    }
   };
 
   const activeModule = CATEGORIES.find(c => c.id === activeCategory);
@@ -83,7 +97,7 @@ export default function SingleEventPage() {
     };
     
     setEntries(updatedEntries);
-    syncToCloud(updatedEntries); // Save instantly to cloud!
+    syncToCloud(updatedEntries); 
     setNewItem(''); 
   };
 
@@ -96,7 +110,7 @@ export default function SingleEventPage() {
     };
 
     setEntries(updatedEntries);
-    syncToCloud(updatedEntries); // Save instantly to cloud!
+    syncToCloud(updatedEntries);
   };
 
   const openModal = (categoryId: string) => {
