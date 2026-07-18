@@ -25,8 +25,8 @@ export default function EventOutfitPage() {
     async function loadData() {
       const { data } = await supabase.from('event_workspaces').select('entries').eq('event_name', rawName).single();
       
-      // If the outfit data is still the old array format, convert it or start fresh
       let loadedOutfits = data?.entries?.outfit || { General: [] };
+      // If previous data was an array, reset it to the new object structure
       if (Array.isArray(loadedOutfits)) {
           loadedOutfits = { General: [] }; 
       }
@@ -40,7 +40,7 @@ export default function EventOutfitPage() {
   const syncToCloud = async (updatedOutfits: any) => {
     setOutfits(updatedOutfits);
     
-    // Fetch full entries first to not overwrite other categories
+    // Fetch full entries first so we don't accidentally delete tasks
     const { data } = await supabase.from('event_workspaces').select('entries').eq('event_name', rawName).single();
     const currentEntries = data?.entries || {};
     
@@ -72,7 +72,7 @@ export default function EventOutfitPage() {
         [activeTab]: [...(outfits[activeTab] || []), newPhoto]
       };
       syncToCloud(updated);
-      setNewCaption(''); // Reset caption input
+      setNewCaption(''); // Reset caption
     }
   };
 
@@ -96,7 +96,6 @@ export default function EventOutfitPage() {
       
       <h1 className="text-4xl font-serif font-bold text-emerald-900 mb-8">{title} Outfits</h1>
 
-      {/* Tabs Row */}
       <div className="flex gap-2 overflow-x-auto mb-8 pb-2 border-b">
         {Object.keys(outfits).map(tab => (
           <button 
@@ -110,7 +109,7 @@ export default function EventOutfitPage() {
         <div className="flex items-center ml-4 gap-2">
           <input 
             type="text" 
-            placeholder="New Category (e.g. Groom)" 
+            placeholder="New Tab (e.g. Groom)" 
             className="border p-1.5 rounded text-sm w-40"
             value={newTabName}
             onChange={e => setNewTabName(e.target.value)}
@@ -119,7 +118,6 @@ export default function EventOutfitPage() {
         </div>
       </div>
 
-      {/* Attachment Input Area */}
       <div className="bg-slate-50 p-4 rounded-xl border mb-8 flex gap-4 items-center">
         <input 
           type="text" 
@@ -134,7 +132,6 @@ export default function EventOutfitPage() {
         </Button>
       </div>
 
-      {/* Thumbnails Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
         {currentPhotos.length === 0 ? (
           <p className="text-slate-400 italic col-span-full">No attachments in {activeTab} yet.</p>
