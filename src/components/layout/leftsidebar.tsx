@@ -16,7 +16,6 @@ const mainNav = [
   { name: 'Vendor Tracker', href: '/vendors', icon: ShoppingBag },
   { name: 'Budget', href: '/budget', icon: IndianRupee },
   { name: 'Guests & RSVP', href: '/guests', icon: Users },
-  { name: 'Outfit Gallery', href: '/outfit-gallery', icon: ImageIcon }, // Added this
 ];
 
 const eventNav = [
@@ -24,7 +23,7 @@ const eventNav = [
   { name: 'Mehendi', href: '/events/mehendi', color: 'bg-emerald-500' },
   { name: 'Haldi', href: '/events/haldi', color: 'bg-yellow-500' },
   { name: 'Sangeet', href: '/events/sangeet', color: 'bg-blue-500' },
-  { name: 'Reception', href: '/events/reception', color: 'bg-gold-500' },
+  { name: 'Reception', href: '/events/reception', color: 'bg-red-500' },
 ];
 
 export function Sidebar() {
