@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, use } from 'react';
+import { useState } from 'react';
+import { useParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { 
   ClipboardList, ShoppingBag, Flame, Gamepad2, 
@@ -12,7 +13,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 
 const CATEGORIES = [
@@ -27,36 +27,48 @@ const CATEGORIES = [
   { id: 'expenses', name: 'Expenses', icon: IndianRupee, color: 'text-gold-600', bg: 'bg-yellow-50 dark:bg-yellow-900/20' },
 ];
 
-export default function SingleEventPage({ params }: { params: Promise<{ eventName: string }> }) {
-  // Safe way to read the URL in Next.js 15 without crashing
-  const resolvedParams = use(params);
-  const rawName = resolvedParams?.eventName || 'event';
+export default function SingleEventPage() {
+  const params = useParams();
+  const rawName = (params?.eventName as string) || 'Event';
   const title = rawName.charAt(0).toUpperCase() + rawName.slice(1);
 
+  // App State
   const [entries, setEntries] = useState<Record<string, string[]>>({
     tasks: ['Book venue', 'Finalize guest list'],
     items: ['Return gifts (x50)'],
     expenses: ['₹25,000 - Advance for decor']
   });
   
+  // Dialog State (One smart dialog instead of 9)
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [newItem, setNewItem] = useState('');
-  const [activeCategory, setActiveCategory] = useState('');
 
-  const handleAddEntry = (categoryId: string) => {
-    if (!newItem.trim()) return;
+  // Find the currently active module data
+  const activeModule = CATEGORIES.find(c => c.id === activeCategory);
+  const activeEntries = activeCategory ? (entries[activeCategory] || []) : [];
+
+  const handleAddEntry = () => {
+    if (!activeCategory || !newItem.trim()) return;
     setEntries(prev => ({
       ...prev,
-      [categoryId]: [...(prev[categoryId] || []), newItem]
+      [activeCategory]: [...(prev[activeCategory] || []), newItem]
     }));
     setNewItem(''); 
   };
 
-  const handleDeleteEntry = (categoryId: string, index: number) => {
-    setEntries(prev => {
-      const updated = [...(prev[categoryId] || [])];
-      updated.splice(index, 1);
-      return { ...prev, [categoryId]: updated };
-    });
+  const handleDeleteEntry = (index: number) => {
+    if (!activeCategory) return;
+    setEntries(prev => ({
+      ...prev,
+      [activeCategory]: (prev[activeCategory] || []).filter((_, i) => i !== index)
+    }));
+  };
+
+  const openModal = (categoryId: string) => {
+    setActiveCategory(categoryId);
+    setNewItem('');
+    setIsDialogOpen(true);
   };
 
   return (
@@ -70,6 +82,7 @@ export default function SingleEventPage({ params }: { params: Promise<{ eventNam
         </div>
       </div>
 
+      {/* The Grid of Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6 mt-8">
         {CATEGORIES.map((module, i) => {
           const Icon = module.icon;
@@ -77,75 +90,82 @@ export default function SingleEventPage({ params }: { params: Promise<{ eventNam
 
           return (
             <motion.div key={module.id} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-              <Dialog>
-                {/* Now that asChild is globally permitted, we can use it here safely! */}
-                <DialogTrigger asChild>
-                  <button 
-                    onClick={() => setActiveCategory(module.id)}
-                    className="w-full text-left bg-white dark:bg-slate-950 p-4 lg:p-6 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-emerald-300 hover:shadow-md transition-all group cursor-pointer"
-                  >
-                    <div className="flex justify-between items-start mb-4">
-                      <div className={`p-3 rounded-xl ${module.bg} transition-colors`}>
-                        <Icon className={`w-6 h-6 ${module.color}`} />
-                      </div>
-                      <span className="text-xs font-medium px-2 py-1 bg-slate-50 dark:bg-slate-900 text-slate-500 rounded-full">
-                        {currentEntries.length} items
-                      </span>
-                    </div>
-                    <h3 className="font-serif text-xl font-bold text-slate-800 dark:text-slate-100 mb-1">{module.name}</h3>
-                    <p className="text-sm text-slate-500 line-clamp-1">
-                      {currentEntries.length > 0 ? currentEntries[0] : 'Click to add items...'}
-                    </p>
-                  </button>
-                </DialogTrigger>
-
-                <DialogContent className="sm:max-w-md">
-                  <DialogHeader>
-                    <DialogTitle className="font-serif text-2xl flex items-center gap-2">
-                      <Icon className={`w-6 h-6 ${module.color}`} />
-                      Manage {module.name}
-                    </DialogTitle>
-                  </DialogHeader>
-                  
-                  <div className="py-4 space-y-4">
-                    <div className="flex gap-2">
-                      <input 
-                        type="text"
-                        placeholder={`Add new to ${module.name}...`}
-                        value={activeCategory === module.id ? newItem : ''}
-                        onChange={(e) => setNewItem(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleAddEntry(module.id)}
-                        className="flex-1 px-4 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                      />
-                      <Button onClick={() => handleAddEntry(module.id)} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-                        <Plus className="w-4 h-4" />
-                      </Button>
-                    </div>
-
-                    <div className="max-h-[300px] overflow-y-auto space-y-2 pr-2">
-                      {currentEntries.length === 0 ? (
-                        <p className="text-center text-sm text-slate-400 py-8 italic">No entries yet. Add one above!</p>
-                      ) : (
-                        currentEntries.map((item, index) => (
-                          <div key={index} className="flex justify-between items-center p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 group">
-                            <span className="text-sm text-slate-700 dark:text-slate-300">{item}</span>
-                            <button 
-                              onClick={() => handleDeleteEntry(module.id, index)}
-                              className="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        ))
-                      )}
-                    </div>
+              <button 
+                onClick={() => openModal(module.id)}
+                className="w-full text-left bg-white dark:bg-slate-950 p-4 lg:p-6 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-emerald-300 hover:shadow-md transition-all group cursor-pointer block"
+              >
+                <div className="flex justify-between items-start mb-4">
+                  <div className={`p-3 rounded-xl ${module.bg} transition-colors`}>
+                    <Icon className={`w-6 h-6 ${module.color}`} />
                   </div>
-                </DialogContent>
-              </Dialog>
+                  <span className="text-xs font-medium px-2 py-1 bg-slate-50 dark:bg-slate-900 text-slate-500 rounded-full">
+                    {currentEntries.length} items
+                  </span>
+                </div>
+                <h3 className="font-serif text-xl font-bold text-slate-800 dark:text-slate-100 mb-1">{module.name}</h3>
+                <p className="text-sm text-slate-500 line-clamp-1">
+                  {currentEntries.length > 0 ? currentEntries[0] : 'Click to add items...'}
+                </p>
+              </button>
             </motion.div>
           );
         })}
       </div>
+
+      {/* The Single Smart Pop-up */}
+      {activeModule && (
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="font-serif text-2xl flex items-center gap-2">
+                <activeModule.icon className={`w-6 h-6 ${activeModule.color}`} />
+                Manage {activeModule.name}
+              </DialogTitle>
+            </DialogHeader>
+            
+            <div className="py-4 space-y-4">
+              <div className="flex gap-2">
+                <input 
+                  type="text"
+                  placeholder={`Add new to ${activeModule.name}...`}
+                  value={newItem}
+                  onChange={(e) => setNewItem(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddEntry()}
+                  className="flex-1 px-4 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+                <Button type="button" onClick={handleAddEntry} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+
+              <div className="max-h-[300px] overflow-y-auto space-y-2 pr-2">
+                {activeEntries.length === 0 ? (
+                  <p className="text-center text-sm text-slate-400 py-8 italic">No entries yet. Add one above!</p>
+                ) : (
+                  activeEntries.map((item, index) => (
+                    <div key={`${item}-${index}`} className="flex justify-between items-center p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 group">
+                      <span className="text-sm text-slate-700 dark:text-slate-300">{item}</span>
+                      
+                      <button 
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault(); 
+                          e.stopPropagation();
+                          handleDeleteEntry(index);
+                        }}
+                        className="text-slate-400 hover:text-red-500 p-2 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                      
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
