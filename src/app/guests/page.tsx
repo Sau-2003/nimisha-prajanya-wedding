@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, Bed, Music, Sun, Utensils, Plus, Trash2 } from "lucide-react";
+import { Users, Bed, Music, Sun, Utensils, Plus, Trash2, CheckSquare } from "lucide-react";
 
 // The structure of a single guest entry
 interface GuestEntry {
@@ -14,9 +14,10 @@ interface GuestEntry {
 }
 
 export default function GuestsPage() {
-  // 1. Data State (Stores the lists for all 4 events)
+  // 1. Data State (Stores the lists for all 5 categories now)
   const [guests, setGuests] = useState<Record<string, GuestEntry[]>>({
     staying: [],
+    prajanya: [],
     sangeet: [],
     haldi: [],
     reception: [],
@@ -24,6 +25,7 @@ export default function GuestsPage() {
 
   // 2. UI State
   const [activeTab, setActiveTab] = useState("staying");
+  const [addToEvents, setAddToEvents] = useState(false); // Checkbox state
   
   // 3. Form State (For adding new rows)
   const [newFamily, setNewFamily] = useState("");
@@ -33,19 +35,38 @@ export default function GuestsPage() {
   const handleAddGuest = () => {
     if (!newFamily.trim() || !newCount) return;
 
+    const baseId = Date.now().toString();
+    const countNum = parseInt(newCount) || 1;
+
     const newEntry: GuestEntry = {
-      id: Date.now().toString(),
+      id: baseId,
       family: newFamily.trim(),
-      count: parseInt(newCount) || 1,
+      count: countNum,
       roomNo: activeTab === "staying" ? newRoomNo.trim() : undefined,
     };
 
-    setGuests({
-      ...guests,
-      [activeTab]: [...guests[activeTab], newEntry],
-    });
+    const newGuestsState = { ...guests };
 
-    // Reset inputs after adding
+    // Add to the currently selected tab
+    newGuestsState[activeTab] = [...newGuestsState[activeTab], newEntry];
+
+    // If checkbox is checked, also copy them to the 3 main events
+    if (addToEvents) {
+      const eventTabs = ["sangeet", "haldi", "reception"];
+      eventTabs.forEach((evt) => {
+        // Prevent duplicating if we are already on that tab
+        if (activeTab !== evt) {
+          newGuestsState[evt] = [
+            ...newGuestsState[evt], 
+            { id: baseId + evt, family: newFamily.trim(), count: countNum } // Room No is intentionally excluded here
+          ];
+        }
+      });
+    }
+
+    setGuests(newGuestsState);
+
+    // Reset inputs
     setNewFamily("");
     setNewCount("");
     setNewRoomNo("");
@@ -58,15 +79,26 @@ export default function GuestsPage() {
     });
   };
 
+  // 4. Inline Edit Function
+  const handleUpdateGuest = (id: string, field: keyof GuestEntry, value: string | number) => {
+    setGuests({
+      ...guests,
+      [activeTab]: guests[activeTab].map((g) => 
+        g.id === id ? { ...g, [field]: value } : g
+      ),
+    });
+  };
+
   const tabs = [
     { id: "staying", name: "Staying", icon: Bed, color: "text-blue-500" },
+    { id: "prajanya", name: "Prajanya's Side", icon: Users, color: "text-indigo-500" },
     { id: "sangeet", name: "Sangeet", icon: Music, color: "text-purple-500" },
     { id: "haldi", name: "Haldi", icon: Sun, color: "text-amber-500" },
     { id: "reception", name: "Reception", icon: Utensils, color: "text-rose-500" },
   ];
 
   const currentList = guests[activeTab];
-  const totalPeople = currentList.reduce((sum, g) => sum + g.count, 0);
+  const totalPeople = currentList.reduce((sum, g) => sum + (Number(g.count) || 0), 0);
 
   return (
     <div className="p-6 md:p-12 max-w-6xl mx-auto h-full">
@@ -115,36 +147,51 @@ export default function GuestsPage() {
         
         <CardContent className="p-0">
           {/* Quick Add Row */}
-          <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-col md:flex-row gap-3">
-            {activeTab === "staying" && (
+          <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-col gap-3">
+            <div className="flex flex-col md:flex-row gap-3">
+              {activeTab === "staying" && (
+                <input
+                  type="text"
+                  placeholder="Room No (e.g. 101)"
+                  className="border p-2 rounded-lg text-sm md:w-32 focus:outline-emerald-500 bg-white"
+                  value={newRoomNo}
+                  onChange={(e) => setNewRoomNo(e.target.value)}
+                />
+              )}
               <input
                 type="text"
-                placeholder="Room No (e.g. 101)"
-                className="border p-2 rounded-lg text-sm md:w-32 focus:outline-emerald-500"
-                value={newRoomNo}
-                onChange={(e) => setNewRoomNo(e.target.value)}
+                placeholder="Family / Guest Name"
+                className="border p-2 rounded-lg text-sm flex-1 focus:outline-emerald-500 bg-white"
+                value={newFamily}
+                onChange={(e) => setNewFamily(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddGuest()}
               />
+              <input
+                type="number"
+                placeholder="Total People"
+                className="border p-2 rounded-lg text-sm md:w-32 focus:outline-emerald-500 bg-white"
+                value={newCount}
+                onChange={(e) => setNewCount(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddGuest()}
+                min="1"
+              />
+              <Button onClick={handleAddGuest} className="bg-emerald-600 hover:bg-emerald-700">
+                <Plus className="w-4 h-4 mr-2" /> Add
+              </Button>
+            </div>
+            
+            {/* Checkbox to add to all other events */}
+            {(activeTab === "staying" || activeTab === "prajanya") && (
+              <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer w-fit">
+                <input 
+                  type="checkbox" 
+                  checked={addToEvents} 
+                  onChange={(e) => setAddToEvents(e.target.checked)}
+                  className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                />
+                Automatically copy to Sangeet, Haldi, & Reception lists
+              </label>
             )}
-            <input
-              type="text"
-              placeholder="Family / Guest Name"
-              className="border p-2 rounded-lg text-sm flex-1 focus:outline-emerald-500"
-              value={newFamily}
-              onChange={(e) => setNewFamily(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAddGuest()}
-            />
-            <input
-              type="number"
-              placeholder="Total People"
-              className="border p-2 rounded-lg text-sm md:w-32 focus:outline-emerald-500"
-              value={newCount}
-              onChange={(e) => setNewCount(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAddGuest()}
-              min="1"
-            />
-            <Button onClick={handleAddGuest} className="bg-emerald-600 hover:bg-emerald-700">
-              <Plus className="w-4 h-4 mr-2" /> Add
-            </Button>
           </div>
 
           {/* The Table */}
@@ -168,28 +215,47 @@ export default function GuestsPage() {
                   </tr>
                 ) : (
                   currentList.map((guest, index) => (
-                    <tr key={guest.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                      {/* Sr No is automatically generated here using the index */}
-                      <td className="p-4 text-center font-medium text-slate-500">{index + 1}</td>
+                    <tr key={guest.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors group">
+                      <td className="p-4 text-center font-medium text-slate-400">{index + 1}</td>
                       
+                      {/* Editable Room No */}
                       {activeTab === "staying" && (
-                        <td className="p-4 font-medium text-slate-700">
-                          {guest.roomNo || "-"}
+                        <td className="p-2">
+                          <input
+                            type="text"
+                            value={guest.roomNo || ""}
+                            onChange={(e) => handleUpdateGuest(guest.id, 'roomNo', e.target.value)}
+                            placeholder="-"
+                            className="w-full bg-transparent border border-transparent hover:border-slate-300 focus:border-emerald-500 focus:bg-white rounded px-2 py-1.5 transition-all outline-none text-slate-700 font-medium"
+                          />
                         </td>
                       )}
                       
-                      <td className="p-4 font-medium text-slate-800">{guest.family}</td>
+                      {/* Editable Family Name */}
+                      <td className="p-2">
+                        <input
+                          type="text"
+                          value={guest.family}
+                          onChange={(e) => handleUpdateGuest(guest.id, 'family', e.target.value)}
+                          className="w-full bg-transparent border border-transparent hover:border-slate-300 focus:border-emerald-500 focus:bg-white rounded px-2 py-1.5 transition-all outline-none text-slate-800 font-medium"
+                        />
+                      </td>
                       
-                      <td className="p-4 text-center">
-                        <span className="bg-slate-100 text-slate-700 px-3 py-1 rounded-full text-sm font-medium">
-                          {guest.count}
-                        </span>
+                      {/* Editable Headcount */}
+                      <td className="p-2 text-center">
+                        <input
+                          type="number"
+                          value={guest.count}
+                          onChange={(e) => handleUpdateGuest(guest.id, 'count', parseInt(e.target.value) || "")}
+                          className="w-20 mx-auto text-center bg-slate-100 border border-transparent hover:border-slate-300 focus:border-emerald-500 focus:bg-white rounded px-2 py-1 transition-all outline-none text-slate-700 font-medium"
+                          min="1"
+                        />
                       </td>
                       
                       <td className="p-4 text-center">
                         <button 
                           onClick={() => handleDelete(guest.id)}
-                          className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
                           title="Remove Guest"
                         >
                           <Trash2 className="w-4 h-4" />
