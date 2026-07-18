@@ -28,7 +28,8 @@ const CATEGORIES = [
   { id: 'expenses', name: 'Expenses', icon: IndianRupee, color: 'text-gold-600', bg: 'bg-yellow-50 dark:bg-yellow-900/20' },
 ];
 
-const DEFAULT_ENTRIES = {
+// Fallback data if the database is completely empty
+const DEFAULT_ENTRIES: Record<string, string[]> = {
   tasks: ['Book venue', 'Finalize guest list'],
   items: ['Return gifts (x50)'],
   expenses: ['₹25,000 - Advance for decor']
@@ -36,7 +37,7 @@ const DEFAULT_ENTRIES = {
 
 export default function SingleEventPage() {
   const params = useParams();
-  const rawName = (params?.eventName as string) || 'event';
+  const rawName = params?.eventName ? String(params.eventName) : 'Event';
   const title = rawName.charAt(0).toUpperCase() + rawName.slice(1);
 
   const [entries, setEntries] = useState<Record<string, string[]>>(DEFAULT_ENTRIES);
@@ -46,46 +47,52 @@ export default function SingleEventPage() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [newItem, setNewItem] = useState('');
 
-  // 1. FETCH DATA FROM CLOUD ON LOAD
+  // 1. SAFELY FETCH DATA
   useEffect(() => {
+    let isMounted = true;
+
     async function loadCloudData() {
       try {
         const { data, error } = await supabase
           .from('event_workspaces')
           .select('entries')
           .eq('event_name', rawName)
-          .maybeSingle(); // <--- This prevents the crash if the table is empty!
+          .maybeSingle();
 
-        if (data && data.entries) {
-          setEntries(data.entries);
+        if (error) throw error;
+
+        // Ensure we only update state if the data is a real object
+        if (data && data.entries && typeof data.entries === 'object') {
+          if (isMounted) setEntries(data.entries);
         }
       } catch (err) {
-        console.error("Supabase Error:", err);
+        console.error("Database load error safely caught:", err);
       } finally {
-        setIsLoaded(true);
+        if (isMounted) setIsLoaded(true);
       }
     }
     
-    if (rawName !== 'event') {
-      loadCloudData();
-    } else {
-      setIsLoaded(true);
-    }
+    loadCloudData();
+
+    return () => { isMounted = false; };
   }, [rawName]);
 
-  // 2. HELPER FUNCTION TO SAVE TO CLOUD
+  // 2. SAFELY SAVE DATA
   const syncToCloud = async (updatedEntries: Record<string, string[]>) => {
     try {
       await supabase
         .from('event_workspaces')
         .upsert({ event_name: rawName, entries: updatedEntries });
     } catch (err) {
-      console.error("Failed to save:", err);
+      console.error("Failed to save safely:", err);
     }
   };
 
   const activeModule = CATEGORIES.find(c => c.id === activeCategory);
-  const activeEntries = activeCategory ? (entries[activeCategory] || []) : [];
+  
+  // CRITICAL SAFETY CHECK: Forces activeEntries to ALWAYS be an Array, preventing crashes
+  const rawActiveEntries = activeCategory ? entries[activeCategory] : [];
+  const activeEntries = Array.isArray(rawActiveEntries) ? rawActiveEntries : [];
   const ActiveIcon = activeModule?.icon; 
 
   const handleAddEntry = () => {
@@ -93,7 +100,7 @@ export default function SingleEventPage() {
     
     const updatedEntries = {
       ...entries,
-      [activeCategory]: [...(entries[activeCategory] || []), newItem]
+      [activeCategory]: [...activeEntries, newItem]
     };
     
     setEntries(updatedEntries);
@@ -106,7 +113,7 @@ export default function SingleEventPage() {
     
     const updatedEntries = {
       ...entries,
-      [activeCategory]: (entries[activeCategory] || []).filter((_, i) => i !== index)
+      [activeCategory]: activeEntries.filter((_, i) => i !== index)
     };
 
     setEntries(updatedEntries);
@@ -121,8 +128,8 @@ export default function SingleEventPage() {
 
   if (!isLoaded) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <p className="text-emerald-600 font-serif text-xl animate-pulse">Syncing with cloud...</p>
+      <div className="flex h-screen w-full items-center justify-center">
+        <p className="text-emerald-600 font-serif text-xl animate-pulse">Loading Workspace...</p>
       </div>
     );
   }
@@ -141,7 +148,9 @@ export default function SingleEventPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6 mt-8">
         {CATEGORIES.map((module, i) => {
           const Icon = module.icon;
-          const currentEntries = entries[module.id] || [];
+          // CRITICAL SAFETY CHECK 2: Prevents mapping crashes on the grid cards
+          const rawEntries = entries[module.id];
+          const currentEntries = Array.isArray(rawEntries) ? rawEntries : [];
 
           return (
             <motion.div key={module.id} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
