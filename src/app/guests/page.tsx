@@ -16,8 +16,8 @@ interface GuestEntry {
 export default function GuestsPage() {
   // 1. Data State
   const [guests, setGuests] = useState<Record<string, GuestEntry[]>>({
-    "Nimisha's Staying": [],
-    "Prajanya's Side": [],
+    "Nimisha's Side Staying": [],
+    "Prajanya's Side Staying": [],
     "Sangeet": [],
     "Haldi": [],
     "Reception": [],
@@ -33,7 +33,7 @@ export default function GuestsPage() {
   const [newRoomNo, setNewRoomNo] = useState("");
 
   // Helper boolean: True if the current tab is one of the staying tabs
-  const isStayingTab = activeTab === "Nimisha's Staying" || activeTab === "Prajanya's Side";
+  const isStayingTab = activeTab === "Nimisha's Side Staying" || activeTab === "Prajanya's Side Staying";
 
   const handleAddGuest = () => {
     if (!newFamily.trim() || !newCount) return;
@@ -91,8 +91,8 @@ export default function GuestsPage() {
   };
 
   const tabs = [
-    { id: "Nimisha's Staying", name: "Nimisha's Staying", icon: Bed, color: "text-blue-500" },
-    { id: "Prajanya's Side", name: "Prajanya's Side", icon: Users, color: "text-indigo-500" },
+    { id: "Nimisha's Side Staying", name: "Nimisha's Side Staying", icon: Bed, color: "text-blue-500" },
+    { id: "Prajanya's Side Staying", name: "Prajanya's Side Staying", icon: Users, color: "text-indigo-500" },
     { id: "Sangeet", name: "Sangeet", icon: Music, color: "text-purple-500" },
     { id: "Haldi", name: "Haldi", icon: Sun, color: "text-amber-500" },
     { id: "Reception", name: "Reception", icon: Utensils, color: "text-rose-500" },
