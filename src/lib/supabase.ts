@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js';
-import { createClient } from '@supabase/supabase-js';
 
 // Hardcoding these temporarily to bypass the Vercel variable sync issue
 const supabaseUrl = 'https://tgjlwdpszubxzdocthgx.supabase.co'; 
