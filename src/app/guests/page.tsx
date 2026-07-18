@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, Bed, Music, Sun, Utensils, Plus, Trash2, CheckSquare } from "lucide-react";
+import { Users, Bed, Music, Sun, Utensils, Plus, Trash2 } from "lucide-react";
 
 // The structure of a single guest entry
 interface GuestEntry {
@@ -14,23 +14,26 @@ interface GuestEntry {
 }
 
 export default function GuestsPage() {
-  // 1. Data State (Stores the lists for all 5 categories now)
+  // 1. Data State
   const [guests, setGuests] = useState<Record<string, GuestEntry[]>>({
-    staying: [],
-    prajanya: [],
-    sangeet: [],
-    haldi: [],
-    reception: [],
+    "Nimisha's Staying": [],
+    "Prajanya's Side": [],
+    "Sangeet": [],
+    "Haldi": [],
+    "Reception": [],
   });
 
   // 2. UI State
-  const [activeTab, setActiveTab] = useState("staying");
+  const [activeTab, setActiveTab] = useState("Nimisha's Staying");
   const [addToEvents, setAddToEvents] = useState(false); // Checkbox state
   
-  // 3. Form State (For adding new rows)
+  // 3. Form State
   const [newFamily, setNewFamily] = useState("");
   const [newCount, setNewCount] = useState("");
   const [newRoomNo, setNewRoomNo] = useState("");
+
+  // Helper boolean: True if the current tab is one of the staying tabs
+  const isStayingTab = activeTab === "Nimisha's Staying" || activeTab === "Prajanya's Side";
 
   const handleAddGuest = () => {
     if (!newFamily.trim() || !newCount) return;
@@ -42,7 +45,8 @@ export default function GuestsPage() {
       id: baseId,
       family: newFamily.trim(),
       count: countNum,
-      roomNo: activeTab === "staying" ? newRoomNo.trim() : undefined,
+      // Apply room number if we are on either staying tab
+      roomNo: isStayingTab ? newRoomNo.trim() : undefined,
     };
 
     const newGuestsState = { ...guests };
@@ -50,17 +54,14 @@ export default function GuestsPage() {
     // Add to the currently selected tab
     newGuestsState[activeTab] = [...newGuestsState[activeTab], newEntry];
 
-    // If checkbox is checked, also copy them to the 3 main events
-    if (addToEvents) {
-      const eventTabs = ["sangeet", "haldi", "reception"];
+    // If checkbox is checked, copy them to the 3 main events
+    if (addToEvents && isStayingTab) {
+      const eventTabs = ["Sangeet", "Haldi", "Reception"];
       eventTabs.forEach((evt) => {
-        // Prevent duplicating if we are already on that tab
-        if (activeTab !== evt) {
-          newGuestsState[evt] = [
-            ...newGuestsState[evt], 
-            { id: baseId + evt, family: newFamily.trim(), count: countNum } // Room No is intentionally excluded here
-          ];
-        }
+        newGuestsState[evt] = [
+          ...newGuestsState[evt], 
+          { id: baseId + evt, family: newFamily.trim(), count: countNum } // Room No excluded
+        ];
       });
     }
 
@@ -90,11 +91,11 @@ export default function GuestsPage() {
   };
 
   const tabs = [
-    { id: "staying", name: "Staying", icon: Bed, color: "text-blue-500" },
-    { id: "prajanya", name: "Prajanya's Side", icon: Users, color: "text-indigo-500" },
-    { id: "sangeet", name: "Sangeet", icon: Music, color: "text-purple-500" },
-    { id: "haldi", name: "Haldi", icon: Sun, color: "text-amber-500" },
-    { id: "reception", name: "Reception", icon: Utensils, color: "text-rose-500" },
+    { id: "Nimisha's Staying", name: "Nimisha's Staying", icon: Bed, color: "text-blue-500" },
+    { id: "Prajanya's Side", name: "Prajanya's Side", icon: Users, color: "text-indigo-500" },
+    { id: "Sangeet", name: "Sangeet", icon: Music, color: "text-purple-500" },
+    { id: "Haldi", name: "Haldi", icon: Sun, color: "text-amber-500" },
+    { id: "Reception", name: "Reception", icon: Utensils, color: "text-rose-500" },
   ];
 
   const currentList = guests[activeTab];
@@ -149,7 +150,7 @@ export default function GuestsPage() {
           {/* Quick Add Row */}
           <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-col gap-3">
             <div className="flex flex-col md:flex-row gap-3">
-              {activeTab === "staying" && (
+              {isStayingTab && (
                 <input
                   type="text"
                   placeholder="Room No (e.g. 101)"
@@ -181,7 +182,7 @@ export default function GuestsPage() {
             </div>
             
             {/* Checkbox to add to all other events */}
-            {(activeTab === "staying" || activeTab === "prajanya") && (
+            {isStayingTab && (
               <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer w-fit">
                 <input 
                   type="checkbox" 
@@ -200,7 +201,7 @@ export default function GuestsPage() {
               <thead>
                 <tr className="bg-white border-b border-slate-200 text-sm text-slate-500">
                   <th className="p-4 font-medium w-20 text-center">Sr No</th>
-                  {activeTab === "staying" && <th className="p-4 font-medium w-32">Room No</th>}
+                  {isStayingTab && <th className="p-4 font-medium w-32">Room No</th>}
                   <th className="p-4 font-medium">Family Name</th>
                   <th className="p-4 font-medium w-40 text-center">No. of People</th>
                   <th className="p-4 font-medium w-20 text-center">Action</th>
@@ -219,7 +220,7 @@ export default function GuestsPage() {
                       <td className="p-4 text-center font-medium text-slate-400">{index + 1}</td>
                       
                       {/* Editable Room No */}
-                      {activeTab === "staying" && (
+                      {isStayingTab && (
                         <td className="p-2">
                           <input
                             type="text"
