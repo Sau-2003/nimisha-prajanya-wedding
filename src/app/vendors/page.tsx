@@ -18,24 +18,26 @@ interface VendorCategory {
 }
 
 const initialVendors: VendorCategory[] = [
-  { name: "Venue", status: "Not Booked", urgencyStatus: "bg-red-100 text-red-700" },
-  { name: "Wedding Planner", status: "Not Booked", urgencyStatus: "bg-red-100 text-red-700" },
-  { name: "Decorator", status: "Not Booked", urgencyStatus: "bg-red-100 text-red-700" },
-  { name: "Makeup Artist", status: "Not Booked", urgencyStatus: "bg-red-100 text-red-700" },
-  { name: "Photographer", status: "Not Booked", urgencyStatus: "bg-red-100 text-red-700" },
-  { name: "Mehendi Artist", status: "Not Booked", urgencyStatus: "bg-red-100 text-red-700" },
-  { name: "DJ / Music", status: "Not Booked", urgencyStatus: "bg-red-100 text-red-700" },
-  { name: "Transport / Cars", status: "Not Booked", urgencyStatus: "bg-red-100 text-red-700" },
-  { name: "Invitations", assignedVendor: "PrintWorks, Bhopal", status: "Booked", urgencyStatus: "bg-emerald-100 text-emerald-700" },
-  { name: "Wedding Favors", status: "Not Booked", urgencyStatus: "bg-red-100 text-red-700" }
+  { name: "Venue", status: "Not Started", urgencyStatus: "bg-white-100 text-black-700" },
+  { name: "Wedding Planner", status: "Not Started", urgencyStatus: "bg-white-100 text-black-700" },
+  { name: "Decorator", status: "Not Started", urgencyStatus: "bg-white-100 text-black-700" },
+  { name: "Makeup Artist", status: "Not Started", urgencyStatus: "bg-white-100 text-black-700" },
+  { name: "Photographer", status: "Not Started", urgencyStatus: "bg-white-100 text-black-700" },
+  { name: "Mehendi Artist", status: "Not Started", urgencyStatus: "bg-white-100 text-black-700" },
+  { name: "DJ / Music", status: "Not Started", urgencyStatus: "bg-white-100 text-black-700" },
+  { name: "Transport / Cars", status: "Not Started", urgencyStatus: "bg-white-100 text-black-700" },
+  { name: "Invitations", status: "Not Started", urgencyStatus: "bg-white-100 text-black-700" },
+  { name: "Wedding Favors", status: "Not Started", urgencyStatus: "bg-white-100 text-black-700" }
 ];
 
 function VendorsTracker() {
   const [vendors, setVendors] = useState<VendorCategory[]>(initialVendors);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  
+  // Dialog form state
   const [vendorName, setVendorName] = useState("");
-  const [vendorStatus, setVendorStatus] = useState<BookingStatus>("Not Booked");
+  const [vendorStatus, setVendorStatus] = useState<BookingStatus>("Not Started");
 
   const openDialog = (index: number) => {
     setEditingIndex(index);
@@ -46,17 +48,17 @@ function VendorsTracker() {
 
   const handleSave = () => {
     if (editingIndex !== null) {
-      // Calculate color
-      let newUrgency: LeadTimeColor = "bg-red-100 text-red-700";
+      // Calculate color based on status
+      let newUrgency: LeadTimeColor = "bg-white-100 text-black-700";
       if (vendorStatus === 'Confirmed' || vendorStatus === 'Booked') {
         newUrgency = "bg-emerald-100 text-emerald-700";
       } else if (vendorStatus === 'Negotiating' || vendorStatus === 'Enquired') {
         newUrgency = "bg-orange-100 text-orange-700";
-      } else if (vendorStatus === 'Not Started') {
-        newUrgency = "bg-white-100 text-black-700";
+      } else if (vendorStatus === 'Not Booked') {
+        newUrgency = "bg-red-100 text-red-700";
       }
 
-      // Update state immutably to trigger re-render
+      // Update state
       const updated = vendors.map((v, i) => {
         if (i === editingIndex) {
           return {
@@ -90,7 +92,6 @@ function VendorsTracker() {
               <div key={item.name} className="p-4 rounded-xl border border-slate-100 hover:border-emerald-300 transition-colors bg-white shadow-sm flex flex-col justify-between min-h-[110px]">
                 <div className="flex justify-between items-start mb-2">
                   <h3 className="font-medium text-slate-800">{item.name}</h3>
-                  {/* Badge now reads directly from the state */}
                   <Badge className={`${item.urgencyStatus} border-none shadow-none font-medium`}>
                     {item.status}
                   </Badge>
@@ -127,7 +128,7 @@ function VendorsTracker() {
           </DialogHeader>
           <div className="space-y-4 mt-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Vendor Name</label>
+              <label className="block text-sm font-medium mb-1">Vendor Name / Details</label>
               <input 
                 type="text" 
                 className="w-full border border-slate-300 p-2 rounded-lg text-sm"
