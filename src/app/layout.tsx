@@ -14,12 +14,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className={`${inter.variable} ${playfair.variable} font-sans bg-slate-50 text-slate-900 flex`}>
-        {/* This is what makes your Sidebar show up! */}
+        {/* Note: If your file is named leftsidebar.tsx, make sure the import at the top of this file matches! */}
         <Sidebar />
         
-        {/* This pushes your main dashboard content to the right so it doesn't hide behind the sidebar */}
-        <main className="flex-1 ml-64 overflow-y-auto h-screen">
-          {children}
+        {/* Make content full width on mobile, and push it right on desktop */}
+        <main className="flex-1 w-full md:ml-64 overflow-y-auto h-screen">
+          {/* Add padding to the top on mobile so the 3-line button isn't covering your dashboard */}
+          <div className="pt-16 md:pt-0">
+            {children}
+          </div>
         </main>
       </body>
     </html>
