@@ -95,7 +95,7 @@ function VendorsTracker() {
 
   return (
     <>
-      <Card>
+      <Card className="col-span-full border-slate-200 shadow-sm">
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {displayVendors.map((item, idx) => (

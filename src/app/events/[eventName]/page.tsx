@@ -40,12 +40,8 @@ export default function EventWorkspacePage() {
 
   // --- ACTIONS (Delegated to Hook) ---
 
-    const handleAddItem = async () => {
-  console.log("Add button clicked");
-  console.log("activeModal:", activeModal);
-  console.log("newItemText:", newItemText);
-
-  if (!activeModal) return;
+const handleAddItem = async () => {
+  if (!activeModal || !newItemText.trim()) return;
 
   await addItem(activeModal, {
     content: newItemText.trim(),
@@ -53,7 +49,10 @@ export default function EventWorkspacePage() {
     imageUrl: newItemImage || undefined,
   });
 
-  console.log("addItem finished");
+  // Clear the form
+  setNewItemText("");
+  setNewItemDate("");
+  setNewItemImage(null);
 };
 
   const handleDeleteItem = async (categoryId: CategoryId, itemId: string) => {
@@ -216,6 +215,7 @@ export default function EventWorkspacePage() {
                 <input 
                   type="date"
                   className="w-1/3 border px-3 rounded-lg outline-none focus:border-emerald-500 text-sm text-slate-600"
+                  placeholder="Date of Completion"
                   value={newItemDate}
                   onChange={(e) => setNewItemDate(e.target.value)}
                 />
