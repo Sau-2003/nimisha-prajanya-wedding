@@ -18,7 +18,6 @@ export function useEventItems(eventName: string) {
   useEffect(() => {
     fetchData();
     
-    // Listen for any changes made on other devices instantly
     const channel = supabase.channel(`public:event_items:${eventName}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'event_items' }, fetchData)
       .subscribe();
@@ -26,5 +25,6 @@ export function useEventItems(eventName: string) {
     return () => { supabase.removeChannel(channel); };
   }, [eventName]);
 
-  return { items, loading };
+  // ADD fetchData HERE so the page can trigger it manually
+  return { items, loading, fetchData }; 
 }
