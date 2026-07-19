@@ -203,10 +203,17 @@ export default function TaskBoardPage() {
   const handleAddTask = async () => {
     if (!newTaskText.trim()) return;
     
-    await supabase.from('tasks').insert({
+    // We added error checking here
+    const { error } = await supabase.from('tasks').insert({
       text: newTaskText.trim(),
       status: 'ongoing'
     });
+    
+    if (error) {
+      alert("DATABASE ERROR: " + error.message);
+      console.error(error);
+      return;
+    }
     
     fetchData(); // Force instant refresh
     setNewTaskText("");
