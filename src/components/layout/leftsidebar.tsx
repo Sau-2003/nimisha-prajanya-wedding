@@ -11,25 +11,25 @@ import {
 
 const mainNav = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { name: 'Global Task Board', href: '/tasks', icon: CheckSquare },
+  { name: 'Global Task Board', href: '/master-task', icon: CheckSquare },
   { name: 'Vendor Tracker', href: '/vendors', icon: ShoppingBag },
   { name: 'Budget', href: '/budget', icon: IndianRupee },
   { name: 'Guests', href: '/guests', icon: Users },
   { name: 'Notes', href: '/notes', icon: BookIcon }, // Added missing comma here
-  { name: 'Master Tasks', href: '/master-tasks', icon: CalendarClock }, // Corrected Clock to CalendarClock
+  { name: 'Date Schedule', href: '/date-schedule', icon: CalendarClock }, // Corrected Clock to CalendarClock
+];
+const eventNav = [
+  { name: 'Puja',href: '/events/puja',color: 'bg-violet-500' },
+  { name: 'Mehendi',href: '/events/mehendi',color: 'bg-emerald-500' },
+  { name: 'Tilak',href: '/events/tilak',color: 'bg-fuchsia-500' },
+  { name: 'Sangeet',href: '/events/sangeet',color: 'bg-sky-500' },
+  { name: 'Haldi',href: '/events/haldi',color: 'bg-amber-400' },
+  { name: 'Reception',href: '/events/reception',color: 'bg-red-500' },
+  { name: 'Phere',href: '/events/phere',color: 'bg-indigo-600' },
+  { name: 'Pagphere',href: '/events/pagphere',color: 'bg-cyan-500' },
+  { name: 'Vidai',href: '/events/vidai',color: 'bg-rose-500' },
 ];
 
-const eventNav = [
-  { name: 'Puja', href: '/events/puja', color: 'bg-purple-500' }, // Changed link to href
-  { name: 'Mehendi', href: '/events/mehendi', color: 'bg-emerald-500' },
-  { name: 'Tilak', href: '/events/tilak', color: 'bg-green-500' },
-  { name: 'Sangeet', href: '/events/sangeet', color: 'bg-blue-500' },
-  { name: 'Haldi', href: '/events/haldi', color: 'bg-yellow-500' },
-  { name: 'Reception', href: '/events/reception', color: 'bg-red-500' },
-  { name: 'Phere', href: '/events/phere', color: 'bg-indigo-500' },
-  { name: 'Pagphere', href: '/events/Pagphere', color: 'bg-violet-500' },
-  { name: 'Vidai', href: '/events/vidai', color: 'bg-rose-500' },
-];
 
 export function Sidebar() {
   const pathname = usePathname();

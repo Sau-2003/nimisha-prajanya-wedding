@@ -10,8 +10,8 @@ export const metadata = {
   description: 'Manage your wedding tasks',
   manifest: '/manifest.json',
   icons: {
-    apple: '/wedding-icon.png', // This fixes the icon for iPhone/iOS shortcuts
-    icon: '/wedding-icon.png',
+    apple: 'C:\\Users\\saumy\\nimisha-prajanya-wedding\\public\\engagement.jpg', // This fixes the icon for iPhone/iOS shortcuts
+    icon: 'C:\\Users\\saumy\\nimisha-prajanya-wedding\\public\\engagement.jpg',
   },
   appleWebApp: {
     capable: true,
