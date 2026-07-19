@@ -1,86 +1,118 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useState, useRef } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Trash2, Plus } from 'lucide-react';
+import { Trash2, Plus, ArrowLeft } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useEventItems } from '@/hooks/useEventItems'; // <-- Using our new cloud hook!
 
 export default function OutfitPage() {
   const { eventName } = useParams();
-  const [outfitData, setOutfitData] = useState<Record<string, string[]>>({ "Main Look": [] });
-  const [activeTab, setActiveTab] = useState("Main Look");
+  const router = useRouter();
+  const rawName = eventName ? String(eventName) : 'event';
 
-  useEffect(() => {
-    async function loadOutfits() {
-      const { data } = await supabase.from('event_workspaces').select('entries').eq('event_name', eventName).maybeSingle();
-      if (data?.entries?.outfits) {
-        setOutfitData(data.entries.outfits);
-      }
-    }
-    loadOutfits();
-  }, [eventName]);
+  // 1. Fetch data from the cloud using our real-time hook
+  const { items, loading } = useEventItems(rawName);
+  
+  const [activeTab, setActiveTab] = useState("Main Look");
+  const [customTabs, setCustomTabs] = useState<string[]>([]); // To hold newly created tabs before images are added
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 2. Filter out only the outfit items from the database
+  // We save outfit categories as "outfit_Main Look", "outfit_Sangeet", etc.
+  const outfitItems = items.filter(item => item.category.startsWith('outfit_'));
+
+  // 3. Extract all unique tab names from the database + our custom empty ones
+  const dbTabs = Array.from(new Set(outfitItems.map(item => item.category.replace('outfit_', ''))));
+  const allTabs = Array.from(new Set(["Main Look", ...dbTabs, ...customTabs]));
+
+  // 4. Get just the images for the currently selected tab
+  const activeItems = outfitItems.filter(item => item.category === `outfit_${activeTab}`);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Upload image to storage
     const { data } = await supabase.storage.from('task-images').upload(`${Date.now()}_${file.name}`, file);
+    
     if (data?.path) {
       const { data: url } = supabase.storage.from('task-images').getPublicUrl(data.path);
-      const updated = { 
-        ...outfitData, 
-        [activeTab]: [...(outfitData[activeTab] || []), url.publicUrl] 
-      };
-      await supabase.from('event_workspaces').update({ entries: { outfits: updated } }).eq('event_name', eventName);
-      setOutfitData(updated);
+      
+      // Instantly insert into the database (Syncs everywhere!)
+      await supabase.from('event_items').insert({
+        event_name: rawName,
+        category: `outfit_${activeTab}`,
+        content: url.publicUrl
+      });
     }
   };
 
-  const deleteImage = async (url: string) => {
-    const updated = {
-      ...outfitData,
-      [activeTab]: outfitData[activeTab].filter(img => img !== url)
-    };
-    await supabase.from('event_workspaces').update({ entries: { outfits: updated } }).eq('event_name', eventName);
-    setOutfitData(updated);
+  const deleteImage = async (id: string) => {
+    // Delete just this specific image row
+    await supabase.from('event_items').delete().eq('id', id);
   };
 
+  const addNewTab = () => {
+    const name = prompt("Enter new outfit category (e.g., Sangeet, Reception):");
+    if (name && name.trim()) {
+      const formattedName = name.trim();
+      setCustomTabs([...customTabs, formattedName]);
+      setActiveTab(formattedName);
+    }
+  };
+
+  if (loading) return <div className="p-12 text-center text-emerald-600">Loading Outfits...</div>;
+
   return (
-    <div className="p-6 md:p-12 max-w-4xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6 text-emerald-900 capitalize">{eventName} Outfits</h1>
+    <div className="p-6 md:p-12 max-w-5xl mx-auto">
+      <Button variant="ghost" onClick={() => router.back()} className="mb-4 -ml-4 text-slate-500 hover:text-emerald-700">
+        <ArrowLeft className="w-4 h-4 mr-2" /> Back to {rawName.charAt(0).toUpperCase() + rawName.slice(1)} Workspace
+      </Button>
+      
+      <h1 className="text-3xl font-bold mb-6 text-emerald-900 capitalize">{rawName} Outfits</h1>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="mb-4">
-          {Object.keys(outfitData).map(tab => (
-            <TabsTrigger key={tab} value={tab}>{tab}</TabsTrigger>
+        <TabsList className="mb-6 flex flex-wrap h-auto bg-slate-100 p-1 rounded-lg">
+          {allTabs.map(tab => (
+            <TabsTrigger key={tab} value={tab} className="rounded-md data-[state=active]:bg-white data-[state=active]:shadow-sm">
+              {tab}
+            </TabsTrigger>
           ))}
-          <Button variant="ghost" size="sm" onClick={() => {
-            const name = prompt("New tab name:");
-            if (name) setOutfitData({...outfitData, [name]: []});
-          }}><Plus className="w-4 h-4"/></Button>
+          <Button variant="ghost" size="sm" onClick={addNewTab} className="ml-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
+            <Plus className="w-4 h-4 mr-1"/> Add Category
+          </Button>
         </TabsList>
 
-        <TabsContent value={activeTab}>
+        <TabsContent value={activeTab} className="mt-0">
           <div className="mb-6">
-            <input type="file" onChange={handleUpload} accept="image/*" className="hidden" id="fileInput" />
-            <Button onClick={() => document.getElementById('fileInput')?.click()}>Add Image</Button>
+            <input type="file" ref={fileInputRef} onChange={handleUpload} accept="image/*" className="hidden" />
+            <Button onClick={() => fileInputRef.current?.click()} className="bg-emerald-600 hover:bg-emerald-700 shadow-sm">
+              <Plus className="w-4 h-4 mr-2" /> Add Image to {activeTab}
+            </Button>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {outfitData[activeTab]?.map((img, idx) => (
-              <Card key={idx} className="relative group p-2">
-                <img src={img} alt="Outfit" className="w-full h-64 object-cover rounded" />
-                <button 
-                  onClick={() => deleteImage(img)}
-                  className="absolute top-4 right-4 bg-red-500 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </Card>
-            ))}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {activeItems.length === 0 ? (
+              <div className="col-span-full p-8 text-center text-slate-400 border-2 border-dashed rounded-xl bg-slate-50">
+                No images added for {activeTab} yet.
+              </div>
+            ) : (
+              activeItems.map((item) => (
+                <Card key={item.id} className="relative group p-2 overflow-hidden border-slate-200 shadow-sm">
+                  <img src={item.content} alt="Outfit" className="w-full h-64 object-cover rounded" />
+                  <button 
+                    onClick={() => deleteImage(item.id)}
+                    className="absolute top-4 right-4 bg-red-500 hover:bg-red-600 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-md"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </Card>
+              ))
+            )}
           </div>
         </TabsContent>
       </Tabs>
