@@ -230,7 +230,7 @@ export default function OutfitPage() {
                   <img src={item.content} alt="Outfit" className="w-full h-64 object-cover rounded" />
                   <button 
                     onClick={() => deleteImage(item.id)}
-                    className="absolute top-4 right-4 bg-red-500 hover:bg-red-600 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-md"
+                    className="absolute top-4 right-4 bg-red-500 hover:bg-red-600 text-white p-2 rounded-full opacity-50 group-hover:opacity-100 transition-all shadow-md"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
