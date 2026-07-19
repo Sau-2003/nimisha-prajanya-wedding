@@ -6,8 +6,18 @@ const playfair = Playfair_Display({ subsets: ['latin'], variable: '--font-playfa
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata = {
-  title: "Nimisha & Prajanya's Wedding Planner",
-  description: "Road to January 30, 2027",
+  title: 'Wedding Planner',
+  description: 'Manage your wedding tasks',
+  manifest: '/manifest.json',
+  icons: {
+    apple: '/wedding-icon.png', // This fixes the icon for iPhone/iOS shortcuts
+    icon: '/wedding-icon.png',
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'Wedding Planner',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

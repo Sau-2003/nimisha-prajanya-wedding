@@ -6,9 +6,7 @@ import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { 
   LayoutDashboard, CheckSquare, CalendarHeart, 
-  ShoppingBag, Users, IndianRupee, ChevronRight,
-  Menu, X, ImageIcon, // Added ImageIcon here
-  BookIcon
+  ShoppingBag, Users, IndianRupee, Menu, X, BookIcon, CalendarClock // Import CalendarClock
 } from 'lucide-react';
 
 const mainNav = [
@@ -17,15 +15,20 @@ const mainNav = [
   { name: 'Vendor Tracker', href: '/vendors', icon: ShoppingBag },
   { name: 'Budget', href: '/budget', icon: IndianRupee },
   { name: 'Guests', href: '/guests', icon: Users },
-  { name: 'Notes', href: '/notes', icon: BookIcon } // Added Notes link here
+  { name: 'Notes', href: '/notes', icon: BookIcon }, // Added missing comma here
+  { name: 'Master Tasks', href: '/master-tasks', icon: CalendarClock }, // Corrected Clock to CalendarClock
 ];
 
 const eventNav = [
-  { name: 'Puja', href: '/events/puja', color: 'bg-purple-500' },
+  { name: 'Puja', href: '/events/puja', color: 'bg-purple-500' }, // Changed link to href
   { name: 'Mehendi', href: '/events/mehendi', color: 'bg-emerald-500' },
-  { name: 'Haldi', href: '/events/haldi', color: 'bg-yellow-500' },
+  { name: 'Tilak', href: '/events/tilak', color: 'bg-green-500' },
   { name: 'Sangeet', href: '/events/sangeet', color: 'bg-blue-500' },
+  { name: 'Haldi', href: '/events/haldi', color: 'bg-yellow-500' },
   { name: 'Reception', href: '/events/reception', color: 'bg-red-500' },
+  { name: 'Phere', href: '/events/phere', color: 'bg-indigo-500' },
+  { name: 'Pagphere', href: '/events/Pagphere', color: 'bg-violet-500' },
+  { name: 'Vidai', href: '/events/vidai', color: 'bg-rose-500' },
 ];
 
 export function Sidebar() {
@@ -34,7 +37,6 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Mobile Hamburger Button */}
       <button 
         onClick={() => setIsOpen(true)}
         className="fixed top-4 left-4 z-40 p-2 bg-white border border-slate-200 rounded-lg shadow-sm md:hidden"
@@ -45,7 +47,6 @@ export function Sidebar() {
       {isOpen && <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setIsOpen(false)} />}
 
       <div className={`fixed top-0 left-0 h-screen w-64 bg-white dark:bg-slate-950 border-r border-slate-100 dark:border-slate-800 z-50 transform transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 overflow-y-auto`}>
-        
         <div className="p-6">
           <button onClick={() => setIsOpen(false)} className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 md:hidden">
             <X className="w-5 h-5" />
@@ -76,7 +77,6 @@ export function Sidebar() {
             })}
           </nav>
 
-          {/* Events Section */}
           <div>
             <div className="px-3 mb-2 flex items-center gap-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
               <CalendarHeart className="w-4 h-4" /> Wedding Events

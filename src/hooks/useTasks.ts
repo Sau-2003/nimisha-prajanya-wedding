@@ -9,6 +9,14 @@ export interface TaskEntry {
   created_at?: string;
 }
 
+// Update this interface in your hook file
+export interface TaskEntry {
+  id: string;
+  text: string;
+  status: 'ongoing' | 'done';
+  due_date?: string | null; // Add this line
+}
+
 export function useTasks() {
   const [tasks, setTasks] = useState<TaskEntry[]>([]);
   const [loading, setLoading] = useState(true);

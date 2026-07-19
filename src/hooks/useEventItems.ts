@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 
 export function useEventItems(eventName: string) {
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<any[]>([]); // Initialize as empty array
   const [loading, setLoading] = useState(true);
 
   const fetchData = async () => {
+    setLoading(true);
     const { data } = await supabase
       .from('event_items')
       .select('*')
@@ -17,14 +18,8 @@ export function useEventItems(eventName: string) {
 
   useEffect(() => {
     fetchData();
-    
-    const channel = supabase.channel(`public:event_items:${eventName}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'event_items' }, fetchData)
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
   }, [eventName]);
 
-  // ADD fetchData HERE so the page can trigger it manually
-  return { items, loading, fetchData }; 
+  // IMPORTANT: You MUST return the object here
+  return { items, loading, fetchData };
 }
