@@ -14,6 +14,20 @@
 //   { name: "Reception" },
 // ];
 
+// // Helper function to convert "14:30" to "2:30 PM"
+// const formatTime12hr = (timeStr: string | null) => {
+//   if (!timeStr) return "-";
+//   try {
+//     const [hours, minutes] = timeStr.split(":");
+//     let h = parseInt(hours, 10);
+//     const ampm = h >= 12 ? "PM" : "AM";
+//     h = h % 12 || 12; // Convert 0 to 12 for midnight
+//     return `${h}:${minutes} ${ampm}`;
+//   } catch {
+//     return timeStr; // Fallback just in case
+//   }
+// };
+
 // export default function GuestsPage() {
 //   const { guests: dbGuests, loading, fetchData } = useGuests();
 //   const [activeTab, setActiveTab] = useState(TABS[0].name);
@@ -64,12 +78,21 @@
 //       return; 
 //     }
 
-//     setNewGuest({ room: "", mobile: "", arrivalTime: "", family: "", count: "", hotel: "", arrival: "", origin: "" });
+//     setNewGuest({ room: "", family: "", count: "", mobile: "", arrivalTime: "", hotel: "", arrival: "", origin: "" });
 //     fetchData();
 //   };
 
 //   const saveEdit = async (id: string) => {
-//     await supabase.from("guests").update(editForm).eq("id", id);
+//     await supabase.from("guests").update({
+//       room_no: editForm.room_no,
+//       family: editForm.family,
+//       count: editForm.count,
+//       mobile_no: editForm.mobile_no || null,
+//       arrival_time: editForm.arrival_time || null,
+//       arrival_date: editForm.arrival_date || null,
+//       origin_place: editForm.origin_place,
+//       hotel_name: editForm.hotel_name
+//     }).eq("id", id);
 //     setEditingId(null);
 //     fetchData();
 //   };
@@ -106,7 +129,6 @@
 //               <input className="border p-2 rounded bg-white" placeholder="Room No" value={newGuest.room} onChange={e => setNewGuest({...newGuest, room: e.target.value})} />
 //               <input className="border p-2 rounded bg-white" placeholder="Mobile Number" value={newGuest.mobile} onChange={e => setNewGuest({...newGuest, mobile: e.target.value})} />
               
-//               {/* Working Placeholder for Arrival Time */}
 //               <input 
 //                 type="text" 
 //                 onFocus={(e) => (e.target.type = "time")}
@@ -120,7 +142,6 @@
 //               <input className="border p-2 rounded bg-white" placeholder="Hotel" value={newGuest.hotel} onChange={e => setNewGuest({...newGuest, hotel: e.target.value})} />
 //               <input className="border p-2 rounded bg-white" placeholder="Origin" value={newGuest.origin} onChange={e => setNewGuest({...newGuest, origin: e.target.value})} />
               
-//               {/* Working Placeholder for Arrival Date */}
 //               <input 
 //                 type="text" 
 //                 onFocus={(e) => (e.target.type = "date")}
@@ -158,14 +179,16 @@
 //                 {activeTab.includes("Staying") && (
 //                   <>
 //                     <th className="p-3">Room</th>
+//                     <th className="p-3">Family Name</th>
+//                     <th className="p-3">No. of People</th>
 //                     <th className="p-3">Mobile</th>
 //                     <th className="p-3">Arrival Time</th>
 //                   </>
 //                 )}
-//                 <th className="p-3">Family Name</th>
-//                 <th className="p-3">No. of People</th>
 //                 {activeTab.includes("Staying") && (
 //                   <>
+//                     <th className="p-3">Mobile</th>
+//                     <th className="p-3">Arrival Time</th>
 //                     <th className="p-3">Date of Arrival</th>
 //                     <th className="p-3">Origin</th>
 //                     <th className="p-3">Hotel</th>
@@ -182,8 +205,8 @@
 //                       <td className="p-3 text-slate-500">{idx + 1}</td>
 //                       {activeTab.includes("Staying") && (
 //                         <>
-//                           <td className="p-2"><input className="border w-full p-1 rounded" placeholder="Room No" value={editForm.room_no} onChange={e => setEditForm({...editForm, room_no: e.target.value})} /></td>
-//                           <td className="p-2"><input className="border w-full p-1 rounded" placeholder="Mobile" value={editForm.mobile_no} onChange={e => setEditForm({...editForm, mobile_no: e.target.value})} /></td>
+//                           <td className="p-2"><input className="border w-full p-1 rounded" placeholder="Room No" value={editForm.room_no || ''} onChange={e => setEditForm({...editForm, room_no: e.target.value})} /></td>
+//                           <td className="p-2"><input className="border w-full p-1 rounded" placeholder="Mobile" value={editForm.mobile_no || ''} onChange={e => setEditForm({...editForm, mobile_no: e.target.value})} /></td>
 //                           <td className="p-2">
 //                             <input 
 //                               type="time" 
@@ -194,8 +217,8 @@
 //                           </td>
 //                         </>
 //                       )}
-//                       <td className="p-2"><input className="border w-full p-1 rounded" placeholder="Family Name" value={editForm.family} onChange={e => setEditForm({...editForm, family: e.target.value})} /></td>
-//                       <td className="p-2"><input className="border w-full p-1 rounded" placeholder="Count" type="number" value={editForm.count} onChange={e => setEditForm({...editForm, count: e.target.value})} /></td>
+//                       <td className="p-2"><input className="border w-full p-1 rounded" placeholder="Family Name" value={editForm.family || ''} onChange={e => setEditForm({...editForm, family: e.target.value})} /></td>
+//                       <td className="p-2"><input className="border w-full p-1 rounded" placeholder="Count" type="number" value={editForm.count || ''} onChange={e => setEditForm({...editForm, count: e.target.value})} /></td>
 //                       {activeTab.includes("Staying") && (
 //                         <>
 //                           <td className="p-2">
@@ -206,8 +229,8 @@
 //                               onChange={e => setEditForm({...editForm, arrival_date: e.target.value})} 
 //                             />
 //                           </td>
-//                           <td className="p-2"><input className="border w-full p-1 rounded" placeholder="Origin" value={editForm.origin_place} onChange={e => setEditForm({...editForm, origin_place: e.target.value})} /></td>
-//                           <td className="p-2"><input className="border w-full p-1 rounded" placeholder="Hotel" value={editForm.hotel_name} onChange={e => setEditForm({...editForm, hotel_name: e.target.value})} /></td>
+//                           <td className="p-2"><input className="border w-full p-1 rounded" placeholder="Origin" value={editForm.origin_place || ''} onChange={e => setEditForm({...editForm, origin_place: e.target.value})} /></td>
+//                           <td className="p-2"><input className="border w-full p-1 rounded" placeholder="Hotel" value={editForm.hotel_name || ''} onChange={e => setEditForm({...editForm, hotel_name: e.target.value})} /></td>
 //                         </>
 //                       )}
 //                       <td className="p-2 flex gap-1 justify-center">
@@ -220,9 +243,10 @@
 //                       <td className="p-3 text-slate-500">{idx + 1}</td>
 //                       {activeTab.includes("Staying") && (
 //                         <>
-//                           <td className="p-3">{g.room_no}</td>
-//                           <td className="p-3">{g.mobile_no}</td>
-//                           <td className="p-3">{g.arrival_time}</td>
+//                           <td className="p-3">{g.room_no || '-'}</td>
+//                           <td className="p-3">{g.mobile_no || '-'}</td>
+//                           {/* APPLYING 12HR FORMAT HERE */}
+//                           <td className="p-3 whitespace-nowrap">{formatTime12hr(g.arrival_time)}</td>
 //                         </>
 //                       )}
 //                       <td className="p-3 font-medium whitespace-nowrap">{g.family}</td>
@@ -230,8 +254,8 @@
 //                       {activeTab.includes("Staying") && (
 //                         <>
 //                           <td className="p-3 whitespace-nowrap">{g.arrival_date ? new Date(g.arrival_date).toLocaleDateString("en-GB") : "-"}</td>
-//                           <td className="p-3">{g.origin_place}</td>
-//                           <td className="p-3">{g.hotel_name}</td>
+//                           <td className="p-3">{g.origin_place || '-'}</td>
+//                           <td className="p-3">{g.hotel_name || '-'}</td>
 //                         </>
 //                       )}
 //                       <td className="p-3 flex gap-1 justify-center">
@@ -251,7 +275,6 @@
 //     </div>
 //   );
 // }
-
 
 "use client";
 
@@ -333,17 +356,17 @@ export default function GuestsPage() {
       return; 
     }
 
-    setNewGuest({ room: "", mobile: "", arrivalTime: "", family: "", count: "", hotel: "", arrival: "", origin: "" });
+    setNewGuest({ room: "", family: "", count: "", mobile: "", arrivalTime: "", hotel: "", arrival: "", origin: "" });
     fetchData();
   };
 
   const saveEdit = async (id: string) => {
     await supabase.from("guests").update({
       room_no: editForm.room_no,
-      mobile_no: editForm.mobile_no || null,
-      arrival_time: editForm.arrival_time || null,
       family: editForm.family,
       count: editForm.count,
+      mobile_no: editForm.mobile_no || null,
+      arrival_time: editForm.arrival_time || null,
       arrival_date: editForm.arrival_date || null,
       origin_place: editForm.origin_place,
       hotel_name: editForm.hotel_name
@@ -431,18 +454,14 @@ export default function GuestsPage() {
             <thead>
               <tr className="text-slate-400 border-b text-left whitespace-nowrap">
                 <th className="p-3">Sr No</th>
-                {activeTab.includes("Staying") && (
-                  <>
-                    <th className="p-3">Room</th>
-                    <th className="p-3">Mobile</th>
-                    <th className="p-3">Arrival Time</th>
-                  </>
-                )}
+                {activeTab.includes("Staying") && <th className="p-3">Room</th>}
                 <th className="p-3">Family Name</th>
                 <th className="p-3">No. of People</th>
                 {activeTab.includes("Staying") && (
                   <>
+                    <th className="p-3">Mobile</th>
                     <th className="p-3">Date of Arrival</th>
+                    <th className="p-3">Arrival Time</th>
                     <th className="p-3">Origin</th>
                     <th className="p-3">Hotel</th>
                   </>
@@ -457,29 +476,27 @@ export default function GuestsPage() {
                     <>
                       <td className="p-3 text-slate-500">{idx + 1}</td>
                       {activeTab.includes("Staying") && (
-                        <>
-                          <td className="p-2"><input className="border w-full p-1 rounded" placeholder="Room No" value={editForm.room_no || ''} onChange={e => setEditForm({...editForm, room_no: e.target.value})} /></td>
-                          <td className="p-2"><input className="border w-full p-1 rounded" placeholder="Mobile" value={editForm.mobile_no || ''} onChange={e => setEditForm({...editForm, mobile_no: e.target.value})} /></td>
-                          <td className="p-2">
-                            <input 
-                              type="time" 
-                              className="border w-full p-1 rounded" 
-                              value={editForm.arrival_time || ""} 
-                              onChange={e => setEditForm({...editForm, arrival_time: e.target.value})} 
-                            />
-                          </td>
-                        </>
+                        <td className="p-2"><input className="border w-full p-1 rounded" placeholder="Room No" value={editForm.room_no || ''} onChange={e => setEditForm({...editForm, room_no: e.target.value})} /></td>
                       )}
                       <td className="p-2"><input className="border w-full p-1 rounded" placeholder="Family Name" value={editForm.family || ''} onChange={e => setEditForm({...editForm, family: e.target.value})} /></td>
                       <td className="p-2"><input className="border w-full p-1 rounded" placeholder="Count" type="number" value={editForm.count || ''} onChange={e => setEditForm({...editForm, count: e.target.value})} /></td>
                       {activeTab.includes("Staying") && (
                         <>
+                          <td className="p-2"><input className="border w-full p-1 rounded" placeholder="Mobile" value={editForm.mobile_no || ''} onChange={e => setEditForm({...editForm, mobile_no: e.target.value})} /></td>
                           <td className="p-2">
                             <input 
                               type="date" 
                               className="border w-full p-1 rounded" 
                               value={editForm.arrival_date || ""} 
                               onChange={e => setEditForm({...editForm, arrival_date: e.target.value})} 
+                            />
+                          </td>
+                          <td className="p-2">
+                            <input 
+                              type="time" 
+                              className="border w-full p-1 rounded" 
+                              value={editForm.arrival_time || ""} 
+                              onChange={e => setEditForm({...editForm, arrival_time: e.target.value})} 
                             />
                           </td>
                           <td className="p-2"><input className="border w-full p-1 rounded" placeholder="Origin" value={editForm.origin_place || ''} onChange={e => setEditForm({...editForm, origin_place: e.target.value})} /></td>
@@ -494,19 +511,14 @@ export default function GuestsPage() {
                   ) : (
                     <>
                       <td className="p-3 text-slate-500">{idx + 1}</td>
-                      {activeTab.includes("Staying") && (
-                        <>
-                          <td className="p-3">{g.room_no || '-'}</td>
-                          <td className="p-3">{g.mobile_no || '-'}</td>
-                          {/* APPLYING 12HR FORMAT HERE */}
-                          <td className="p-3 whitespace-nowrap">{formatTime12hr(g.arrival_time)}</td>
-                        </>
-                      )}
+                      {activeTab.includes("Staying") && <td className="p-3">{g.room_no || '-'}</td>}
                       <td className="p-3 font-medium whitespace-nowrap">{g.family}</td>
                       <td className="p-3">{g.count}</td>
                       {activeTab.includes("Staying") && (
                         <>
+                          <td className="p-3">{g.mobile_no || '-'}</td>
                           <td className="p-3 whitespace-nowrap">{g.arrival_date ? new Date(g.arrival_date).toLocaleDateString("en-GB") : "-"}</td>
+                          <td className="p-3 whitespace-nowrap">{formatTime12hr(g.arrival_time)}</td>
                           <td className="p-3">{g.origin_place || '-'}</td>
                           <td className="p-3">{g.hotel_name || '-'}</td>
                         </>
