@@ -17,6 +17,11 @@ export default function TasksPage() {
   const [newTaskText, setNewTaskText] = useState("");
   const [dueDate, setDueDate] = useState("");
 
+  const isMobile =
+  typeof window !== "undefined" &&
+  /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+
   // Edit Task States
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editingTaskText, setEditingTaskText] = useState("");
@@ -147,14 +152,14 @@ export default function TasksPage() {
                       rows={2}
                       value={editingTaskText}
                       onChange={(e) => setEditingTaskText(e.target.value)}
-                      placeholder="Task description"
-                      className="border border-emerald-500 rounded-lg outline-none px-2 py-2 text-slate-700 resize-none"
                       onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
+                        if (!isMobile && e.key === "Enter" && !e.shiftKey) {
                           e.preventDefault();
                           saveEditedTask(task.id);
                         }
                       }}
+                      placeholder="Task description"
+                      className="border border-emerald-500 rounded-lg outline-none px-2 py-2 text-slate-700 resize-none"               
                     />
                     <div className="flex gap-2 items-center">
                       <input 
@@ -261,13 +266,13 @@ export default function TasksPage() {
           <DialogHeader><DialogTitle>Add New Task</DialogTitle></DialogHeader>
           <div className="space-y-4 pt-4">
             <textarea
-              className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
-              rows={3}
+              className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 resize-none"             
               placeholder="What needs to be done?"
+              rows={3}
               value={newTaskText}
               onChange={(e) => setNewTaskText(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
+                if (!isMobile && e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
                   handleAddTask();
                 }
