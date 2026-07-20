@@ -20,15 +20,16 @@ const mainNav = [
   { name: 'Date Schedule', href: '/date-schedule', icon: CalendarClock }, // Corrected Clock to CalendarClock
 ];
 const eventNav = [
-  { name: 'Puja',href: '/events/puja',color: 'bg-violet-500' },
-  { name: 'Mehendi',href: '/events/mehendi',color: 'bg-emerald-500' },
-  { name: 'Tilak',href: '/events/tilak',color: 'bg-fuchsia-500' },
-  { name: 'Sangeet',href: '/events/sangeet',color: 'bg-sky-500' },
-  { name: 'Haldi',href: '/events/haldi',color: 'bg-amber-400' },
-  { name: 'Reception',href: '/events/reception',color: 'bg-red-500' },
-  { name: 'Phere',href: '/events/phere',color: 'bg-indigo-600' },
-  { name: 'Pagphere',href: '/events/pagphere',color: 'bg-cyan-500' },
-  { name: 'Vidai',href: '/events/vidai',color: 'bg-rose-500' },
+  { name: 'Puja',      href: '/events/puja',      color: 'bg-orange-500' },
+  { name: 'Mehendi',   href: '/events/mehendi',   color: 'bg-emerald-500' },
+  { name: 'Check In',  href: '/events/check-in',  color: 'bg-stone-600' },
+  { name: 'Tilak',     href: '/events/tilak',     color: 'bg-rose-600' },
+  { name: 'Sangeet',   href: '/events/sangeet',   color: 'bg-indigo-500' },
+  { name: 'Haldi',     href: '/events/haldi',     color: 'bg-amber-400' },
+  { name: 'Reception', href: '/events/reception', color: 'bg-fuchsia-600' },
+  { name: 'Phere',     href: '/events/phere',     color: 'bg-red-500' },
+  { name: 'Pagphere',  href: '/events/pagphere',  color: 'bg-cyan-500' },
+  { name: 'Vidai',     href: '/events/vidai',     color: 'bg-pink-400' },
 ];
 
 
