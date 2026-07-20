@@ -9,6 +9,7 @@ import {
   ShoppingBag, Users, IndianRupee, Menu, X, BookIcon, CalendarClock // Import CalendarClock
 } from 'lucide-react';
 import Image from "next/image";
+import { DressIcon } from '@phosphor-icons/react';
 
 const mainNav = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -18,6 +19,7 @@ const mainNav = [
   { name: 'Guests', href: '/guests', icon: Users },
   { name: 'Notes', href: '/notes', icon: BookIcon }, // Added missing comma here
   { name: 'Date Schedule', href: '/date-schedule', icon: CalendarClock }, // Corrected Clock to CalendarClock
+  { name: 'Options', href: '/options', icon: DressIcon },
 ];
 const eventNav = [
   { name: 'Puja',      href: '/events/puja',      color: 'bg-orange-500' },
