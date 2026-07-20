@@ -278,11 +278,11 @@ export default function EventWorkspacePage() {
                           e.preventDefault();
                           saveEditedItem(activeModal, item.id);
                         }
-                      }
+                        }
                     }}
                     className="border border-emerald-500 rounded-md outline-none px-2 py-2 text-slate-700 text-sm w-full resize-none" rows={3}
                     />
-                    
+
                     <div className="flex gap-2 text-sm h-8 mt-1">
                       <input 
                         type="date"
