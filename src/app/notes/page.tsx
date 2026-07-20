@@ -11,31 +11,29 @@ function NoteCard({ note, onDelete, onUpdate }: any) {
   // Local state keeps typing fast & smooth
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content || "");
+  const [isEditing, setIsEditing] = useState(false);
 
-    const renderTextWithLinks = (text: string) => {
-  if (!text) return null;
-
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
-  const parts = text.split(urlRegex);
-
-  return parts.map((part, index) => {
-    if (urlRegex.test(part)) {
-      return (
-        <a
-          key={index}
-          href={part}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-blue-600 underline break-all"
-        >
-          {part}
-        </a>
-      );
-    }
-
-    return <span key={index}>{part}</span>;
-  });
-};
+  const renderTextWithLinks = (text: string) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+    return parts.map((part, index) => {
+      if (urlRegex.test(part)) {
+        return (
+          <a
+            key={index}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 underline break-all relative z-10 hover:text-blue-800"
+            onClick={(e) => e.stopPropagation()} // PREVENTS PARENT DIV FROM ENTERING EDIT MODE
+          >
+            {part}
+          </a>
+        );
+      }
+      return <span key={index}>{part}</span>;
+    });
+  };
 
   // Sync if database changes from another device
   useEffect(() => {
@@ -48,7 +46,7 @@ function NoteCard({ note, onDelete, onUpdate }: any) {
       <button 
         onClick={() => onDelete(note.id)}
         // Fixed for mobile: always visible on phones, hover on desktop
-        className="absolute top-6 right-6 p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg opacity-50 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10 shadow-sm"
+        className="absolute top-6 right-6 p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg opacity-50 md:opacity-50 md:group-hover:opacity-100 transition-opacity z-10 shadow-sm"
         title="Delete Note"
       >
         <Trash2 className="w-5 h-5" />
@@ -57,7 +55,7 @@ function NoteCard({ note, onDelete, onUpdate }: any) {
       <div className="pt-8 pb-4 pl-12 md:pl-16 pr-8">
         <input 
           type="text"
-          className="text-5xl font-sans text-[#c4b5fd] tracking-widest uppercase w-full bg-transparent border-b-2 border-transparent hover:border-[#c4b5fd]/30 focus:border-[#c4b5fd] focus:outline-none transition-all"
+          className="text-2xl font-sans text-indigo-600 tracking-widest uppercase w-full bg-transparent border-b-2 border-transparent hover:border-[#c4b5fd]/30 focus:border-[#c4b5fd] focus:outline-none transition-all"
           value={title}
           placeholder="ENTER TITLE..."
           onChange={(e) => setTitle(e.target.value.toUpperCase())}
@@ -65,25 +63,33 @@ function NoteCard({ note, onDelete, onUpdate }: any) {
         />
       </div>
 
-      <div className="relative w-full">
-        <div className="absolute top-0 bottom-0 left-8 md:left-12 w-px bg-[#c4b5fd]"></div>
-        <textarea
-          className="w-full min-h-[400px] pl-12 md:pl-16 pr-8 py-0 bg-transparent focus:outline-none resize-y text-slate-700 text-lg font-sans"
-          style={{ 
-            lineHeight: '32px', 
-            backgroundImage: 'repeating-linear-gradient(transparent, transparent 31px, #c4b5fd 31px, #c4b5fd 32px)', 
-            backgroundAttachment: 'local' 
-          }}
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          onBlur={() => onUpdate(note.id, { content })} // Saves to cloud when you click away
-          placeholder="Start typing your notes here..."
-        />
-        {content.trim() && (
-  <div className="mt-4 rounded-lg border bg-slate-50 p-4 whitespace-pre-wrap break-words">
-    {renderTextWithLinks(content)}
-  </div>
-)}
+      <div className="w-full p-4">
+        {isEditing ? (
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            onBlur={() => {
+              onUpdate(note.id, { title, content });
+              setIsEditing(false);
+            }}
+            rows={3}
+            className="w-full resize-none border rounded-lg p-4 focus:outline-none"
+            style={{ height: "auto" }}
+            onInput={(e) => {
+              const target = e.currentTarget;
+              target.style.height = "auto";
+              target.style.height = `${target.scrollHeight}px`;
+            }}
+            autoFocus
+          />
+        ) : (
+          <div
+            onClick={() => setIsEditing(true)}
+            className="border rounded-lg p-4 whitespace-pre-wrap break-words cursor-text min-h-[80px]"
+          >
+            {renderTextWithLinks(content)}
+          </div>
+        )}
       </div>
     </div>
   );
