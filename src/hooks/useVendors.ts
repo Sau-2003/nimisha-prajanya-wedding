@@ -7,7 +7,7 @@ export interface VendorEntry {
   assigned_vendor?: string | null;
   status: string;
   estimated_cost?: number | null;   // <-- Add this
-  contact_number?: string | null;   // <-- Add this
+  contact_number?: string[] | null;   // <-- Add this
   notes?: string | null;            // <-- Add this
   created_at?: string;
   updated_at?: string;

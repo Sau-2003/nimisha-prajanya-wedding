@@ -6,17 +6,18 @@ const playfair = Playfair_Display({ subsets: ['latin'], variable: '--font-playfa
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata = {
-  title: 'Wedding Planner',
-  description: 'Manage your wedding tasks',
-  manifest: '/manifest.json',
+  title: "Wedding Planner",
+  description: "Manage your wedding tasks",
+  manifest: "/manifest.json",
+  themeColor: "#047857",
   icons: {
-    apple: 'C:\\Users\\saumy\\nimisha-prajanya-wedding\\public\\engagement.jpg', // This fixes the icon for iPhone/iOS shortcuts
-    icon: 'C:\\Users\\saumy\\nimisha-prajanya-wedding\\public\\engagement.jpg',
+    icon: "/engagement.png",
+    apple: "/engagement.png",
   },
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'default',
-    title: 'Wedding Planner',
+    statusBarStyle: "default",
+    title: "Wedding Planner",
   },
 };
 

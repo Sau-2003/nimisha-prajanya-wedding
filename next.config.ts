@@ -1,6 +1,6 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  // Put it right here inside the curly braces:
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
   allowedDevOrigins: ["192.168.29.77", "localhost"],
 };
 

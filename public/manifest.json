@@ -1,15 +1,16 @@
 {
   "name": "Nimisha-Prajanya Wedding Planner",
-  "short_name": "Wedding Planner",
+  "short_name": "Wedding",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#047857",
   "icons": [
     {
       "src": "/engagement.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
-  ],
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#047857" 
+  ]
 }
