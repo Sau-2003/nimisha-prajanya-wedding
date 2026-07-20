@@ -83,7 +83,7 @@ export default function OptionsPage() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-serif font-bold text-emerald-900 flex items-center gap-3">
-          <DressIcon className="w-8 h-8 text-emerald-700" /> Options
+          <DressIcon className="w-8 h-8 text-emerald-700" /> Shoping
         </h1>
         <p className="text-sm text-slate-500 mt-1">
           Organize themes, outfits, and decorations under custom tabs.

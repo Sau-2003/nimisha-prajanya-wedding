@@ -19,7 +19,7 @@ const mainNav = [
   { name: 'Guests', href: '/guests', icon: Users },
   { name: 'Notes', href: '/notes', icon: BookIcon }, // Added missing comma here
   { name: 'Date Schedule', href: '/date-schedule', icon: CalendarClock }, // Corrected Clock to CalendarClock
-  { name: 'Options', href: '/options', icon: DressIcon },
+  { name: 'Shoping', href: '/shoping', icon: DressIcon },
 ];
 const eventNav = [
   { name: 'Puja',      href: '/events/puja',      color: 'bg-orange-500' },
