@@ -12,6 +12,31 @@ function NoteCard({ note, onDelete, onUpdate }: any) {
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content || "");
 
+    const renderTextWithLinks = (text: string) => {
+  if (!text) return null;
+
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+
+  return parts.map((part, index) => {
+    if (urlRegex.test(part)) {
+      return (
+        <a
+          key={index}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-600 underline break-all"
+        >
+          {part}
+        </a>
+      );
+    }
+
+    return <span key={index}>{part}</span>;
+  });
+};
+
   // Sync if database changes from another device
   useEffect(() => {
     setTitle(note.title);
@@ -54,6 +79,11 @@ function NoteCard({ note, onDelete, onUpdate }: any) {
           onBlur={() => onUpdate(note.id, { content })} // Saves to cloud when you click away
           placeholder="Start typing your notes here..."
         />
+        {content.trim() && (
+  <div className="mt-4 rounded-lg border bg-slate-50 p-4 whitespace-pre-wrap break-words">
+    {renderTextWithLinks(content)}
+  </div>
+)}
       </div>
     </div>
   );

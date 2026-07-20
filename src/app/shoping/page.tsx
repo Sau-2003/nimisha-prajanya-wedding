@@ -322,7 +322,21 @@ export default function OptionsPage() {
                         </div>
                       )}
                       <p className="text-sm text-slate-700 whitespace-pre-wrap break-words">
-                        {item.caption}
+                        {item.caption.split(/(https?:\/\/[^\s]+)/g).map((part, index) =>
+                          /^https?:\/\/[^\s]+$/.test(part) ? (
+                            <a
+                              key={index}
+                              href={part}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-emerald-600 underline hover:text-emerald-700"
+                            >
+                              {part}
+                            </a>
+                          ) : (
+                            part
+                          )
+                        )}
                       </p>
                     </div>
 

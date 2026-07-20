@@ -74,6 +74,32 @@ export default function TasksPage() {
     fetchData();
   };
 
+  const renderTextWithLinks = (text: string) => {
+  if (!text) return null;
+
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+
+  return parts.map((part, index) => {
+    if (urlRegex.test(part)) {
+      return (
+        <a
+          key={index}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-emerald-600 hover:underline break-all"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {part}
+        </a>
+      );
+    }
+
+    return <span key={index}>{part}</span>;
+  });
+};
+
   // Helper to format dates nicely
   const formatDate = (dateString: string) => {
     if (!dateString) return "";
@@ -140,7 +166,7 @@ export default function TasksPage() {
                   </div>
                 ) : (
                   <div className="flex-1">
-                    <p className="text-slate-700">{task.text}</p>
+                    <p className="text-slate-700 whitespace-pre-wrap break-words">{renderTextWithLinks(task.text)}</p>
                     {task.due_date && (
                       <p className="text-xs text-slate-400 flex items-center gap-1 mt-1.5 font-medium">
                         <Calendar className="w-3.5 h-3.5 text-emerald-500" /> {formatDate(task.due_date)}
@@ -192,7 +218,7 @@ export default function TasksPage() {
             {completedTasks.map(task => (
               <div key={task.id} className="bg-white border p-4 rounded-xl shadow-sm flex justify-between items-start group">
                 <div className="flex-1">
-                  <p className="text-slate-400 line-through">{task.text}</p>
+                  <p className="text-slate-400 line-through whitespace-pre-wrap break-words">{renderTextWithLinks(task.text)}</p>
                   {task.due_date && (
                     <p className="text-xs text-slate-300 flex items-center gap-1 mt-1.5">
                       <Calendar className="w-3.5 h-3.5" /> {formatDate(task.due_date)}

@@ -4,6 +4,33 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Calendar, Check, Loader2 } from 'lucide-react';
 
+const renderTextWithLinks = (text: string) => {
+  if (!text) return null;
+
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+
+  return parts.map((part, index) => {
+    if (part.match(urlRegex)) {
+      return (
+        <a
+          key={index}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-emerald-600 hover:text-emerald-700 underline break-all"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {part}
+        </a>
+      );
+    }
+
+    return <span key={index}>{part}</span>;
+  });
+};
+
+
 export default function DateSchedulePage() {
   const [schedule, setSchedule] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -11,6 +38,7 @@ export default function DateSchedulePage() {
   const fetchData = async () => {
   setLoading(true);
 
+  
   // 1. Fetch Event Items - ONLY 'tasks' category
   const { data: eventData } = await supabase
     .from('event_items')
@@ -86,7 +114,7 @@ export default function DateSchedulePage() {
                 <div key={item.id} className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                   <Calendar className="w-5 h-5 text-emerald-600" />
                   <div className="flex-1">
-                    <p className="font-semibold text-slate-800">{item.content}</p>
+                    <p className="font-semibold text-slate-800 whitespace-pre-wrap break-words">{renderTextWithLinks(item.content)}</p>
                     <p className="text-xs capitalize text-slate-500">
                       {item.isGlobal ? "Global Task" : item.event_name}
                     </p>
