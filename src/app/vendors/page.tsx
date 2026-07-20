@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Plus, CheckCircle2, Trash2, Phone, IndianRupee } from "lucide-react";
+import { MapPin, Plus, CheckCircle2, Trash2, Phone, IndianRupee, Pencil, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useVendors } from "@/hooks/useVendors";
 
@@ -20,31 +20,64 @@ interface VendorOption {
   notes?: string;
 }
 
-
 const initialCategories = [
   "Venue", "Wedding Planner", "Decorator", "Makeup Artist", "Nail Artist",
   "Photographer", "Mehendi Artist", "DJ / Music", "Transport / Cars",
   "Invitations", "Wedding Favors"
 ];
 
+// Helper to make URLs clickable in notes
+const renderTextWithLinks = (text: string) => {
+  if (!text) return "";
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+
+  return parts.map((part, index) => {
+    if (part.match(urlRegex)) {
+      return (
+        <a 
+          key={index} 
+          href={part} 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="text-emerald-600 font-medium hover:underline break-all"
+          onClick={(e) => e.stopPropagation()} 
+        >
+          {part}
+        </a>
+      );
+    }
+    return <span key={index}>{part}</span>;
+  });
+};
+
 function VendorsTracker() {
   const { dbVendors, loading, fetchData } = useVendors();
-  console.log("Database Data:", dbVendors);
 
+  // Modal State
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
 
+  // Add Mode State
   const [newOptionName, setNewOptionName] = useState("");
   const [newOptionStatus, setNewOptionStatus] = useState<BookingStatus>("Enquired");
   const [newEstimatedCost, setNewEstimatedCost] = useState<string>("");
   const [newContactNumber, setNewContactNumber] = useState("");
   const [newNotes, setNewNotes] = useState("");
 
+  // Edit Mode State
+  const [editingOptionId, setEditingOptionId] = useState<string | null>(null);
+  const [editOptionName, setEditOptionName] = useState("");
+  const [editEstimatedCost, setEditEstimatedCost] = useState<string>("");
+  const [editContactNumber, setEditContactNumber] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+
+  // Process and map database entries to our fixed categories
   const displayCategories = initialCategories.map((categoryName) => {
     const matches: VendorOption[] = dbVendors
       ?.filter((v) => v.category === categoryName)
       .map((v: any) => ({
-        id: v.id, // Make sure this is v.id!
+        id: v.id,
         name: v.assigned_vendor || "Unnamed Vendor",
         status: v.status as BookingStatus,
         estimatedCost: v.estimated_cost || 0,
@@ -70,6 +103,7 @@ function VendorsTracker() {
     setNewEstimatedCost("");
     setNewContactNumber("");
     setNewNotes("");
+    setEditingOptionId(null); // Reset edit mode
     setIsDialogOpen(true);
   };
 
@@ -93,27 +127,45 @@ function VendorsTracker() {
     await fetchData();
   };
 
+  const startEditing = (opt: VendorOption) => {
+    setEditingOptionId(opt.id);
+    setEditOptionName(opt.name);
+    setEditEstimatedCost(opt.estimatedCost ? opt.estimatedCost.toString() : "");
+    setEditContactNumber(opt.contactNumber || "");
+    setEditNotes(opt.notes || "");
+  };
+
+  const cancelEditing = () => setEditingOptionId(null);
+
+  const saveEditedOption = async (optionId: string) => {
+    if (!editOptionName.trim()) return;
+
+    await supabase.from("vendors").update({
+      assigned_vendor: editOptionName.trim(),
+      estimated_cost: editEstimatedCost ? parseFloat(editEstimatedCost) : 0,
+      contact_number: editContactNumber.trim() || null,
+      notes: editNotes.trim() || null,
+      updated_at: new Date().toISOString(),
+    }).eq("id", optionId);
+
+    setEditingOptionId(null);
+    fetchData();
+  };
+
   const handleStatusChange = async (optionId: string, status: BookingStatus) => {
     await supabase.from("vendors").update({ status }).eq("id", optionId);
     fetchData();
   };
 
-  // --- THIS IS THE SINGLE, CORRECTED DELETE FUNCTION ---
   const handleDeleteOption = async (optionId: string) => {
     if (!optionId) {
-      console.error("Error: optionId is undefined. Your useVendors hook MUST select 'id' from the database.");
       alert("Error: Vendor ID is missing. Check the console.");
       return;
     }
 
     const { error } = await supabase.from("vendors").delete().eq("id", optionId);
-    
-    if (error) {
-      console.error("Supabase Deletion Error:", error.message);
-      alert("Failed to delete. Check the console for details.");
-    } else {
-      await fetchData(); 
-    }
+    if (error) alert("Failed to delete. Check console.");
+    else await fetchData(); 
   };
 
   if (loading) return <div className="p-12 text-center text-emerald-600 font-medium">Loading Vendors...</div>;
@@ -149,6 +201,7 @@ function VendorsTracker() {
                   </div>
 
                   <div className="mt-2 space-y-2">
+                    {/* CONFIRMED STATE */}
                     {hasConfirmed && item.confirmedOption ? (
                       <div className="bg-emerald-100/60 p-2.5 rounded-lg border border-emerald-200 space-y-1">
                         <div className="flex items-center justify-between">
@@ -177,6 +230,8 @@ function VendorsTracker() {
                         </div>
                       </div>
                     ) : (
+                      
+                      /* UNCONFIRMED MULTI-OPTION STATE */
                       <div>
                         {item.options.length > 0 ? (
                           <div className="space-y-1.5">
@@ -218,8 +273,13 @@ function VendorsTracker() {
         </CardContent>
       </Card>
 
+      {/* MANAGE OPTIONS MODAL */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+          
+          {/* Silent Focus Trap: Keeps mobile keyboard closed on open */}
+          <button type="button" aria-hidden="true" className="opacity-0 absolute w-0 h-0 pointer-events-none" />
+
           <DialogHeader>
             <DialogTitle>Manage {editingCategory} Options</DialogTitle>
           </DialogHeader>
@@ -229,48 +289,95 @@ function VendorsTracker() {
             {currentCategoryData?.options.length === 0 ? (
               <p className="text-sm text-slate-400 italic">No options added yet.</p>
             ) : (
-              <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+              <div className="space-y-2">
                 {currentCategoryData?.options.map((opt) => (
                   <div key={opt.id} className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-slate-800">{opt.name}</span>
-                      <div className="flex items-center gap-2">
-                        <select
-                          value={opt.status}
-                          onChange={(e) => handleStatusChange(opt.id, e.target.value as BookingStatus)}
-                          className={`text-xs p-1 rounded border font-medium ${
-                            opt.status === "Confirmed" ? "bg-emerald-100 text-emerald-800 border-emerald-300" : "bg-white border-slate-300"
-                          }`}
-                        >
-                          <option value="Enquired">Enquired</option>
-                          <option value="Negotiating">Negotiating</option>
-                          <option value="Booked">Booked</option>
-                          <option value="Confirmed">Confirmed</option>
-                        </select>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-red-600" onClick={() => handleDeleteOption(opt.id)}>
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                    
+                    {/* EDIT OPTION MODE */}
+                    {editingOptionId === opt.id ? (
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          className="w-full border border-emerald-500 p-1.5 rounded text-sm focus:outline-none"
+                          value={editOptionName}
+                          onChange={(e) => setEditOptionName(e.target.value)}
+                        />
+                        <div className="flex gap-2">
+                          <input
+                            type="number"
+                            placeholder="Est. Cost"
+                            className="w-1/2 border border-emerald-500 p-1.5 rounded text-sm focus:outline-none"
+                            value={editEstimatedCost}
+                            onChange={(e) => setEditEstimatedCost(e.target.value)}
+                          />
+                          <input
+                            type="text"
+                            placeholder="Phone / Links"
+                            className="w-1/2 border border-emerald-500 p-1.5 rounded text-sm focus:outline-none"
+                            value={editContactNumber}
+                            onChange={(e) => setEditContactNumber(e.target.value)}
+                          />
+                        </div>
+                        <textarea
+                          placeholder="Notes"
+                          className="w-full border border-emerald-500 p-1.5 rounded text-sm focus:outline-none resize-none"
+                          rows={2}
+                          value={editNotes}
+                          onChange={(e) => setEditNotes(e.target.value)}
+                        />
+                        <div className="flex justify-end gap-2 mt-1">
+                          <button onClick={cancelEditing} className="px-3 py-1.5 text-xs bg-slate-200 text-slate-700 font-medium rounded-md hover:bg-slate-300 transition-colors">Cancel</button>
+                          <button onClick={() => saveEditedOption(opt.id)} className="px-3 py-1.5 text-xs bg-emerald-600 text-white font-medium rounded-md hover:bg-emerald-700 transition-colors">Save</button>
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      
+                      /* DISPLAY OPTION MODE */
+                      <>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-slate-800">{opt.name}</span>
+                          <div className="flex items-center gap-1.5">
+                            <select
+                              value={opt.status}
+                              onChange={(e) => handleStatusChange(opt.id, e.target.value as BookingStatus)}
+                              className={`text-xs p-1 rounded border font-medium outline-none cursor-pointer ${
+                                opt.status === "Confirmed" ? "bg-emerald-100 text-emerald-800 border-emerald-300" : "bg-white border-slate-300"
+                              }`}
+                            >
+                              <option value="Enquired">Enquired</option>
+                              <option value="Negotiating">Negotiating</option>
+                              <option value="Booked">Booked</option>
+                              <option value="Confirmed">Confirmed</option>
+                            </select>
+                            <button onClick={() => startEditing(opt)} className="p-1 text-slate-400 hover:text-emerald-600 rounded bg-white border border-slate-200 transition-colors">
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={() => handleDeleteOption(opt.id)} className="p-1 text-slate-400 hover:text-red-600 rounded bg-white border border-slate-200 transition-colors">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
 
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
-                      {opt.estimatedCost ? (
-                        <span className="flex items-center gap-0.5 text-slate-700 font-medium">
-                          <IndianRupee className="w-3 h-3 text-slate-400" />
-                          {opt.estimatedCost.toLocaleString("en-IN")}
-                        </span>
-                      ) : null}
-                      {opt.contactNumber && (
-                        <span className="flex items-center gap-1 text-slate-500">
-                          <Phone className="w-3 h-3 text-slate-400" />
-                          {opt.contactNumber}
-                        </span>
-                      )}
-                    </div>
-                    {opt.notes && (
-                      <p className="text-[11px] text-slate-500 bg-white p-1.5 rounded border border-slate-100">
-                        {opt.notes}
-                      </p>
+                        <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
+                          {opt.estimatedCost ? (
+                            <span className="flex items-center gap-0.5 text-slate-700 font-medium">
+                              <IndianRupee className="w-3 h-3 text-slate-400" />
+                              {opt.estimatedCost.toLocaleString("en-IN")}
+                            </span>
+                          ) : null}
+                          {opt.contactNumber && (
+                            <a href={`tel:${opt.contactNumber}`} className="flex items-center gap-1 hover:text-emerald-600 hover:underline">
+                              <Phone className="w-3 h-3 text-slate-400" />
+                              {opt.contactNumber}
+                            </a>
+                          )}
+                        </div>
+                        {opt.notes && (
+                          <p className="text-[11px] text-slate-600 bg-white p-2.5 rounded-md border border-slate-100 whitespace-pre-wrap break-words mt-1">
+                            {renderTextWithLinks(opt.notes)}
+                          </p>
+                        )}
+                      </>
                     )}
                   </div>
                 ))}
@@ -278,8 +385,9 @@ function VendorsTracker() {
             )}
           </div>
 
-          <hr className="my-2 border-slate-100" />
+          <hr className="my-3 border-slate-100" />
 
+          {/* ADD NEW OPTION FORM */}
           <div className="space-y-3">
             <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Add New Option</h4>
             
@@ -314,24 +422,24 @@ function VendorsTracker() {
                 />
                 <input
                   type="text"
-                  placeholder="Phone / Instagram"
+                  placeholder="Phone Number"
                   className="w-1/2 border border-slate-300 p-2 rounded-lg text-sm focus:outline-none focus:border-emerald-500"
                   value={newContactNumber}
                   onChange={(e) => setNewContactNumber(e.target.value)}
                 />
               </div>
 
-              <input
-                type="text"
-                placeholder="Notes (Package details, inclusions, etc.)"
-                className="w-full border border-slate-300 p-2 rounded-lg text-sm focus:outline-none focus:border-emerald-500"
+              <textarea
+                placeholder="Notes / Links (Package details, inclusions, Instagram link, etc.)"
+                className="w-full border border-slate-300 p-2 rounded-lg text-sm focus:outline-none focus:border-emerald-500 resize-none"
+                rows={2}
                 value={newNotes}
                 onChange={(e) => setNewNotes(e.target.value)}
               />
             </div>
 
-            <Button onClick={handleAddOption} className="w-full bg-emerald-600 hover:bg-emerald-700 text-sm">
-              <Plus className="w-4 h-4 mr-1" /> Add Option
+            <Button onClick={handleAddOption} className="w-full bg-emerald-600 hover:bg-emerald-700 text-sm font-semibold transition-colors">
+              <Plus className="w-4 h-4 mr-1" /> Add Vendor Option
             </Button>
           </div>
         </DialogContent>
