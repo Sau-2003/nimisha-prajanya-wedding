@@ -143,11 +143,18 @@ export default function TasksPage() {
                 {/* Conditionally render input field OR text */}
                 {editingTaskId === task.id ? (
                   <div className="flex-1 flex flex-col gap-2 w-full">
-                    <input 
+                    <textarea
+                      rows={2}
                       value={editingTaskText}
                       onChange={(e) => setEditingTaskText(e.target.value)}
                       placeholder="Task description"
-                      className="border-b border-emerald-500 outline-none px-1 py-1 text-slate-700"
+                      className="border border-emerald-500 rounded-lg outline-none px-2 py-2 text-slate-700 resize-none"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          saveEditedTask(task.id);
+                        }
+                      }}
                     />
                     <div className="flex gap-2 items-center">
                       <input 
@@ -253,11 +260,18 @@ export default function TasksPage() {
         <DialogContent>
           <DialogHeader><DialogTitle>Add New Task</DialogTitle></DialogHeader>
           <div className="space-y-4 pt-4">
-            <input 
-              className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500" 
-              placeholder="What needs to be done?" 
-              value={newTaskText} 
-              onChange={e => setNewTaskText(e.target.value)} 
+            <textarea
+              className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+              rows={3}
+              placeholder="What needs to be done?"
+              value={newTaskText}
+              onChange={(e) => setNewTaskText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleAddTask();
+                }
+              }}
             />
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium text-slate-600">Target Date (Optional)</label>
