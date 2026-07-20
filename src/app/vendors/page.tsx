@@ -20,6 +20,7 @@ interface VendorOption {
   notes?: string;
 }
 
+
 const initialCategories = [
   "Venue", "Wedding Planner", "Decorator", "Makeup Artist", "Nail Artist",
   "Photographer", "Mehendi Artist", "DJ / Music", "Transport / Cars",
@@ -28,6 +29,7 @@ const initialCategories = [
 
 function VendorsTracker() {
   const { dbVendors, loading, fetchData } = useVendors();
+  console.log("Database Data:", dbVendors);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
@@ -42,7 +44,7 @@ function VendorsTracker() {
     const matches: VendorOption[] = dbVendors
       ?.filter((v) => v.category === categoryName)
       .map((v: any) => ({
-        id: v.id,
+        id: v.id, // Make sure this is v.id!
         name: v.assigned_vendor || "Unnamed Vendor",
         status: v.status as BookingStatus,
         estimatedCost: v.estimated_cost || 0,
@@ -96,9 +98,22 @@ function VendorsTracker() {
     fetchData();
   };
 
+  // --- THIS IS THE SINGLE, CORRECTED DELETE FUNCTION ---
   const handleDeleteOption = async (optionId: string) => {
-    await supabase.from("vendors").delete().eq("id", optionId);
-    fetchData();
+    if (!optionId) {
+      console.error("Error: optionId is undefined. Your useVendors hook MUST select 'id' from the database.");
+      alert("Error: Vendor ID is missing. Check the console.");
+      return;
+    }
+
+    const { error } = await supabase.from("vendors").delete().eq("id", optionId);
+    
+    if (error) {
+      console.error("Supabase Deletion Error:", error.message);
+      alert("Failed to delete. Check the console for details.");
+    } else {
+      await fetchData(); 
+    }
   };
 
   if (loading) return <div className="p-12 text-center text-emerald-600 font-medium">Loading Vendors...</div>;
@@ -325,7 +340,6 @@ function VendorsTracker() {
   );
 }
 
-// CRITICAL: Next.js App Router REQUIRES a default export for page components
 export default function VendorsPage() {
   return (
     <div className="p-6 md:p-12 max-w-[1600px] mx-auto space-y-8 h-full flex flex-col">
