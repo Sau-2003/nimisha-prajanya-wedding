@@ -21,7 +21,7 @@ interface VendorOption {
 }
 
 const initialCategories = [
-  "Venue", "Wedding Planner", "Decorator", "Makeup Artist", "Nail Artist",
+  "Venue", "Wedding Planner", "Panditji", "Decorator", "Makeup Artist", "Nail Artist",
   "Photographer", "Mehendi Artist", "DJ / Music", "Transport / Cars",
   "Invitations", "Wedding Favors"
 ];
@@ -84,13 +84,13 @@ function VendorsTracker() {
         contactNumber: v.contact_numbers ?? [],
         notes: v.notes || "",
       })) || [];
-
-    const confirmedOption = matches.find((opt) => opt.status === 'Confirmed');
+    
+    const confirmedOptions = matches.filter((opt) => opt.status === "Confirmed");
 
     return {
       name: categoryName,
       options: matches,
-      confirmedOption: confirmedOption || null,
+      confirmedOptions,
     };
   });
 
@@ -197,7 +197,7 @@ function VendorsTracker() {
         <CardContent className="pt-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {displayCategories.map((item) => {
-              const hasConfirmed = Boolean(item.confirmedOption);
+              const hasConfirmed = item.confirmedOptions.length > 0;
 
               return (
                 <div
@@ -207,7 +207,7 @@ function VendorsTracker() {
                   }`}
                 >
                   <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-medium text-slate-800">{item.name}</h3>
+                    <h3 className="font-medium text-slate-800">{item.name}</h3>                    
                     <Badge
                       className={`${
                         hasConfirmed
@@ -217,36 +217,41 @@ function VendorsTracker() {
                           : "bg-slate-100 text-slate-600"
                       } border-none shadow-none font-medium`}
                     >
-                      {hasConfirmed ? "Confirmed" : item.options.length > 0 ? `${item.options.length} Options` : "Not Started"}
+                      {hasConfirmed
+                        ? `${item.confirmedOptions.length} Confirmed`
+                        : item.options.length > 0
+                        ? `${item.options.length} Options`
+                        : "Not Started"}
                     </Badge>
                   </div>
 
                   <div className="mt-2 space-y-2">
                     {/* CONFIRMED STATE */}
-                    {hasConfirmed && item.confirmedOption ? (
-                      <div className="bg-emerald-100/60 p-2.5 rounded-lg border border-emerald-200 space-y-1">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 text-emerald-900 font-semibold text-sm">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                            <span>{item.confirmedOption.name}</span>
-                          </div>
-                          <Button variant="ghost" size="sm" onClick={() => openDialog(item.name)} className="text-xs text-emerald-700 hover:bg-emerald-200/50 h-6 px-2">
-                            Manage
-                          </Button>
-                        </div>
+                    {hasConfirmed ? (
+                      <div className="space-y-2">
+                        {item.confirmedOptions.map((vendor) => (
+                          <div
+                            key={vendor.id}
+                            className="bg-emerald-100/60 p-2.5 rounded-lg border border-emerald-200 space-y-1"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 text-emerald-900 font-semibold text-sm">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                <span>{vendor.name}</span>
+                              </div>
+                            </div>
 
-                        <div className="flex flex-wrap items-center gap-3 text-xs text-emerald-800 pt-1">
-                          {item.confirmedOption.estimatedCost ? (
-                            <span className="flex items-center gap-0.5 font-medium">
-                              <IndianRupee className="w-3 h-3 text-emerald-700" />
-                              {item.confirmedOption.estimatedCost.toLocaleString("en-IN")}
-                            </span>
-                          ) : null}
-                          {item.confirmedOption.contactNumber && (
-                            <div className="flex flex-col">
-                              {item.confirmedOption.contactNumber?.map((phone, index) => (
+                            <div className="flex flex-wrap gap-3 text-xs text-emerald-800">
+                              {vendor.estimatedCost ? (
+                                <span className="flex items-center gap-1">
+                                  <IndianRupee className="w-3 h-3" />
+                                  {vendor.estimatedCost.toLocaleString("en-IN")}
+                                </span>
+                              ) : null}
+
+                              {vendor.contactNumber?.map((phone, i) => (
                                 <a
-                                  key={index}
+                                  key={i}
                                   href={`tel:${phone}`}
                                   className="flex items-center gap-1 hover:underline"
                                 >
@@ -255,8 +260,17 @@ function VendorsTracker() {
                                 </a>
                               ))}
                             </div>
-                          )}
-                        </div>
+                          </div>
+                        ))}
+
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openDialog(item.name)}
+                          className="text-xs text-emerald-700"
+                        >
+                          Manage
+                        </Button>
                       </div>
                     ) : (
                       
