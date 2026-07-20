@@ -29,7 +29,7 @@ const renderTextWithLinks = (text: string) => {
           target="_blank" 
           rel="noopener noreferrer"
           className="text-emerald-600 font-medium hover:underline break-all"
-          onClick={(e) => e.stopPropagation()} // Prevents clicking the link from closing/triggering something else
+          onClick={(e) => e.stopPropagation()}
         >
           {part}
         </a>
@@ -65,7 +65,6 @@ export default function EventWorkspacePage() {
   const percentComplete = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
 
   // --- ACTIONS (Delegated to Hook) ---
-
   const handleAddItem = async () => {
     if (!activeModal || !newItemText.trim()) return;
 
@@ -75,7 +74,6 @@ export default function EventWorkspacePage() {
       imageUrl: newItemImage || undefined,
     });
 
-    // Clear the form
     setNewItemText("");
     setNewItemDate("");
     setNewItemImage(null);
@@ -111,7 +109,6 @@ export default function EventWorkspacePage() {
   };
 
   // --- HELPERS ---
-
   const formatDate = (dateString: string) => {
     if (!dateString) return "";
     return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -148,6 +145,20 @@ export default function EventWorkspacePage() {
     );
   };
 
+  // The ordered layout 
+  const workspaceCards = [
+    { id: 'tasks', title: 'Tasks', icon: ClipboardList, color: 'text-blue-500', isLink: false },
+    { id: 'taskDone', title: 'Task Done', icon: CheckCircle2, color: 'text-emerald-500', isLink: false },
+    { id: 'outfit', title: 'Outfit', icon: Shirt, color: 'text-red-500', isLink: true, href: `/events/${rawEventName}/outfits`, subtext: 'Manage Outfits' },
+    { id: 'ideas', title: 'Ideas', icon: Lightbulb, color: 'text-amber-500', isLink: false },
+    { id: 'games', title: 'Games', icon: Gamepad2, color: 'text-purple-500', isLink: false },
+    { id: 'gifts', title: 'Return Gift', icon: Gift, color: 'text-red-500', isLink: false },
+    { id: 'itemsNeeded', title: 'Items Needed', icon: ShoppingBag, color: 'text-pink-500', isLink: false },
+    { id: 'vendors', title: 'Vendors', icon: Store, color: 'text-teal-500', isLink: false },
+    { id: 'pujaItems', title: 'Puja Items', icon: Flame, color: 'text-orange-500', isLink: false },
+    { id: 'expenses', title: 'Expenses', icon: IndianRupee, color: 'text-slate-800', isLink: true, href: '/budget', showExternalIcon: true },
+  ];
+
   if (loading) return <div className="p-12 text-center text-emerald-600">Loading workspace...</div>;
 
   return (
@@ -176,51 +187,53 @@ export default function EventWorkspacePage() {
 
       {/* Grid Workspace */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {[
-          { id: 'tasks', title: 'Tasks', icon: ClipboardList, color: 'text-blue-500' },
-          { id: 'taskDone', title: 'Task Done', icon: CheckCircle2, color: 'text-emerald-500' },
-          { id: 'itemsNeeded', title: 'Items Needed', icon: ShoppingBag, color: 'text-pink-500' },
-          { id: 'pujaItems', title: 'Puja Items', icon: Flame, color: 'text-orange-500' },
-          { id: 'games', title: 'Games', icon: Gamepad2, color: 'text-purple-500' },
-          { id: 'gifts', title: 'Return Gift', icon: Gift, color: 'text-red-500' },
-          { id: 'vendors', title: 'Vendors', icon: Store, color: 'text-teal-500' },
-          { id: 'ideas', title: 'Ideas', icon: Lightbulb, color: 'text-amber-500' },
-          { id: 'notes', title: 'Notes', icon: FileText, color: 'text-slate-500' },
-        ].map((card) => (
-          <button 
-            key={card.id}
-            onClick={() => { setActiveModal(card.id as CategoryId); setEditingItemId(null); }}
-            className="bg-white border border-slate-100 p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow text-left h-full flex flex-col group"
-          >
-            <div className="flex items-center gap-3 mb-4">
-              <card.icon className={`w-5 h-5 ${card.color}`} />
-              <h2 className="font-bold text-slate-800 text-lg group-hover:text-emerald-600 transition-colors">{card.title}</h2>
-            </div>
-            <div className="flex-1">
-              {renderCardPreview(card.id as CategoryId)}
-            </div>
-          </button>
-        ))}
+        {workspaceCards.map((card) => {
+          // Render as NextJS Link if it's an external page route
+          if (card.isLink) {
+            return (
+              <Link 
+                key={card.id} 
+                href={card.href!} 
+                className="bg-white border border-slate-100 p-6 rounded-2xl shadow-sm hover:shadow-md hover:border-emerald-200 transition-all flex flex-col justify-between group"
+              >
+                <div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <card.icon className={`w-5 h-5 ${card.color}`} />
+                    <h2 className="font-bold text-slate-800 text-lg group-hover:text-emerald-600 transition-colors">
+                      {card.title}
+                    </h2>
+                  </div>
+                  {card.subtext && <p className="text-sm text-slate-400 italic">{card.subtext}</p>}
+                </div>
+                {card.showExternalIcon && (
+                  <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-emerald-500 transition-colors self-end mt-2" />
+                )}
+              </Link>
+            );
+          }
 
-        <Link href={`/events/${rawEventName}/outfits`} className="bg-white border border-slate-100 p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow text-left h-full flex flex-col group">
-          <div className="flex items-center gap-3 mb-4">
-            <Shirt className="w-5 h-5 text-red-500" />
-            <h2 className="font-bold text-slate-800 text-lg group-hover:text-emerald-600 transition-colors">Outfit</h2>
-          </div>
-          <p className="text-sm text-slate-400 italic">Manage Outfits</p>
-        </Link>
-
-        <Link href="/budget" className="bg-white border border-slate-100 p-6 rounded-2xl shadow-sm hover:shadow-md hover:border-emerald-200 transition-all flex items-center justify-between group">
-          <div className="flex items-center gap-3">
-            <IndianRupee className="w-5 h-5 text-slate-800" />
-            <h2 className="font-bold text-slate-800 text-lg">Expenses</h2>
-          </div>
-          <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-emerald-500 transition-colors" />
-        </Link>
+          // Render as Modal trigger button if it's a standard category
+          return (
+            <button 
+              key={card.id}
+              onClick={() => { setActiveModal(card.id as CategoryId); setEditingItemId(null); }}
+              className="bg-white border border-slate-100 p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow text-left h-full flex flex-col group"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <card.icon className={`w-5 h-5 ${card.color}`} />
+                <h2 className="font-bold text-slate-800 text-lg group-hover:text-emerald-600 transition-colors">
+                  {card.title}
+                </h2>
+              </div>
+              <div className="flex-1">
+                {renderCardPreview(card.id as CategoryId)}
+              </div>
+            </button>
+          );
+        })}
       </div>
 
       {/* MODAL */}
-      
       <Dialog open={!!activeModal} onOpenChange={(open) => !open && setActiveModal(null)}>
         <DialogContent 
           className="sm:max-w-xl"
@@ -236,7 +249,7 @@ export default function EventWorkspacePage() {
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3 mt-2">
             <textarea 
               className="w-full border p-2.5 rounded-lg outline-none focus:border-emerald-500 text-sm resize-none"
-              placeholder="Type new entry here... (Desktop: Shift + Enter for new line)"
+              placeholder="Type new entry here... "
               rows={2}
               value={newItemText}
               onChange={(e) => setNewItemText(e.target.value)}
@@ -253,18 +266,17 @@ export default function EventWorkspacePage() {
 
             <div className="flex gap-2 h-[42px]">
               {activeModal === 'tasks' && (
-                <div className="relative w-1/3">
+                <div className="w-1/3 h-full">
+                  {/* Changed to type="text" by default so placeholder works, switching to date on focus */}
                   <input 
-                    type="date"
+                    type={newItemDate ? "date" : "text"}
+                    onFocus={(e) => (e.target.type = "date")}
+                    onBlur={(e) => { if (!e.target.value) e.target.type = "text"; }}
                     className="w-full h-full border px-3 rounded-lg outline-none focus:border-emerald-500 text-sm text-slate-600 bg-white"
+                    placeholder="Date of Campletion"
                     value={newItemDate}
                     onChange={(e) => setNewItemDate(e.target.value)}
                   />
-                  {!newItemDate && (
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 pointer-events-none">
-                      Last date
-                    </span>
-                  )}
                 </div>
               )}
               
@@ -321,11 +333,15 @@ export default function EventWorkspacePage() {
                     />
 
                     <div className="flex gap-2 text-sm h-8 mt-1">
+                      {/* Applied the same text/date switching logic to the Edit fields as well */}
                       <input 
-                        type="date"
+                        type={editingTaskDate ? "date" : "text"}
+                        onFocus={(e) => (e.target.type = "date")}
+                        onBlur={(e) => { if (!e.target.value) e.target.type = "text"; }}
+                        placeholder="Date of Campletion"
                         value={editingTaskDate}
                         onChange={(e) => setEditingTaskDate(e.target.value)}
-                        className="border rounded px-2 outline-none w-1/3 text-slate-600"
+                        className="border rounded px-2 outline-none w-1/3 text-slate-600 bg-white"
                       />
                       <div className="flex-1 relative">
                         <input 
