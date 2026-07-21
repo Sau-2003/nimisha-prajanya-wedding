@@ -184,8 +184,13 @@ export default function EventWorkspacePage() {
     const list = items[categoryId] || [];
     if (list.length === 0) return <p className="text-sm text-slate-400 italic">Empty</p>;
 
-    const preview = list.slice(0, 2);
-    const remainder = list.length - 2;
+    // Sort descending by creation date for preview
+    const sortedList = [...list].sort((a: any, b: any) => 
+      new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime()
+    );
+
+    const preview = sortedList.slice(0, 2);
+    const remainder = sortedList.length - 2;
 
     return (
       <ul className="text-slate-600 text-sm space-y-2.5">
@@ -422,9 +427,11 @@ export default function EventWorkspacePage() {
               </div>
             )}
 
-            {/* List Items */}
+            {/* List Items (Sorted Descending by creation date) */}
             <div className="mt-4 space-y-3 pb-4">
-              {activeModal && items[activeModal]?.map((item: any) => {
+              {activeModal && [...(items[activeModal] || [])].sort((a: any, b: any) => 
+                new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime()
+              ).map((item: any) => {
                 const overdue = activeModal === 'tasks' && isOverdue(item.dueDate || null);
                 return (
                   <div 

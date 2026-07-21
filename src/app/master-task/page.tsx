@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check,CheckSquare,ClipboardList, Trash2, RotateCcw, Plus, Pencil, X, Calendar, Image as ImageIcon} from "lucide-react";
+import { Check, CheckSquare, ClipboardList, Trash2, RotateCcw, Plus, Pencil, X, Calendar, Image as ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
@@ -29,9 +29,14 @@ export default function TasksPage() {
   // Full Screen Image State
   const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
 
-  // Filter tasks
-  const ongoingTasks = tasks.filter((t: any) => t.status === 'ongoing');
-  const completedTasks = tasks.filter((t: any) => t.status === 'done');
+  // Filter tasks & sort descending by creation date (Newest first)
+  const ongoingTasks = tasks
+    .filter((t: any) => t.status === 'ongoing')
+    .sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+
+  const completedTasks = tasks
+    .filter((t: any) => t.status === 'done')
+    .sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
 
   // Handle Image Selection with AUTO COMPRESSION
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, isEditMode: boolean) => {
@@ -42,12 +47,10 @@ export default function TasksPage() {
       reader.onload = (event) => {
         const img = new Image();
         img.onload = () => {
-          // Create an invisible canvas to compress the image
           const canvas = document.createElement("canvas");
           let width = img.width;
           let height = img.height;
           
-          // Max dimensions to prevent massive base64 strings
           const MAX_WIDTH = 800; 
           const MAX_HEIGHT = 800;
 
@@ -68,7 +71,6 @@ export default function TasksPage() {
           const ctx = canvas.getContext("2d");
           ctx?.drawImage(img, 0, 0, width, height);
 
-          // Compress to JPEG at 70% quality (drastically reduces file size)
           const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
 
           if (isEditMode) {
@@ -188,20 +190,18 @@ export default function TasksPage() {
     });
   };
 
-  // Helper to format dates nicely
   const formatDate = (dateString: string) => {
     if (!dateString) return "";
     return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
-  // Helper to check if a task is overdue
   const isOverdue = (dateString: string | null) => {
     if (!dateString) return false;
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Reset today to midnight
+    today.setHours(0, 0, 0, 0);
     
     const dueDate = new Date(dateString);
-    dueDate.setHours(0, 0, 0, 0); // Reset due date to midnight
+    dueDate.setHours(0, 0, 0, 0);
     
     return dueDate < today;
   };
@@ -263,7 +263,6 @@ export default function TasksPage() {
                         className="border border-emerald-500 rounded-lg outline-none px-2 py-2 text-slate-700 resize-none"              
                       />
                       
-                      {/* Image Preview in Edit Mode */}
                       {editingTaskImage && (
                         <div className="relative inline-block w-max mt-1 mb-1">
                           <img src={editingTaskImage} alt="Preview" className="h-16 w-auto rounded-md border border-slate-200 object-cover" />
@@ -339,7 +338,7 @@ export default function TasksPage() {
                     </div>
                   )}
 
-                  {/* Actions (Hidden while editing) */}
+                  {/* Actions */}
                   {editingTaskId !== task.id && (
                     <div className="flex gap-2">
                       <button 
@@ -440,7 +439,6 @@ export default function TasksPage() {
           <DialogHeader><DialogTitle>Add New Task</DialogTitle></DialogHeader>
           <div className="space-y-4 pt-2">
             
-            {/* Image Preview Area */}
             {newTaskImage && (
               <div className="relative inline-block w-max">
                 <img src={newTaskImage} alt="Preview" className="h-28 w-auto rounded-lg border border-slate-200 object-cover shadow-sm" />
