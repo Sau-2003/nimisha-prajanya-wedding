@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { 
-  LayoutDashboard, CheckSquare, CalendarHeart, 
+  LayoutDashboard, CheckSquare, CalendarHeart, ClipboardList,
   ShoppingBag, Users, IndianRupee, Menu, X, BookIcon, CalendarClock,Handshake  // Import CalendarClock
 } from 'lucide-react';
 import Image from "next/image";
@@ -13,7 +13,7 @@ import { DressIcon } from '@phosphor-icons/react';
 
 const mainNav = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { name: 'Global Task Board', href: '/master-task', icon: CheckSquare },
+  { name: 'Global Task Board', href: '/master-task', icon: ClipboardList },
   { name: 'Vendor Tracker', href: '/vendors', icon: Handshake  },
   { name: 'Budget', href: '/budget', icon: IndianRupee },
   { name: 'Guests', href: '/guests', icon: Users },

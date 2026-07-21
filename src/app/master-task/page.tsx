@@ -1,9 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { 
-  Check, Trash2, RotateCcw, Plus, LayoutList, Pencil, X, Calendar, Image as ImageIcon
-} from "lucide-react";
+import { Check,CheckSquare,ClipboardList, Trash2, RotateCcw, Plus, Pencil, X, Calendar, Image as ImageIcon} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
@@ -205,7 +203,7 @@ export default function TasksPage() {
       <div className="flex justify-between items-start mb-10">
         <div>
           <h1 className="flex items-center gap-3 text-3xl font-serif font-bold text-emerald-900 mb-2">
-            <LayoutList className="w-8 h-8 text-emerald-700" /> 
+            <ClipboardList className="w-8 h-8 text-emerald-700" /> 
             Global Task Board
           </h1>
           <p className="text-slate-500">Manage everything you need to do before the big day.</p>
