@@ -1,5 +1,5 @@
 {
-  "name": "Nimisha-Prajanya Wedding Planner",
+  "name": "Nimisha & Prajanya Wedding",
   "short_name": "Wedding Planner",
   "start_url": "/",
   "display": "standalone",
@@ -8,9 +8,13 @@
   "icons": [
     {
       "src": "/engagement.jpg",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/engagement.jpg",
       "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
+      "type": "image/png"
     }
   ]
 }
