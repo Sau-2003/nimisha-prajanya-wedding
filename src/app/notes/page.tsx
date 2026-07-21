@@ -2,17 +2,36 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, Image as ImageIcon, X } from "lucide-react";
+import { Plus, Trash2, Image as ImageIcon, X, Pin, BookIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
 import { useNotes } from "@/hooks/useNotes"; 
 
-// --- SUB-COMPONENT: Handles typing cleanly without lagging the app ---
-function NoteCard({ note, onDelete, onUpdate, onImageClick }: any) {
-  // Local state keeps typing fast & smooth
+function NoteCard({ 
+  note, 
+  onDelete, 
+  onUpdate, 
+  onImageClick
+}: any) {
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content || "");
   const [isEditing, setIsEditing] = useState(false);
+  
+  // Custom Cursor-Following Tooltip State
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
+
+  // Safely treat null/undefined as false for older notes
+  const isPinned = Boolean(note.is_pinned);
+
+  const handleTooltipMove = (e: React.MouseEvent, text: string) => {
+    setMousePos({ x: e.clientX, y: e.clientY });
+    if (activeTooltip !== text) setActiveTooltip(text);
+  };
+
+  const handleTooltipLeave = () => {
+    setActiveTooltip(null);
+  };
 
   const renderTextWithLinks = (text: string) => {
     const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -36,7 +55,6 @@ function NoteCard({ note, onDelete, onUpdate, onImageClick }: any) {
     });
   };
 
-  // Handle Image Upload with Hyper-Compression for Database Storage
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -49,7 +67,6 @@ function NoteCard({ note, onDelete, onUpdate, onImageClick }: any) {
           let width = img.width;
           let height = img.height;
           
-          // Compress to max 500x500px to keep base64 string tiny
           const MAX_WIDTH = 500; 
           const MAX_HEIGHT = 500;
 
@@ -70,10 +87,7 @@ function NoteCard({ note, onDelete, onUpdate, onImageClick }: any) {
           const ctx = canvas.getContext("2d");
           ctx?.drawImage(img, 0, 0, width, height);
 
-          // Compress to JPEG at 50% quality
           const compressedBase64 = canvas.toDataURL("image/jpeg", 0.5);
-
-          // Save immediately to database
           onUpdate(note.id, { image_url: compressedBase64 });
         };
         img.src = event.target?.result as string;
@@ -83,26 +97,68 @@ function NoteCard({ note, onDelete, onUpdate, onImageClick }: any) {
     }
   };
 
-  // Sync if database changes from another device
   useEffect(() => {
     setTitle(note.title);
     setContent(note.content || "");
   }, [note]);
 
-  return (
-    <div className="relative bg-white w-full rounded-xl shadow-md border border-slate-100 overflow-hidden group">
-      <button 
-        onClick={() => onDelete(note.id)}
-        className="absolute top-6 right-6 p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg opacity-50 md:opacity-50 md:group-hover:opacity-100 transition-opacity z-10 shadow-sm"
-        title="Delete Note"
-      >
-        <Trash2 className="w-5 h-5" />
-      </button>
+  const formattedDate = note.created_at 
+    ? new Date(note.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : "Just now";
 
-      <div className="pt-8 pb-4 pl-12 md:pl-16 pr-8">
+  return (
+    <div className={`relative bg-white w-full rounded-xl shadow-md border overflow-hidden group transition-all duration-300 ${
+        isPinned ? 'border-slate-800 ring-1 ring-slate-800/20' : 'border-slate-100'
+    }`}>
+      
+      {/* Top Right Action Buttons */}
+      <div className="absolute top-6 right-6 flex items-center gap-2 z-20">
+        
+        {/* PIN BUTTON */}
+        <button 
+          type="button"
+          onMouseMove={(e) => handleTooltipMove(e, isPinned ? "Unpin Note" : "Pin Note")}
+          onMouseLeave={handleTooltipLeave}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onUpdate(note.id, { is_pinned: !isPinned });
+            setActiveTooltip(null);
+          }}
+          className={`p-2 rounded-lg transition-all shadow-sm ${
+            isPinned 
+              ? 'bg-slate-800 text-white opacity-100 hover:bg-slate-900' 
+              : 'bg-slate-100 text-slate-500 opacity-50 md:group-hover:opacity-100 hover:bg-slate-200'
+          }`}
+        >
+          <Pin className="w-4 h-4" fill={isPinned ? "currentColor" : "none"} />
+        </button>
+
+        {/* DELETE BUTTON */}
+        <button 
+          type="button"
+          onMouseMove={(e) => handleTooltipMove(e, "Delete Note")}
+          onMouseLeave={handleTooltipLeave}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(note.id);
+            setActiveTooltip(null);
+          }}
+          className="p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg opacity-50 md:opacity-50 md:group-hover:opacity-100 transition-opacity shadow-sm"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="pt-6 pb-4 pl-6 md:pl-10 pr-32">
+        {/* DATE DISPLAY */}
+        <div className="text-[10px] text-slate-400 font-bold tracking-widest uppercase mb-1.5 ml-1">
+          {formattedDate}
+        </div>
+
         <input 
           type="text"
-          className="text-2xl font-sans text-indigo-600 tracking-widest uppercase w-full bg-transparent border-b-2 border-transparent hover:border-[#c4b5fd]/30 focus:border-[#c4b5fd] focus:outline-none transition-all"
+          className="text-xl font-sans text-indigo-600 tracking-widest uppercase w-full bg-transparent border-b-2 border-transparent hover:border-[#c4b5fd]/30 focus:border-[#c4b5fd] focus:outline-none transition-all"
           value={title}
           placeholder="ENTER TITLE..."
           onChange={(e) => setTitle(e.target.value.toUpperCase())}
@@ -110,7 +166,7 @@ function NoteCard({ note, onDelete, onUpdate, onImageClick }: any) {
         />
       </div>
 
-      <div className="w-full px-4 md:px-12 pb-4">
+      <div className="w-full px-4 md:px-10 pb-6">
         {isEditing ? (
           <textarea
             value={content}
@@ -168,13 +224,23 @@ function NoteCard({ note, onDelete, onUpdate, onImageClick }: any) {
           />
           <label 
             htmlFor={`note-image-${note.id}`}
-            className="flex items-center gap-2 text-sm text-slate-500 hover:text-indigo-600 cursor-pointer transition-colors bg-slate-50 px-3 py-1.5 rounded-md hover:bg-slate-100"
+            className="flex items-center gap-2 text-xs text-slate-500 hover:text-indigo-600 cursor-pointer transition-colors bg-slate-50 px-3 py-1.5 rounded-md hover:bg-slate-100"
           >
             <ImageIcon className="w-4 h-4" />
             {note.image_url ? "Change Image" : "Attach Image"}
           </label>
         </div>
       </div>
+
+      {/* RENDER CURSOR-FOLLOWING TOOLTIP */}
+      {activeTooltip && (
+        <div 
+          className="fixed z-[100] px-2.5 py-1 bg-slate-900 text-white text-[11px] font-medium rounded shadow-lg pointer-events-none whitespace-nowrap"
+          style={{ left: mousePos.x + 12, top: mousePos.y + 16 }}
+        >
+          {activeTooltip}
+        </div>
+      )}
     </div>
   );
 }
@@ -182,11 +248,11 @@ function NoteCard({ note, onDelete, onUpdate, onImageClick }: any) {
 // --- MAIN PAGE ---
 export default function NotesPage() {
   const { notes, loading, fetchData } = useNotes();
+  const [localNotes, setLocalNotes] = useState<any[]>([]);
   
   const [pageTitle, setPageTitle] = useState("Wedding Notes");
   const [pageDesc, setPageDesc] = useState("Jot down your ideas.");
   
-  // Full screen image state
   const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -194,8 +260,33 @@ export default function NotesPage() {
     setPageDesc(localStorage.getItem("notes-page-desc") || "Jot down your ideas.");
   }, []);
 
+  // Safely sort Notes ensuring boolean comparisons
+  useEffect(() => {
+    if (notes) {
+      const sorted = [...notes].sort((a, b) => {
+        const aPinned = Boolean(a.is_pinned);
+        const bPinned = Boolean(b.is_pinned);
+        
+        if (aPinned !== bPinned) {
+          return aPinned ? -1 : 1;
+        }
+        
+        const dateA = new Date(a.created_at || 0).getTime();
+        const dateB = new Date(b.created_at || 0).getTime();
+        return dateB - dateA;
+      });
+      setLocalNotes(sorted);
+    }
+  }, [notes]);
+
   const handleAddNote = async () => {
-    const { error } = await supabase.from('notes').insert({ title: 'NEW NOTE', content: '' });
+    const { error } = await supabase.from('notes').insert({ 
+      title: 'NEW NOTE', 
+      content: '', 
+      is_pinned: false,
+      created_at: new Date().toISOString()
+    });
+    
     if (error) {
       alert("Error adding note: " + error.message);
       return;
@@ -205,46 +296,61 @@ export default function NotesPage() {
   };
 
   const handleDelete = async (id: string) => {
+    setLocalNotes(prev => prev.filter(n => n.id !== id));
     await supabase.from('notes').delete().eq('id', id);
     fetchData();
   };
 
   const handleUpdate = async (id: string, updates: any) => {
+    setLocalNotes((prev) => {
+      const newNotes = prev.map((n) => (n.id === id ? { ...n, ...updates } : n));
+      
+      return newNotes.sort((a, b) => {
+        const aPinned = Boolean(a.is_pinned);
+        const bPinned = Boolean(b.is_pinned);
+        
+        if (aPinned !== bPinned) return aPinned ? -1 : 1;
+        const dateA = new Date(a.created_at || 0).getTime();
+        const dateB = new Date(b.created_at || 0).getTime();
+        return dateB - dateA;
+      });
+    });
+
     const { error } = await supabase.from('notes').update(updates).eq('id', id);
     if (error) {
-      alert("Database error: " + error.message);
+      alert("Database error: Check if is_pinned column exists! " + error.message);
+      fetchData(); 
+    } else {
+      fetchData(); 
     }
   };
 
   if (loading) return <div className="p-12 text-center text-[#c4b5fd] font-bold">Loading Notes...</div>;
 
   return (
-    <div className="p-6 md:p-12 max-w-5xl mx-auto min-h-screen space-y-8">
+    <div className="p-6 md:p-12 max-w-4xl mx-auto min-h-screen space-y-8">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex-1">
-          <input 
-            className="font-serif text-3xl font-bold text-slate-900 w-full focus:outline-none"
-            value={pageTitle}
-            onChange={(e) => { setPageTitle(e.target.value); localStorage.setItem("notes-page-title", e.target.value); }}
-          />
-          <input 
-            className="text-slate-500 mt-1 w-full focus:outline-none"
-            value={pageDesc}
-            onChange={(e) => { setPageDesc(e.target.value); localStorage.setItem("notes-page-desc", e.target.value); }}
-          />
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-serif font-bold text-emerald-900 flex items-center gap-3">
+            <BookIcon className="w-8 h-8 text-emerald-700" /> Wedding Notes
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Jot down your ideas.
+          </p>
         </div>
+                     
         <Button onClick={handleAddNote} className="bg-[#c4b5fd] hover:bg-[#a78bfa] text-slate-900 font-semibold shadow-sm">
           <Plus className="w-5 h-5 mr-2" /> Add Note
         </Button>
       </div>
 
       {/* Notes List */}
-      <div className="space-y-10">
-        {notes.length === 0 ? (
+      <div className="space-y-6">
+        {localNotes.length === 0 ? (
            <div className="text-center py-12 text-slate-400 italic">No notes yet. Click "Add Note" to get started!</div>
         ) : (
-          notes.map((note: any) => (
+          localNotes.map((note: any) => (
             <NoteCard 
               key={note.id} 
               note={note} 

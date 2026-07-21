@@ -7,7 +7,8 @@ export type WorkspaceItem = {
   id: string;
   content: string;
   dueDate?: string;
-  imageUrl?: string; 
+  imageUrl?: string;
+  created_at: string 
 };
 
 type GroupedItems = Record<CategoryId, WorkspaceItem[]>;
@@ -45,6 +46,7 @@ export function useEventItems(eventName: string) {
           content: row.content || "",
           dueDate: row.due_date || undefined,
           imageUrl: row.image_url || undefined,
+          created_at: row.created_at || "",
         });
       }
     });

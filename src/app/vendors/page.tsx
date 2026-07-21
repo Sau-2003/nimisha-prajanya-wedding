@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Plus, CheckCircle2, Trash2, Phone, IndianRupee, Pencil, X } from "lucide-react";
+import { MapPin, Plus, CheckCircle2, Trash2, Phone, IndianRupee, Pencil, Handshake, X, Link as LinkIcon } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useVendors } from "@/hooks/useVendors";
 
@@ -26,29 +26,102 @@ const initialCategories = [
   "Invitations", "Wedding Favors"
 ];
 
-// Helper to make URLs clickable in notes
+// --- NEW Component: Link Preview ---
+const LinkPreview = ({ url }: { url: string }) => {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Using Microlink's free API to fetch link metadata (title, description, image)
+    fetch(`https://api.microlink.io/?url=${encodeURIComponent(url)}`)
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.status === "success") {
+          setData(json.data);
+        }
+        setLoading(false);
+      })
+      .catch(() => {
+        setLoading(false);
+      });
+  }, [url]);
+
+  if (loading) {
+    return <div className="animate-pulse bg-slate-100 h-20 rounded-lg border border-slate-200 w-full mt-2"></div>;
+  }
+
+  // Fallback if no preview data could be fetched
+  if (!data) return null; 
+
+  const domain = new URL(url).hostname.replace('www.', '');
+
+  return (
+    <a 
+      href={url} 
+      target="_blank" 
+      rel="noopener noreferrer" 
+      className="flex items-stretch mt-2 border border-slate-200 rounded-lg overflow-hidden hover:bg-slate-50 transition-colors bg-white group shadow-sm no-underline max-w-sm"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {data.image?.url ? (
+        <div className="w-20 sm:w-24 flex-shrink-0 border-r border-slate-100">
+          <img src={data.image.url} alt={data.title} className="w-full h-full object-cover" />
+        </div>
+      ) : (
+        <div className="w-20 sm:w-24 flex-shrink-0 border-r border-slate-100 bg-slate-50 flex items-center justify-center text-slate-300">
+          <LinkIcon className="w-6 h-6" />
+        </div>
+      )}
+      <div className="p-2 sm:p-3 flex flex-col justify-center overflow-hidden flex-1">
+        <h4 className="text-xs font-semibold text-slate-800 truncate group-hover:text-emerald-700 transition-colors">
+          {data.title || domain}
+        </h4>
+        <p className="text-[10px] text-slate-500 line-clamp-1 mt-0.5">{data.description}</p>
+        <span className="text-[9px] text-slate-400 mt-1 truncate uppercase tracking-wider">{domain}</span>
+      </div>
+    </a>
+  );
+};
+
+// --- UPDATED: Helper to make URLs clickable and render previews ---
 const renderTextWithLinks = (text: string) => {
-  if (!text) return "";
+  if (!text) return null;
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   const parts = text.split(urlRegex);
+  const extractedUrls = text.match(urlRegex) || [];
 
-  return parts.map((part, index) => {
-    if (part.match(urlRegex)) {
-      return (
-        <a 
-          key={index} 
-          href={part} 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="text-emerald-600 font-medium hover:underline break-all"
-          onClick={(e) => e.stopPropagation()} 
-        >
-          {part}
-        </a>
-      );
-    }
-    return <span key={index}>{part}</span>;
-  });
+  return (
+    <div className="space-y-2">
+      <div className="whitespace-pre-wrap break-words">
+        {parts.map((part, index) => {
+          if (part.match(urlRegex)) {
+            return (
+              <a 
+                key={index} 
+                href={part} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-emerald-600 font-medium hover:underline break-all"
+                onClick={(e) => e.stopPropagation()} 
+              >
+                {part}
+              </a>
+            );
+          }
+          return <span key={index}>{part}</span>;
+        })}
+      </div>
+      
+      {/* Render rich link previews for every URL found in the text */}
+      {extractedUrls.length > 0 && (
+        <div className="flex flex-col gap-2 pt-1">
+          {extractedUrls.map((url, idx) => (
+            <LinkPreview key={idx} url={url} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
 };
 
 function VendorsTracker() {
@@ -101,15 +174,13 @@ function VendorsTracker() {
     setNewOptionName("");
     setNewOptionStatus("Enquired");
     setNewEstimatedCost("");
-    setNewContactNumbers([""]); // Fixed: using setNewContactNumbers instead of setEditContactNumbers
+    setNewContactNumbers([""]);
     setNewNotes("");
-    setEditingOptionId(null); // Reset edit mode
+    setEditingOptionId(null);
     setIsDialogOpen(true);
   };
 
   const handleAddOption = async () => {
-    console.log("Add button clicked");
-
     if (!newOptionName.trim() || !editingCategory) return;
 
     const filteredPhones = newContactNumbers.filter(phone => phone.trim() !== "");
@@ -130,7 +201,6 @@ function VendorsTracker() {
       return;
     }
 
-    // Reset Form Fields Safely
     setNewOptionName("");
     setNewOptionStatus("Enquired");
     setNewEstimatedCost("");
@@ -260,6 +330,13 @@ function VendorsTracker() {
                                 </a>
                               ))}
                             </div>
+                            
+                            {/* Confirmed Vendor Notes Preview */}
+                            {vendor.notes && (
+                               <div className="mt-2 text-[11px] text-emerald-800/80 bg-white/60 p-2 rounded border border-emerald-100/50">
+                                 {renderTextWithLinks(vendor.notes)}
+                               </div>
+                            )}
                           </div>
                         ))}
 
@@ -318,7 +395,7 @@ function VendorsTracker() {
 
       {/* MANAGE OPTIONS MODAL */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
           
           <button type="button" aria-hidden="true" className="opacity-0 absolute w-0 h-0 pointer-events-none" />
 
@@ -458,9 +535,9 @@ function VendorsTracker() {
                           )}
                         </div>
                         {opt.notes && (
-                          <p className="text-[11px] text-slate-600 bg-white p-2.5 rounded-md border border-slate-100 whitespace-pre-wrap break-words mt-1">
+                          <div className="text-[11px] text-slate-600 bg-white p-2.5 rounded-md border border-slate-100 mt-1">
                             {renderTextWithLinks(opt.notes)}
-                          </p>
+                          </div>
                         )}
                       </>
                     )}
@@ -566,12 +643,17 @@ function VendorsTracker() {
 }
 
 export default function VendorsPage() {
+  
   return (
     <div className="p-6 md:p-12 max-w-[1600px] mx-auto space-y-8 h-full flex flex-col">
       <div>
-        <h1 className="font-serif text-3xl font-bold text-emerald-900">Vendors</h1>
-        <p className="text-slate-500 mt-1">Keep track of options and confirmed selections for your wedding team.</p>
-      </div>
+        <h1 className="text-3xl font-serif font-bold text-emerald-900 flex items-center gap-3">
+          <Handshake className="w-8 h-8 text-emerald-700" /> Vendors
+        </h1>
+        <p className="text-sm text-slate-500 mt-1">
+          Keep track of options and confirmed selections of your wedding team.
+        </p>
+      </div>     
       <VendorsTracker />
     </div>
   );

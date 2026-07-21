@@ -94,7 +94,8 @@ export default function TasksPage() {
         text: newTaskText.trim(), 
         status: 'ongoing',
         due_date: dueDate || null,
-        image_url: newTaskImage || null
+        image_url: newTaskImage || null,
+        created_at: new Date().toISOString()
       });
 
       if (error) {
@@ -296,11 +297,14 @@ export default function TasksPage() {
                   
                   /* DISPLAY MODE */
                   <div className="flex-1">
+                    <div className="text-[10px] text-slate-400 font-bold tracking-widest uppercase mb-1.5">
+                      {task.created_at ? formatDate(task.created_at) : "Just now"}
+                    </div>
                     <p className="text-slate-700 whitespace-pre-wrap break-words">{renderTextWithLinks(task.text)}</p>
                     
                     {task.due_date && (
                       <p className="text-xs text-slate-400 flex items-center gap-1 mt-1.5 font-medium">
-                        <Calendar className="w-3.5 h-3.5 text-emerald-500" /> {formatDate(task.due_date)}
+                        <Calendar className="w-3.5 h-3.5 text-emerald-500" /> Due by {formatDate(task.due_date)}
                       </p>
                     )}
 
@@ -365,11 +369,14 @@ export default function TasksPage() {
             {completedTasks.map((task: any) => (
               <div key={task.id} className="bg-white border p-4 rounded-xl shadow-sm flex justify-between items-start group">
                 <div className="flex-1">
+                  <div className="text-[10px] text-slate-400 font-bold tracking-widest uppercase mb-1.5 opacity-70">
+                    {task.created_at ? formatDate(task.created_at) : "Just now"}
+                  </div>
                   <p className="text-slate-400 line-through whitespace-pre-wrap break-words">{renderTextWithLinks(task.text)}</p>
                   
                   {task.due_date && (
                     <p className="text-xs text-slate-300 flex items-center gap-1 mt-1.5">
-                      <Calendar className="w-3.5 h-3.5" /> {formatDate(task.due_date)}
+                      <Calendar className="w-3.5 h-3.5" /> Due by {formatDate(task.due_date)}
                     </p>
                   )}
 

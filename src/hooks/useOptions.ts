@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
 
 export interface OptionItem {
   id: string;
@@ -13,221 +13,253 @@ export interface TabOption {
   label: string;
 }
 
-const DEFAULT_TABS: TabOption[] = [
-  { id: "decorations", label: "Decorations" },
-];
-
 export function useOptions() {
-  const [tabs, setTabs] = useState<TabOption[]>(DEFAULT_TABS);
-  const [activeTab, setActiveTab] = useState<string>("decorations");
+  const [tabs, setTabs] = useState<TabOption[]>([]);
+  const [activeTab, setActiveTab] = useState("");
   const [items, setItems] = useState<OptionItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
-  // 1. Fetch items from Supabase database on load
   useEffect(() => {
-    async function fetchOptions() {
-      setLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from('event_items')
-          .select('*')
-          .like('category', 'option_%');
-
-        if (!error && data) {
-          // Map DB items to OptionItem interface
-          const mappedItems: OptionItem[] = data.map((item) => ({
-            id: item.id,
-            tabId: item.category.replace('option_', ''),
-            caption: item.text || '',
-            imageUrl: item.content || undefined,
-          }));
-
-          setItems(mappedItems);
-
-          // Extract unique tabs from existing database records
-          const dbTabIds = Array.from(new Set(mappedItems.map((i) => i.tabId)));
-          const dynamicTabs: TabOption[] = dbTabIds.map((tabId) => ({
-            id: tabId,
-            label: tabId.charAt(0).toUpperCase() + tabId.slice(1).replace(/-/g, ' '),
-          }));
-
-          // Merge default tabs with dynamic DB tabs avoiding duplicates
-          setTabs((prev) => {
-            const combined = [...prev];
-            dynamicTabs.forEach((dt) => {
-              if (!combined.some((t) => t.id === dt.id)) {
-                combined.push(dt);
-              }
-            });
-            return combined;
-          });
-        }
-      } catch (err) {
-        console.error("Failed to load options:", err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchOptions();
+    fetchData();
   }, []);
 
-  // 2. Add New Tab
-  const addTab = (label: string) => {
+  async function fetchData() {
+    setLoading(true);
+
+    try {
+      // Load tabs
+      const { data: tabData, error: tabError } = await supabase
+        .from("option_tabs")
+        .select("*")
+        .order("created_at");
+
+      if (tabError) throw tabError;
+
+      const loadedTabs: TabOption[] =
+        tabData?.map((tab) => ({
+          id: tab.id,
+          label: tab.label,
+        })) ?? [];
+
+      setTabs(loadedTabs);
+
+      if (loadedTabs.length > 0) {
+        setActiveTab((prev) => prev || loadedTabs[0].id);
+      }
+
+      // Load items
+      const { data: itemData, error: itemError } = await supabase
+        .from("event_items")
+        .select("*")
+        .like("category", "option_%");
+
+      if (itemError) throw itemError;
+
+      const loadedItems: OptionItem[] =
+        itemData?.map((item) => ({
+          id: item.id,
+          tabId: item.category.replace("option_", ""),
+          caption: item.text ?? "",
+          imageUrl: item.content ?? undefined,
+        })) ?? [];
+
+      setItems(loadedItems);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const addTab = async (label: string) => {
     const trimmed = label.trim();
     if (!trimmed) return;
-    const newId = trimmed.toLowerCase().replace(/\s+/g, "-");
 
-    if (tabs.some((t) => t.id === newId)) {
-      alert("A tab with this name already exists.");
+    const id = trimmed
+      .toLowerCase()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-z0-9-]/g, "");
+
+    if (tabs.some((t) => t.id === id)) {
+      alert("Tab already exists.");
       return;
     }
 
-    setTabs((prev) => [...prev, { id: newId, label: trimmed }]);
-    setActiveTab(newId);
+    const { error } = await supabase.from("option_tabs").insert({
+      id,
+      label: trimmed,
+    });
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    const newTab = {
+      id,
+      label: trimmed,
+    };
+
+    setTabs((prev) => [...prev, newTab]);
+    setActiveTab(id);
   };
 
-  // 3. Delete Tab & Clean up items inside it
   const deleteTab = async (tabId: string) => {
-    const tabToDelete = tabs.find((t) => t.id === tabId);
-    if (!tabToDelete) return;
+    const tab = tabs.find((t) => t.id === tabId);
+    if (!tab) return;
 
-    if (confirm(`Are you sure you want to delete the "${tabToDelete.label}" tab and all options inside it?`)) {
-      const remainingTabs = tabs.filter((t) => t.id !== tabId);
-      setTabs(remainingTabs);
-      setItems((prev) => prev.filter((item) => item.tabId !== tabId));
+    if (
+      !confirm(
+        `Delete "${tab.label}" and all options inside it?`
+      )
+    )
+      return;
 
-      if (activeTab === tabId) {
-        setActiveTab(remainingTabs.length > 0 ? remainingTabs[0].id : "");
-      }
+    await supabase.from("option_tabs").delete().eq("id", tabId);
 
-      // Delete from Supabase DB
-      await supabase
-        .from('event_items')
-        .delete()
-        .eq('category', `option_${tabId}`);
+    await supabase
+      .from("event_items")
+      .delete()
+      .eq("category", `option_${tabId}`);
+
+    const remaining = tabs.filter((t) => t.id !== tabId);
+
+    setTabs(remaining);
+
+    setItems((prev) =>
+      prev.filter((item) => item.tabId !== tabId)
+    );
+
+    if (activeTab === tabId) {
+      setActiveTab(remaining[0]?.id ?? "");
     }
   };
 
-  // 4. Upload image & save new Option
-  const addOptionItem = async (caption: string, imageFile?: File | null) => {
+  const uploadImage = async (file: File) => {
+    const filename = `options/${Date.now()}_${file.name.replace(
+      /[^a-zA-Z0-9.]/g,
+      ""
+    )}`;
+
+    const { data, error } = await supabase.storage
+      .from("task-images")
+      .upload(filename, file);
+
+    if (error) throw error;
+
+    const { data: url } = supabase.storage
+      .from("task-images")
+      .getPublicUrl(data.path);
+
+    return url.publicUrl;
+  };
+
+  const addOptionItem = async (
+    caption: string,
+    imageFile?: File | null
+  ) => {
     if (!activeTab) {
-      alert("Please select or create a tab first.");
+      alert("Please create a tab first.");
       return;
     }
-    if (!caption.trim() && !imageFile) return;
 
-    let uploadedImageUrl: string | undefined = undefined;
+    let imageUrl: string | undefined;
 
     if (imageFile) {
-      try {
-        const { data, error: uploadError } = await supabase.storage
-          .from('task-images')
-          .upload(`options/${Date.now()}_${imageFile.name.replace(/[^a-zA-Z0-9.]/g, '')}`, imageFile);
-
-        if (uploadError) {
-          alert(`Storage Error: ${uploadError.message}`);
-          return;
-        }
-
-        if (data?.path) {
-          const { data: urlData } = supabase.storage.from('task-images').getPublicUrl(data.path);
-          uploadedImageUrl = urlData.publicUrl;
-        }
-      } catch (err) {
-        console.error("Upload failed:", err);
-      }
+      imageUrl = await uploadImage(imageFile);
     }
 
-    // Save entry to Supabase DB
-    const { data: dbData, error: dbError } = await supabase
-      .from('event_items')
+    const { data, error } = await supabase
+      .from("event_items")
       .insert({
         category: `option_${activeTab}`,
-        text: caption.trim() || 'Untitled Option',
-        content: uploadedImageUrl || null,
+        text: caption || "Untitled Option",
+        content: imageUrl ?? null,
       })
       .select()
       .single();
 
-    if (dbError) {
-      alert(`Database Error: ${dbError.message}`);
+    if (error) {
+      alert(error.message);
       return;
     }
 
-    const newItem: OptionItem = {
-      id: dbData ? dbData.id : Date.now().toString(),
-      tabId: activeTab,
-      caption: caption.trim() || "Untitled Option",
-      imageUrl: uploadedImageUrl,
-    };
-
-    setItems((prev) => [newItem, ...prev]);
+    setItems((prev) => [
+      {
+        id: data.id,
+        tabId: activeTab,
+        caption: caption || "Untitled Option",
+        imageUrl,
+      },
+      ...prev,
+    ]);
   };
 
-  // 5. Update existing option
-  const updateOptionItem = async (id: string, caption: string, imageFile?: File | null, removeImage = false) => {
-    let updatedUrl: string | undefined = undefined;
+  const updateOptionItem = async (
+    id: string,
+    caption: string,
+    imageFile?: File | null,
+    removeImage = false
+  ) => {
+    const existing = items.find((i) => i.id === id);
+
+    if (!existing) return;
+
+    let imageUrl = existing.imageUrl;
+
+    if (removeImage) imageUrl = undefined;
 
     if (imageFile) {
-      try {
-        const { data, error: uploadError } = await supabase.storage
-          .from('task-images')
-          .upload(`options/${Date.now()}_${imageFile.name.replace(/[^a-zA-Z0-9.]/g, '')}`, imageFile);
-
-        if (!uploadError && data?.path) {
-          const { data: urlData } = supabase.storage.from('task-images').getPublicUrl(data.path);
-          updatedUrl = urlData.publicUrl;
-        }
-      } catch (err) {
-        console.error("Upload error during update:", err);
-      }
+      imageUrl = await uploadImage(imageFile);
     }
 
-    const existingItem = items.find((i) => i.id === id);
-    let finalUrl = existingItem?.imageUrl;
-    if (removeImage) finalUrl = undefined;
-    if (updatedUrl) finalUrl = updatedUrl;
-
-    // Update in Supabase DB
-    await supabase
-      .from('event_items')
+    const { error } = await supabase
+      .from("event_items")
       .update({
-        text: caption.trim() || "Untitled Option",
-        content: finalUrl || null,
+        text: caption || "Untitled Option",
+        content: imageUrl ?? null,
       })
-      .eq('id', id);
+      .eq("id", id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
 
     setItems((prev) =>
-      prev.map((item) => {
-        if (item.id !== id) return item;
-        return {
-          ...item,
-          caption: caption.trim() || "Untitled Option",
-          imageUrl: finalUrl,
-        };
-      })
+      prev.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              caption: caption || "Untitled Option",
+              imageUrl,
+            }
+          : item
+      )
     );
   };
 
-  // 6. Delete option
   const deleteOptionItem = async (id: string) => {
-    setItems((prev) => prev.filter((item) => item.id !== id));
-    await supabase.from('event_items').delete().eq('id', id);
+    await supabase.from("event_items").delete().eq("id", id);
+
+    setItems((prev) =>
+      prev.filter((item) => item.id !== id)
+    );
   };
 
   return {
     tabs,
     activeTab,
     setActiveTab,
+    loading,
+    selectedPhoto,
+    setSelectedPhoto,
     addTab,
     deleteTab,
-    items: items.filter((item) => item.tabId === activeTab),
-    loading,
     addOptionItem,
     updateOptionItem,
     deleteOptionItem,
-    selectedPhoto,
-    setSelectedPhoto,
+    items: items.filter((item) => item.tabId === activeTab),
   };
 }

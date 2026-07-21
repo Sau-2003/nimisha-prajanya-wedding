@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, Pencil, Check, X } from "lucide-react";
+import { Plus, Users, Trash2, Pencil, Check, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useGuests } from "@/hooks/useGuests";
 
@@ -101,7 +101,15 @@ export default function GuestsPage() {
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
-      <h1 className="text-3xl font-bold text-emerald-900 mb-2">Guest Management</h1>
+      <div className="mb-8">
+          <h1 className="font-serif text-3xl font-bold text-emerald-900 flex items-center gap-3">
+            <Users className="w-8 h-8 text-emerald-600" />
+            Guest Management
+          </h1>
+          <p className="mt-2 text-slate-500">
+            View all gusets by events.
+          </p>
+        </div>
       
       {/* Tabs */}
       <div className="flex gap-2 border-b mb-8 overflow-x-auto pb-2">

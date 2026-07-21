@@ -72,6 +72,7 @@ export default function EventWorkspacePage() {
       content: newItemText.trim(),
       dueDate: newItemDate || undefined,
       imageUrl: newItemImage || undefined,
+      created_at: new Date().toISOString() 
     });
 
     setNewItemText("");
@@ -111,7 +112,7 @@ export default function EventWorkspacePage() {
   // --- HELPERS ---
   const formatDate = (dateString: string) => {
     if (!dateString) return "";
-    return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, isEditMode: boolean) => {
@@ -125,6 +126,7 @@ export default function EventWorkspacePage() {
     }
   };
 
+  // UPDATED: Now displays Due Date in the card preview
   const renderCardPreview = (categoryId: CategoryId) => {
     const list = items[categoryId] || [];
     if (list.length === 0) return <p className="text-sm text-slate-400 italic">Empty</p>;
@@ -133,11 +135,18 @@ export default function EventWorkspacePage() {
     const remainder = list.length - 2;
 
     return (
-      <ul className="text-slate-600 text-sm space-y-2">
+      <ul className="text-slate-600 text-sm space-y-2.5">
         {preview.map(item => (
-          <li key={item.id} className="flex items-start gap-2">
-            <span className="text-slate-300">•</span> 
-            <span className="truncate">{item.content}</span>
+          <li key={item.id} className="flex flex-col">
+            <div className="flex items-start gap-2">
+              <span className="text-slate-300 mt-0.5">•</span> 
+              <span className="truncate text-slate-700 font-medium">{item.content}</span>
+            </div>
+            {item.dueDate && (
+              <div className="text-[10px] text-emerald-600 font-medium flex items-center gap-1 ml-4 mt-0.5">
+                <Calendar className="w-3 h-3" /> Due by {formatDate(item.dueDate)}
+              </div>
+            )}
           </li>
         ))}
         {remainder > 0 && <li className="text-xs text-slate-400 mt-2 font-medium">+{remainder} more</li>}
@@ -267,13 +276,12 @@ export default function EventWorkspacePage() {
             <div className="flex gap-2 h-[42px]">
               {activeModal === 'tasks' && (
                 <div className="w-1/3 h-full">
-                  {/* Changed to type="text" by default so placeholder works, switching to date on focus */}
                   <input 
                     type={newItemDate ? "date" : "text"}
                     onFocus={(e) => (e.target.type = "date")}
                     onBlur={(e) => { if (!e.target.value) e.target.type = "text"; }}
                     className="w-full h-full border px-3 rounded-lg outline-none focus:border-emerald-500 text-sm text-slate-600 bg-white"
-                    placeholder="Date of Campletion"
+                    placeholder="Due Date"
                     value={newItemDate}
                     onChange={(e) => setNewItemDate(e.target.value)}
                   />
@@ -310,7 +318,7 @@ export default function EventWorkspacePage() {
 
           {/* List Items */}
           <div className="mt-4 space-y-3 max-h-[400px] overflow-y-auto pr-2">
-            {activeModal && items[activeModal]?.map((item) => (
+            {activeModal && items[activeModal]?.map((item: any) => (
               <div key={item.id} className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 border border-slate-200 p-3.5 rounded-xl bg-white shadow-sm">
                 
                 {/* --- EDIT MODE --- */}
@@ -333,12 +341,11 @@ export default function EventWorkspacePage() {
                     />
 
                     <div className="flex gap-2 text-sm h-8 mt-1">
-                      {/* Applied the same text/date switching logic to the Edit fields as well */}
                       <input 
                         type={editingTaskDate ? "date" : "text"}
                         onFocus={(e) => (e.target.type = "date")}
                         onBlur={(e) => { if (!e.target.value) e.target.type = "text"; }}
-                        placeholder="Date of Campletion"
+                        placeholder="Due Date"
                         value={editingTaskDate}
                         onChange={(e) => setEditingTaskDate(e.target.value)}
                         className="border rounded px-2 outline-none w-1/3 text-slate-600 bg-white"
@@ -374,13 +381,18 @@ export default function EventWorkspacePage() {
                 /* --- DISPLAY MODE --- */
                   <>
                     <div className="flex-1">
+                      {/* DATE CREATED */}
+                      <div className="text-[10px] text-slate-400 font-bold tracking-widest uppercase mb-1.5 opacity-70">
+                        {item.created_at || item.createdAt ? formatDate(item.created_at || item.createdAt) : formatDate(new Date().toISOString())}
+                      </div>
+                      
                       <p className={`text-sm text-slate-800 whitespace-pre-wrap break-words ${activeModal === 'taskDone' ? 'line-through text-slate-400' : ''}`}>
                         {renderTextWithLinks(item.content)}
                       </p>
                       
                       {item.dueDate && (
                         <p className="text-xs text-emerald-600 font-medium flex items-center gap-1 mt-1.5">
-                          <Calendar className="w-3 h-3" /> Due: {formatDate(item.dueDate)}
+                          <Calendar className="w-3 h-3" /> Due by {formatDate(item.dueDate)}
                         </p>
                       )}
 

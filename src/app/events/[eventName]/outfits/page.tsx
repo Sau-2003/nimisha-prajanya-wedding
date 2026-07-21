@@ -27,8 +27,13 @@ export default function OutfitPage() {
   const [uploading, setUploading] = useState(false);
   const [newCaption, setNewCaption] = useState("");
   
-  const [activeTab, setActiveTab] = useState("Main Look");
   const [customTabs, setCustomTabs] = useState<string[]>([]);
+  
+  // Derived tabs from DB items + locally created tabs (Removed "Main Look")
+  const dbTabs = Array.from(new Set(outfitItems.map(item => item.category.replace('outfit_', ''))));
+  const allTabs = Array.from(new Set(["Ideas", ...dbTabs, ...customTabs]));
+
+  const [activeTab, setActiveTab] = useState(allTabs[0] || "Ideas");
   
   // State for Full Screen Lightbox & Editing
   const [selectedImage, setSelectedImage] = useState<OutfitItem | null>(null);
@@ -59,9 +64,13 @@ export default function OutfitPage() {
     fetchOutfits();
   }, [fetchOutfits]);
 
-  // Derived tabs from DB items + locally created tabs
-  const dbTabs = Array.from(new Set(outfitItems.map(item => item.category.replace('outfit_', ''))));
-  const allTabs = Array.from(new Set(["Ideas", ...dbTabs, ...customTabs]));
+  // Ensure activeTab stays valid if tabs change
+  useEffect(() => {
+    if (allTabs.length > 0 && !allTabs.includes(activeTab)) {
+      setActiveTab(allTabs[0]);
+    }
+  }, [allTabs, activeTab]);
+
   const activeItems = outfitItems.filter(item => item.category === `outfit_${activeTab}`);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -108,7 +117,7 @@ export default function OutfitPage() {
   };
 
   const deleteImage = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation(); // Prevents opening full-screen view
+    e.stopPropagation(); 
     await supabase.from('event_items').delete().eq('id', id);
     fetchOutfits(); 
   };
@@ -128,7 +137,6 @@ export default function OutfitPage() {
     try {
       let finalImageUrl = editingItem.content;
 
-      // If user uploaded a replacement image file
       if (editFile) {
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('task-images')
@@ -146,7 +154,6 @@ export default function OutfitPage() {
         }
       }
 
-      // Update Supabase Record
       const { error: updateError } = await supabase
         .from('event_items')
         .update({
@@ -179,7 +186,7 @@ export default function OutfitPage() {
   };
 
   const deleteTab = async (e: React.MouseEvent, tabToDelete: string) => {
-    e.stopPropagation(); // Prevents tab switching when clicking delete
+    e.stopPropagation(); 
     
     if (confirm(`Are you sure you want to delete the "${tabToDelete}" category and all its images?`)) {
       await supabase
@@ -193,7 +200,7 @@ export default function OutfitPage() {
 
       if (activeTab === tabToDelete) {
         const remainingTabs = allTabs.filter(tab => tab !== tabToDelete);
-        setActiveTab(remainingTabs.length > 0 ? remainingTabs[0] : "Main Look");
+        setActiveTab(remainingTabs.length > 0 ? remainingTabs[0] : "Ideas");
       }
 
       fetchOutfits();
@@ -221,15 +228,14 @@ export default function OutfitPage() {
                 {tab}
               </TabsTrigger>
               
-              {tab !== "Main Look" && (
-                <button
-                  onClick={(e) => deleteTab(e, tab)}
-                  className="absolute right-1.5 p-0.5 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-200/60 transition-colors"
-                  title={`Delete ${tab} category`}
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              )}
+              {/* Every tab now has a delete button since Main Look is gone */}
+              <button
+                onClick={(e) => deleteTab(e, tab)}
+                className="absolute right-1.5 p-0.5 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-200/60 transition-colors"
+                title={`Delete ${tab} category`}
+              >
+                <X className="w-3 h-3" />
+              </button>
             </div>
           ))}
 
@@ -282,13 +288,11 @@ export default function OutfitPage() {
                     <div className="relative overflow-hidden rounded">
                       <img src={item.content} alt={item.text || "Outfit"} className="w-full h-56 object-cover rounded group-hover:scale-105 transition-transform duration-300" />
                       
-                      {/* Full-Screen Overlay Hint */}
                       <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white pointer-events-none">
                         <Maximize2 className="w-6 h-6" />
                       </div>
                     </div>
 
-                    {/* Image Caption */}
                     {item.text && item.text !== 'Outfit Image' && (
                       <p className="mt-2 text-xs font-medium text-slate-700 truncate px-1" title={item.text}>
                         {item.text}
@@ -296,7 +300,6 @@ export default function OutfitPage() {
                     )}
                   </div>
 
-                  {/* Action Overlay Buttons */}
                   <div className="absolute top-3 right-3 flex gap-1.5 opacity-90 md:opacity-0 group-hover:opacity-100 transition-all z-10">
                     <button 
                       onClick={(e) => openEditModal(e, item)}

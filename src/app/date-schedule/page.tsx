@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Calendar, Check, Loader2 } from 'lucide-react';
+import { Calendar, Check, Loader2, CalendarClock } from 'lucide-react';
 
 const renderTextWithLinks = (text: string) => {
   if (!text) return null;
@@ -94,44 +94,67 @@ export default function DateSchedulePage() {
 
   if (loading) return <div className="p-12 text-center text-emerald-600"><Loader2 className="animate-spin inline" /></div>;
 
-  return (
-    <div className="p-6 md:p-12 max-w-4xl mx-auto">
-      <h1 className="text-3xl font-bold text-emerald-900 mb-8 font-serif">Date Schedule</h1>
-      
-      <div className="space-y-6">
-        {Object.entries(
-          schedule.reduce((groups, item) => {
-            const date = new Date(item.due_date).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-            if (!groups[date]) groups[date] = [];
-            groups[date].push(item);
-            return groups;
-          }, {} as Record<string, any[]>)
-        ).map(([date, items]) => (
-          <div key={date}>
-            <h2 className="mb-3 text-lg font-semibold text-emerald-700">{date}</h2>
-            <div className="space-y-3">
-              {(items as any[]).map((item) => (
-                <div key={item.id} className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <Calendar className="w-5 h-5 text-emerald-600" />
-                  <div className="flex-1">
-                    <p className="font-semibold text-slate-800 whitespace-pre-wrap break-words">{renderTextWithLinks(item.content)}</p>
-                    <p className="text-xs capitalize text-slate-500">
-                      {item.isGlobal ? "Global Task" : item.event_name}
-                    </p>
-                  </div>
-                  <button 
-                    onClick={() => markAsDone(item)}
-                    className="p-2 bg-emerald-50 text-emerald-600 rounded-full hover:bg-emerald-100 transition-colors"
-                    title="Mark Done"
-                  >
-                    <Check className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
+  
+    // <div className="p-6 md:p-12 max-w-4xl mx-auto">
+    //   <h1 className="text-3xl font-bold text-emerald-900 mb-8 font-serif">Date Schedule</h1>
+    return (
+  <div className="p-6 md:p-12 max-w-4xl mx-auto">
+    <div className="mb-8">
+      <h1 className="font-serif text-3xl font-bold text-emerald-900 flex items-center gap-3">
+        <CalendarClock className="w-8 h-8 text-emerald-600" />
+        Date Schedule
+      </h1>
+      <p className="mt-2 text-slate-500">
+        View all upcoming global and event tasks sorted by date.
+      </p>
     </div>
-  );
-}
+
+    <div className="space-y-6">
+      {Object.entries(
+        schedule.reduce((groups, item) => {
+          const date = new Date(item.due_date).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+          });
+          if (!groups[date]) groups[date] = [];
+          groups[date].push(item);
+          return groups;
+        }, {} as Record<string, any[]>)
+      ).map(([date, items]) => (
+        <div key={date}>
+          <h2 className="mb-3 text-lg font-semibold text-emerald-700">
+            {date}
+          </h2>
+
+          <div className="space-y-3">
+            {(items as any[]).map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+              >
+                <Calendar className="w-5 h-5 text-emerald-600" />
+
+                <div className="flex-1">
+                  <p className="font-semibold text-slate-800 whitespace-pre-wrap break-words">
+                    {renderTextWithLinks(item.content)}
+                  </p>
+                  <p className="text-xs capitalize text-slate-500">
+                    {item.isGlobal ? "Global Task" : item.event_name}
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => markAsDone(item)}
+                  className="p-2 bg-emerald-50 text-emerald-600 rounded-full hover:bg-emerald-100 transition-colors"
+                  title="Mark Done"
+                >
+                  <Check className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
