@@ -93,10 +93,6 @@ export default function DateSchedulePage() {
 };
 
   if (loading) return <div className="p-12 text-center text-emerald-600"><Loader2 className="animate-spin inline" /></div>;
-
-  
-    // <div className="p-6 md:p-12 max-w-4xl mx-auto">
-    //   <h1 className="text-3xl font-bold text-emerald-900 mb-8 font-serif">Date Schedule</h1>
     return (
   <div className="p-6 md:p-12 max-w-4xl mx-auto">
     <div className="mb-8">

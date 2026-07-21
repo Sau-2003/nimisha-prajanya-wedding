@@ -33,7 +33,7 @@ export default function GuestsPage() {
   const [activeTab, setActiveTab] = useState(TABS[0].name);
   
   const [newGuest, setNewGuest] = useState({ 
-    room: "", mobile: "", arrivalTime: "", family: "", count: "", hotel: "", arrival: "", origin: "" 
+    room: "", mobile: "", arrivalTime: "", family: "", count: "", hotel: "", arrival: "", origin: "" , transportion: ""
   });
   
   const [copyAll, setCopyAll] = useState(false);
@@ -63,6 +63,7 @@ export default function GuestsPage() {
       arrival_time: category === activeTab ? (newGuest.arrivalTime || null) : null,
       hotel_name: category === activeTab ? newGuest.hotel : "",
       arrival_date: category === activeTab ? (newGuest.arrival || null) : null,
+      transportaion_name: category === activeTab ? newGuest.transportion : "",
       origin_place: category === activeTab ? newGuest.origin : ""
     });
 
@@ -78,7 +79,7 @@ export default function GuestsPage() {
       return; 
     }
 
-    setNewGuest({ room: "", family: "", count: "", mobile: "", arrivalTime: "", hotel: "", arrival: "", origin: "" });
+    setNewGuest({ room: "", family: "", count: "", mobile: "", arrivalTime: "", hotel: "", arrival: "", origin: "", transportion: "" });
     fetchData();
   };
 
@@ -91,6 +92,7 @@ export default function GuestsPage() {
       arrival_time: editForm.arrival_time || null,
       arrival_date: editForm.arrival_date || null,
       origin_place: editForm.origin_place,
+      transportaion_name: editForm.transportaion_name,
       hotel_name: editForm.hotel_name
     }).eq("id", id);
     setEditingId(null);
@@ -147,6 +149,7 @@ export default function GuestsPage() {
                 onChange={e => setNewGuest({...newGuest, arrivalTime: e.target.value})} 
               />
               
+              <input className="border p-2 rounded bg-white" placeholder="Mode of Transportion" value={newGuest.transportion} onChange={e => setNewGuest({...newGuest, transportion: e.target.value})} />
               <input className="border p-2 rounded bg-white" placeholder="Hotel" value={newGuest.hotel} onChange={e => setNewGuest({...newGuest, hotel: e.target.value})} />
               <input className="border p-2 rounded bg-white" placeholder="Origin" value={newGuest.origin} onChange={e => setNewGuest({...newGuest, origin: e.target.value})} />
               
@@ -159,6 +162,7 @@ export default function GuestsPage() {
                 value={newGuest.arrival} 
                 onChange={e => setNewGuest({...newGuest, arrival: e.target.value})} 
               />
+              
             </>
           )}
 
@@ -192,6 +196,7 @@ export default function GuestsPage() {
                     <th className="p-3">Mobile</th>
                     <th className="p-3">Date of Arrival</th>
                     <th className="p-3">Arrival Time</th>
+                    <th className="p-3">Transportion</th>
                     <th className="p-3">Origin</th>
                     <th className="p-3">Hotel</th>
                   </>
@@ -230,6 +235,7 @@ export default function GuestsPage() {
                             />
                           </td>
                           <td className="p-2"><input className="border w-full p-1 rounded" placeholder="Origin" value={editForm.origin_place || ''} onChange={e => setEditForm({...editForm, origin_place: e.target.value})} /></td>
+                          <td className="p-2"><input className="border w-full p-1 rounded" placeholder="Transportion" value={editForm.transportaion_name || ''} onChange={e => setEditForm({...editForm, transportaion_name: e.target.value})} /></td>
                           <td className="p-2"><input className="border w-full p-1 rounded" placeholder="Hotel" value={editForm.hotel_name || ''} onChange={e => setEditForm({...editForm, hotel_name: e.target.value})} /></td>
                         </>
                       )}
@@ -247,9 +253,10 @@ export default function GuestsPage() {
                       {activeTab.includes("Staying") && (
                         <>
                           <td className="p-3">{g.mobile_no || '-'}</td>
-                          <td className="p-3 whitespace-nowrap">{g.arrival_date ? new Date(g.arrival_date).toLocaleDateString("en-GB") : "-"}</td>
+                          <td className="p-3 whitespace-nowrap">{g.arrival_date ? new Date(g.arrival_date).toLocaleDateString("en-GB", {day: "2-digit",month: "2-digit",year: "numeric",}).replace(/\//g, "-") : "-"}</td>
                           <td className="p-3 whitespace-nowrap">{formatTime12hr(g.arrival_time)}</td>
                           <td className="p-3">{g.origin_place || '-'}</td>
+                          <td className="p-3">{g.transportaion_name || '-'}</td>
                           <td className="p-3">{g.hotel_name || '-'}</td>
                         </>
                       )}
