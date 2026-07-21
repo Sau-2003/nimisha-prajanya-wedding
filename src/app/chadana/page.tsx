@@ -259,7 +259,7 @@ function ChadanaCard({
 
                   <button 
                     onClick={() => removeImage(idx)} 
-                    className="absolute -top-2 -right-2 bg-red-100 text-red-600 rounded-full p-1.5 opacity-100 md:opacity-0 group-hover/image:opacity-100 transition-opacity shadow-md hover:bg-red-200"
+                    className="absolute -top-2 -right-2 bg-red-100 text-red-600 rounded-full p-1.5 opacity-50 md:opacity-0 group-hover/image:opacity-100 transition-opacity shadow-md hover:bg-red-200"
                     title="Remove Image"
                   >
                     <X className="w-4 h-4" />
