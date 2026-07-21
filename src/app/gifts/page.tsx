@@ -333,7 +333,7 @@ export default function GiftsPage() {
 
   const handleAddGift = async () => {
     const { error } = await supabase.from('gifts').insert({ 
-      title: 'NEW GIFT', 
+      title: '', 
       content: '', 
       images: [],
       image_urls: [],

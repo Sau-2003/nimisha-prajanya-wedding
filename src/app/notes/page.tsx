@@ -281,7 +281,7 @@ export default function NotesPage() {
 
   const handleAddNote = async () => {
     const { error } = await supabase.from('notes').insert({ 
-      title: 'NEW NOTE', 
+      title: '', 
       content: '', 
       is_pinned: false,
       created_at: new Date().toISOString()

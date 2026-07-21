@@ -331,7 +331,7 @@ export default function ChadanaPage() {
 
   const handleAddChadana = async () => {
     const { error } = await supabase.from('chadana').insert({ 
-      title: 'NEW CHADANA', 
+      title: '', 
       content: '', 
       images: [],
       image_urls: [],
