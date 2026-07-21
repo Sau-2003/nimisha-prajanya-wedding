@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { 
-  LayoutDashboard, CheckSquare, CalendarHeart, ClipboardList,
+  LayoutDashboard, Gem, CalendarHeart, ClipboardList, Gift,
   ShoppingBag, Users, IndianRupee, Menu, X, BookIcon, CalendarClock,Handshake  // Import CalendarClock
 } from 'lucide-react';
 import Image from "next/image";
@@ -18,7 +18,9 @@ const mainNav = [
   { name: 'Budget', href: '/budget', icon: IndianRupee },
   { name: 'Guests', href: '/guests', icon: Users },
   { name: 'Notes', href: '/notes', icon: BookIcon }, // Added missing comma here
-  { name: 'Date Schedule', href: '/date-schedule', icon: CalendarClock }, // Corrected Clock to CalendarClock
+  { name: 'Task Schedule', href: '/task-schedule', icon: CalendarClock }, // Corrected Clock to CalendarClock
+  { name: 'Chadana', href: '/chadana', icon: Gem },
+  { name: 'Gifts', href: '/gifts', icon: Gift },
   { name: 'Shoping', href: '/shoping', icon: ShoppingBag },
   { name: 'All Outfits', href: '/all_outfits', icon:DressIcon  },
 ];

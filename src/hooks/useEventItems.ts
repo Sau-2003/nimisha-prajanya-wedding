@@ -74,8 +74,9 @@ export function useEventItems(eventName: string) {
     ])
     .select();
 
-  if (error) {
-    console.error("DETAILED INSERT ERROR:", error); // This will tell us if it's a field error
+if (error) {
+    console.error("DETAILED INSERT ERROR:", JSON.stringify(error, null, 2), error.message);
+    alert(`Failed to save: ${error.message || "Check console"}`);
     return;
   }
   
