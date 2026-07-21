@@ -107,5 +107,3 @@ if (error) {
 
   return { items, loading, addItem, updateItem, moveItem, deleteItem };
 }
-
-
