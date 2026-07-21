@@ -355,24 +355,31 @@ export default function ChadanaPage() {
 
   const handleUpdate = async (id: string, updates: any) => {
     setLocalChadana((prev) => {
-      const newChadana = prev.map((n) => (n.id === id ? { ...n, ...updates } : n));
-      
-      return newChadana.sort((a, b) => {
+      const updated = prev.map((n) =>
+        n.id === id ? { ...n, ...updates } : n
+      );
+
+      return updated.sort((a, b) => {
         const aPinned = Boolean(a.is_pinned);
         const bPinned = Boolean(b.is_pinned);
-        
+
         if (aPinned !== bPinned) return aPinned ? -1 : 1;
-        const dateA = new Date(a.created_at || 0).getTime();
-        const dateB = new Date(b.created_at || 0).getTime();
-        return dateB - dateA;
+
+        return (
+          new Date(b.created_at || 0).getTime() -
+          new Date(a.created_at || 0).getTime()
+        );
       });
     });
 
-    const { error } = await supabase.from('chadana').update(updates).eq('id', id);
+    const { error } = await supabase
+      .from("chadana")
+      .update(updates)
+      .eq("id", id);
+
     if (error) {
-      alert("Database error: " + error.message);
+      alert(error.message);
     }
-    fetchData(); 
   };
 
   if (loading) return <div className="p-12 text-center text-emerald-600 font-bold">Loading Chadana...</div>;

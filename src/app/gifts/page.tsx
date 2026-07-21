@@ -356,26 +356,34 @@ export default function GiftsPage() {
   };
 
   const handleUpdate = async (id: string, updates: any) => {
-    setLocalGifts((prev) => {
-      const newGifts = prev.map((n) => (n.id === id ? { ...n, ...updates } : n));
-      
-      return newGifts.sort((a, b) => {
+    setLocalGifts(prev => {
+        const updated = prev.map(g =>
+        g.id === id ? { ...g, ...updates } : g
+        );
+
+        return updated.sort((a, b) => {
         const aPinned = Boolean(a.is_pinned);
         const bPinned = Boolean(b.is_pinned);
-        
+
         if (aPinned !== bPinned) return aPinned ? -1 : 1;
-        const dateA = new Date(a.created_at || 0).getTime();
-        const dateB = new Date(b.created_at || 0).getTime();
-        return dateB - dateA;
-      });
+
+        return (
+            new Date(b.created_at || 0).getTime() -
+            new Date(a.created_at || 0).getTime()
+        );
+        });
     });
 
-    const { error } = await supabase.from('gifts').update(updates).eq('id', id);
+    const { error } = await supabase
+        .from("gifts")
+        .update(updates)
+        .eq("id", id);
+
     if (error) {
-      alert("Database error: " + error.message);
+        alert(error.message);
+        fetchData(); // only on error if you want to restore
     }
-    fetchData(); 
-  };
+    };
 
   if (loading) return <div className="p-12 text-center text-emerald-600 font-bold">Loading Gifts...</div>;
 
