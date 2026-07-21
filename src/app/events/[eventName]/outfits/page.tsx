@@ -34,8 +34,9 @@ export default function OutfitPage() {
   
   const [customTabs, setCustomTabs] = useState<string[]>([]);
   
-  // Derived tabs from DB items + locally created tabs (Removed "Main Look")
-  const dbTabs = Array.from(new Set(outfitItems.map(item => item.category.replace('outfit_', '').replace('outfit_link_', ''))));
+  // Derived tabs strictly from image categories (ignoring links so links don't create tabs)
+  const imageItems = outfitItems.filter(item => item.category.startsWith('outfit_') && !item.category.startsWith('outfit_link_'));
+  const dbTabs = Array.from(new Set(imageItems.map(item => item.category.replace('outfit_', ''))));
   const allTabs = Array.from(new Set(["Ideas", ...dbTabs, ...customTabs]));
 
   const [activeTab, setActiveTab] = useState(allTabs[0] || "Ideas");
@@ -163,7 +164,6 @@ export default function OutfitPage() {
   const openEditModal = (e: React.MouseEvent, item: OutfitItem) => {
     e.stopPropagation();
     if (item.category.startsWith('outfit_link_')) {
-      // Handle quick inline or prompt edit for links if desired, or skip
       const updatedTitle = prompt("Edit Link Title:", item.text);
       const updatedUrl = prompt("Edit URL:", item.content);
       if (updatedUrl !== null) {
