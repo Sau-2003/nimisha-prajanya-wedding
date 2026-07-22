@@ -375,7 +375,9 @@ export default function EventWorkspacePage() {
                     }
                   }}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
+                    // Only submit on desktop when Enter is pressed without Shift.
+                    // On mobile, let Enter create a new line naturally.
+                    if (e.key === 'Enter' && !e.shiftKey && window.innerWidth > 768) {
                       e.preventDefault(); 
                       handleAddItem();    
                     }
@@ -524,7 +526,8 @@ export default function EventWorkspacePage() {
                             }
                           }}
                           onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
+                            // Only submit on desktop when Enter is pressed without Shift.
+                            if (e.key === 'Enter' && !e.shiftKey && window.innerWidth > 768) {
                               e.preventDefault();
                               saveEditedItem(activeModal, item.id);
                             }
