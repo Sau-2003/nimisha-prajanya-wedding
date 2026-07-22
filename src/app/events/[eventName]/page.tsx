@@ -247,7 +247,7 @@ export default function EventWorkspacePage() {
     { id: 'itemsNeeded', title: 'Items Needed', icon: ShoppingBag, color: 'text-pink-500', isLink: false },
     { id: 'vendors', title: 'Vendors', icon: Store, color: 'text-teal-500', isLink: false },
     { id: 'pujaItems', title: 'Puja Items', icon: Flame, color: 'text-orange-500', isLink: false },
-    { id: 'expenses', title: 'Expenses', icon: IndianRupee, color: 'text-slate-800', isLink: true, href: '/budget', showExternalIcon: true },
+    // { id: 'expenses', title: 'Expenses', icon: IndianRupee, color: 'text-slate-800', isLink: true, href: '/budget', showExternalIcon: true },
   ];
 
   if (loading) return <div className="p-12 text-center text-emerald-600">Loading workspace...</div>;
@@ -294,9 +294,10 @@ export default function EventWorkspacePage() {
                   </div>
                   {card.subtext && <p className="text-sm text-slate-400 italic">{card.subtext}</p>}
                 </div>
-                {card.showExternalIcon && (
+                {/*Budget Link
+                 {card.showExternalIcon && (
                   <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-emerald-500 transition-colors self-end mt-2" />
-                )}
+                )} */}
               </Link>
             );
           }
