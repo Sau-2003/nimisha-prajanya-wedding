@@ -136,6 +136,10 @@ export function useOptions() {
     }
   };
 
+  const renameTab = (id: string, newLabel: string) => {
+    setTabs(tabs.map(tab => tab.id === id ? { ...tab, label: newLabel } : tab));
+  };
+
   const uploadImage = async (file: File) => {
     const filename = `options/${Date.now()}_${file.name.replace(
       /[^a-zA-Z0-9.]/g,
@@ -252,6 +256,7 @@ export function useOptions() {
     tabs,
     activeTab,
     setActiveTab,
+    renameTab,
     loading,
     selectedPhoto,
     setSelectedPhoto,

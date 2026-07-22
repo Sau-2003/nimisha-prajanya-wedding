@@ -7,8 +7,9 @@ export type WorkspaceItem = {
   id: string;
   content: string;
   dueDate?: string;
+  assignedTo?: string; // Added assignedTo property
   imageUrl?: string;
-  created_at: string 
+  created_at: string;
 };
 
 type GroupedItems = Record<CategoryId, WorkspaceItem[]>;
@@ -45,6 +46,7 @@ export function useEventItems(eventName: string) {
           id: row.id,
           content: row.content || "",
           dueDate: row.due_date || undefined,
+          assignedTo: row.assigned_to || undefined, // Map column
           imageUrl: row.image_url || undefined,
           created_at: row.created_at || "",
         });
@@ -57,37 +59,36 @@ export function useEventItems(eventName: string) {
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
-  // FIXED addItem function
   const addItem = async (category: CategoryId, payload: Omit<WorkspaceItem, "id">) => {
-  console.log("Attempting to insert:", { event_name: eventName, category, content: payload.content });
-  
-  const { data, error } = await supabase
-    .from("event_items")
-    .insert([
-      {
-        event_name: eventName,
-        category: category,
-        content: payload.content || "No content", // Ensure a value is sent
-        due_date: payload.dueDate || null,
-        image_url: payload.imageUrl || null
-      },
-    ])
-    .select();
+    const { error } = await supabase
+      .from("event_items")
+      .insert([
+        {
+          event_name: eventName,
+          category: category,
+          content: payload.content || "No content",
+          due_date: payload.dueDate || null,
+          assigned_to: payload.assignedTo || null, // Save assigned_to
+          image_url: payload.imageUrl || null
+        },
+      ]);
 
-if (error) {
-    console.error("DETAILED INSERT ERROR:", JSON.stringify(error, null, 2), error.message);
-    alert(`Failed to save: ${error.message || "Check console"}`);
-    return;
-  }
-  
-  fetchItems();
-};
+    if (error) {
+      console.error("DETAILED INSERT ERROR:", error.message);
+      alert(`Failed to save: ${error.message}`);
+      return;
+    }
+    
+    fetchItems();
+  };
+
   const updateItem = async (id: string, updates: Partial<WorkspaceItem>) => {
     const { error } = await supabase
       .from("event_items")
       .update({
         content: updates.content,
         due_date: updates.dueDate || null,
+        assigned_to: updates.assignedTo || null, // Update assigned_to
         image_url: updates.imageUrl || null
       })
       .eq('id', id);

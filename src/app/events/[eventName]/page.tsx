@@ -7,11 +7,12 @@ import {
   ClipboardList, CheckCircle2, ShoppingBag, Flame, 
   Gamepad2, Store, Lightbulb, Shirt, IndianRupee, 
   ExternalLink, Plus, Trash2, Check, RotateCcw, 
-  Pencil, X, Calendar, Image as ImageIcon
+  Pencil, X, Calendar, Image as ImageIcon, User, ChevronDown
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useEventItems, CategoryId, WorkspaceItem } from '@/hooks/useEventItems';
+import { useTeamMembers } from '@/hooks/useTeamMembers';
 
 // --- HELPER: Parse URLs into clickable links ---
 const renderTextWithLinks = (text: string) => {
@@ -43,20 +44,28 @@ export default function EventWorkspacePage() {
   const rawEventName = (params?.eventName as string) || "Event";
   const formattedEventName = rawEventName.charAt(0).toUpperCase() + rawEventName.slice(1);
 
-  // 1. Data State 
+  // 1. Data States 
   const { items, loading, addItem, updateItem, deleteItem, moveItem } = useEventItems(rawEventName);
+  
+  // Custom Hook replaces localStorage for sharing state with Global Task Board
+  const { teamMembers, addTeamMember } = useTeamMembers();
+
+  // Dropdown UI State
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
   // 2. Modal Add/View State
   const [activeModal, setActiveModal] = useState<CategoryId | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newItemText, setNewItemText] = useState("");
   const [newItemDate, setNewItemDate] = useState("");
+  const [newItemAssignedTo, setNewItemAssignedTo] = useState("");
   const [newItemImage, setNewItemImage] = useState<string | null>(null);
 
   // 3. Edit Mode State
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingTaskText, setEditingTaskText] = useState("");
   const [editingTaskDate, setEditingTaskDate] = useState("");
+  const [editingAssignedTo, setEditingAssignedTo] = useState("");
   const [editingTaskImage, setEditingTaskImage] = useState<string | null>(null);
 
   // 4. Image Preview State
@@ -70,10 +79,11 @@ export default function EventWorkspacePage() {
   // --- ACTIONS ---
   const handleAddItem = async () => {
     if (!activeModal || !newItemText.trim()) return;
-
+    
     const payload = {
       content: newItemText.trim(),
       dueDate: newItemDate || undefined, 
+      assignedTo: newItemAssignedTo.trim() || undefined,
       imageUrl: newItemImage || undefined, 
       created_at: new Date().toISOString() 
     };
@@ -82,6 +92,7 @@ export default function EventWorkspacePage() {
 
     setNewItemText("");
     setNewItemDate("");
+    setNewItemAssignedTo("");
     setNewItemImage(null);
     setShowAddForm(false);
   };
@@ -98,6 +109,7 @@ export default function EventWorkspacePage() {
     setEditingItemId(item.id);
     setEditingTaskText(item.content);
     setEditingTaskDate(item.dueDate || "");
+    setEditingAssignedTo((item as any).assignedTo || "");
     setEditingTaskImage(item.imageUrl || null);
   };
 
@@ -106,9 +118,15 @@ export default function EventWorkspacePage() {
   const saveEditedItem = async (categoryId: CategoryId, itemId: string) => {
     if (!editingTaskText.trim()) return;
     
+    // Save new assignee to global hook automatically if it's a new name
+    if (editingAssignedTo.trim()) {
+      addTeamMember(editingAssignedTo.trim());
+    }
+    
     const payload = {
       content: editingTaskText.trim(),
       dueDate: editingTaskDate || undefined,
+      assignedTo: editingAssignedTo.trim() || undefined,
       imageUrl: editingTaskImage || undefined
     };
 
@@ -122,7 +140,6 @@ export default function EventWorkspacePage() {
     return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
-  // Helper to check if a task is overdue
   const isOverdue = (dateString: string | null) => {
     if (!dateString) return false;
     const today = new Date();
@@ -184,7 +201,6 @@ export default function EventWorkspacePage() {
     const list = items[categoryId] || [];
     if (list.length === 0) return <p className="text-sm text-slate-400 italic">Empty</p>;
 
-    // Sort descending by creation date for preview
     const sortedList = [...list].sort((a: any, b: any) => 
       new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime()
     );
@@ -198,9 +214,16 @@ export default function EventWorkspacePage() {
           const overdue = categoryId === 'tasks' && isOverdue(item.dueDate || null);
           return (
             <li key={item.id} className="flex flex-col">
-              <div className="flex items-start gap-2">
-                <span className="text-slate-300 mt-0.5">•</span> 
-                <span className={`truncate font-medium ${overdue ? 'text-red-600' : 'text-slate-700'}`}>{item.content}</span>
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start gap-2 truncate">
+                  <span className="text-slate-300 mt-0.5">•</span> 
+                  <span className={`truncate font-medium ${overdue ? 'text-red-600' : 'text-slate-700'}`}>{item.content}</span>
+                </div>
+                {(item as any).assignedTo && (
+                  <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full text-[10px] font-medium shrink-0 flex items-center gap-1">
+                    <User className="w-2.5 h-2.5 text-emerald-600" /> {(item as any).assignedTo}
+                  </span>
+                )}
               </div>
               {item.dueDate && (
                 <div className={`text-[10px] font-medium flex items-center gap-1 ml-4 mt-0.5 ${overdue ? 'text-red-500' : 'text-emerald-600'}`}>
@@ -234,7 +257,7 @@ export default function EventWorkspacePage() {
       
       {/* Header Section */}
       <div className="mb-10">
-        <div className="flex flex-col md:flex-row md:items-center gap-4 mb-6">
+        <div className="flex flex-col md:flex-row md:items-center gap-4 mb-2">
           <h1 className="text-3xl font-serif font-bold text-emerald-900">
             {formattedEventName} Workspace
           </h1>
@@ -247,8 +270,7 @@ export default function EventWorkspacePage() {
             </span>
           </div>
         </div>
-
-        <div className="w-full md:w-1/2 h-2.5 bg-slate-100 rounded-full overflow-hidden">
+        <div className="w-full md:w-64 h-2.5 bg-slate-100 rounded-full overflow-hidden mt-3">
           <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${percentComplete}%` }}></div>
         </div>
       </div>
@@ -310,6 +332,7 @@ export default function EventWorkspacePage() {
           if (!open) {
             setActiveModal(null);
             setShowAddForm(false);
+            setOpenDropdownId(null);
           }
         }}
       >
@@ -359,9 +382,9 @@ export default function EventWorkspacePage() {
                   }}
                 />
 
-                <div className="flex gap-2 h-[42px]">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 h-auto sm:h-[42px]">
                   {activeModal === 'tasks' && (
-                    <div className="w-1/3 h-full">
+                    <div className="relative h-[42px] sm:h-full">
                       <input 
                         type={newItemDate ? "date" : "text"}
                         onFocus={(e) => (e.target.type = "date")}
@@ -374,9 +397,51 @@ export default function EventWorkspacePage() {
                     </div>
                   )}
                   
+                  {activeModal === 'tasks' && (
+                    <div className="relative h-[42px] sm:h-full">
+                      <div 
+                        onClick={() => setOpenDropdownId(openDropdownId === 'add-new' ? null : 'add-new')}
+                        className="w-full h-full border px-3 rounded-lg text-sm text-slate-700 bg-white flex items-center justify-between cursor-pointer select-none"
+                      >
+                        <span className="truncate">{newItemAssignedTo || "Assign To..."}</span>
+                        <ChevronDown className="w-4 h-4 text-slate-400 shrink-0 ml-1" />
+                      </div>
+
+                      {openDropdownId === 'add-new' && (
+                        <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
+                          <div className="p-1.5 border-b bg-slate-50 sticky top-0">
+                            <input
+                              type="text"
+                              autoFocus
+                              value={newItemAssignedTo}
+                              onChange={(e) => setNewItemAssignedTo(e.target.value)}
+                              placeholder="Type custom name..."
+                              className="w-full text-xs px-2 py-1.5 border rounded bg-white outline-none focus:border-emerald-500 text-slate-700"
+                            />
+                          </div>
+                          <div
+                            onClick={() => { setNewItemAssignedTo(""); setOpenDropdownId(null); }}
+                            className="px-3 py-2 text-xs text-slate-400 hover:bg-slate-100 cursor-pointer italic"
+                          >
+                            Unassigned
+                          </div>
+                          {teamMembers.map((member) => (
+                            <div
+                              key={member}
+                              onClick={() => { setNewItemAssignedTo(member); setOpenDropdownId(null); }}
+                              className="px-3 py-2 text-xs text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 cursor-pointer truncate"
+                            >
+                              {member}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Thumbnail Preview for Add Form */}
                   {newItemImage ? (
-                    <div className="relative h-full aspect-[4/3] border border-emerald-200 rounded-lg overflow-hidden shadow-sm group bg-black/5 shrink-0 flex items-center justify-center">
+                    <div className="relative h-[42px] sm:h-full aspect-[4/3] border border-emerald-200 rounded-lg overflow-hidden shadow-sm group bg-black/5 shrink-0 flex items-center justify-center">
                       <img 
                         src={newItemImage} 
                         className="w-full h-full object-cover" 
@@ -390,7 +455,7 @@ export default function EventWorkspacePage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="flex-1 relative h-full">
+                    <div className="relative h-[42px] sm:h-full">
                       <input 
                         type="file"
                         accept="image/*"
@@ -403,31 +468,35 @@ export default function EventWorkspacePage() {
                         className="flex items-center justify-center w-full h-full border border-dashed rounded-lg cursor-pointer text-sm transition-colors bg-white border-slate-300 text-slate-500 hover:bg-slate-50"
                       >
                         <ImageIcon className="w-4 h-4 mr-2" />
-                        Upload Image
+                        Image
                       </label>
                     </div>
                   )}
+                </div>
 
+                <div className="flex gap-2 justify-end pt-2">
                   <Button 
                     variant="outline" 
                     onClick={() => {
                       setShowAddForm(false);
                       setNewItemText("");
+                      setNewItemDate("");
+                      setNewItemAssignedTo("");
                       setNewItemImage(null);
+                      setOpenDropdownId(null);
                     }} 
-                    className="h-full px-3 text-slate-500 border-slate-200 ml-auto"
+                    className="px-3 py-1.5 h-9 text-slate-500 border-slate-200 text-xs"
                   >
                     Cancel
                   </Button>
-
-                  <Button onClick={handleAddItem} className="bg-emerald-600 hover:bg-emerald-700 h-full">
-                    <Plus className="w-4 h-4 mr-1" /> Add
+                  <Button onClick={handleAddItem} className="bg-emerald-600 hover:bg-emerald-700 h-9 px-4 text-xs">
+                    <Plus className="w-3.5 h-3.5 mr-1" /> Add Entry
                   </Button>
                 </div>
               </div>
             )}
 
-            {/* List Items (Sorted Descending by creation date) */}
+            {/* List Items */}
             <div className="mt-4 space-y-3 pb-4">
               {activeModal && [...(items[activeModal] || [])].sort((a: any, b: any) => 
                 new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime()
@@ -464,20 +533,64 @@ export default function EventWorkspacePage() {
                           rows={1}
                         />
 
-                        <div className="flex gap-2 text-sm h-8 mt-1">
-                          <input 
-                            type={editingTaskDate ? "date" : "text"}
-                            onFocus={(e) => (e.target.type = "date")}
-                            onBlur={(e) => { if (!e.target.value) e.target.type = "text"; }}
-                            placeholder="Due Date"
-                            value={editingTaskDate}
-                            onChange={(e) => setEditingTaskDate(e.target.value)}
-                            className="border rounded px-2 outline-none w-1/3 text-slate-600 bg-white"
-                          />
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm mt-1">
+                          {activeModal === 'tasks' && (
+                            <input 
+                              type={editingTaskDate ? "date" : "text"}
+                              onFocus={(e) => (e.target.type = "date")}
+                              onBlur={(e) => { if (!e.target.value) e.target.type = "text"; }}
+                              placeholder="Due Date"
+                              value={editingTaskDate}
+                              onChange={(e) => setEditingTaskDate(e.target.value)}
+                              className="border rounded px-2 h-9 outline-none text-slate-600 bg-white w-full"
+                            />
+                          )}
+
+                          {activeModal === 'tasks' && (
+                            <div className="relative w-full">
+                              <div 
+                                onClick={() => setOpenDropdownId(openDropdownId === item.id ? null : item.id)}
+                                className="text-sm border rounded px-2 h-9 text-slate-600 bg-white flex items-center justify-between cursor-pointer select-none"
+                              >
+                                <span className="truncate">{editingAssignedTo || "Assign to..."}</span>
+                                <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1" />
+                              </div>
+
+                              {openDropdownId === item.id && (
+                                <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-md shadow-xl z-50 max-h-48 overflow-y-auto">
+                                  <div className="p-1 border-b bg-slate-50 sticky top-0">
+                                    <input
+                                      type="text"
+                                      autoFocus
+                                      value={editingAssignedTo}
+                                      onChange={(e) => setEditingAssignedTo(e.target.value)}
+                                      placeholder="Type custom name..."
+                                      className="w-full text-xs px-2 py-1 border rounded bg-white outline-none focus:border-emerald-500 text-slate-700"
+                                    />
+                                  </div>
+                                  <div
+                                    onClick={() => { setEditingAssignedTo(""); setOpenDropdownId(null); }}
+                                    className="px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-100 cursor-pointer italic"
+                                  >
+                                    Unassigned
+                                  </div>
+                                  {teamMembers.map((member) => (
+                                    <div
+                                      key={member}
+                                      onClick={() => { setEditingAssignedTo(member); setOpenDropdownId(null); }}
+                                      className="px-3 py-1.5 text-xs text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 cursor-pointer truncate"
+                                    >
+                                      {member}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
                           
                           {/* Thumbnail Preview for Edit Form */}
                           {editingTaskImage ? (
-                            <div className="h-full aspect-[4/3] rounded border border-emerald-200 relative overflow-hidden group flex items-center justify-center shrink-0">
+                            <div className="h-9 rounded border border-emerald-200 relative overflow-hidden group flex items-center justify-center shrink-0">
                               <img 
                                 src={editingTaskImage} 
                                 className="w-full h-full object-cover" 
@@ -489,7 +602,7 @@ export default function EventWorkspacePage() {
                               </button>
                             </div>
                           ) : (
-                            <div className="flex-1 relative">
+                            <div className="relative h-9">
                               <input 
                                 type="file"
                                 accept="image/*"
@@ -499,10 +612,10 @@ export default function EventWorkspacePage() {
                               />
                               <label 
                                 htmlFor={`edit-image-${item.id}`} 
-                                className="flex items-center justify-center w-full h-full border border-dashed rounded cursor-pointer text-slate-500 hover:bg-slate-50"
+                                className="flex items-center justify-center w-full h-full border border-dashed rounded cursor-pointer text-slate-500 hover:bg-slate-50 text-xs"
                               >
                                 <ImageIcon className="w-3 h-3 mr-1" />
-                                Upload Image
+                                Image
                               </label>
                             </div>
                           )}
@@ -515,12 +628,18 @@ export default function EventWorkspacePage() {
                       </div>
                     ) : (
                       
-                    /* --- DISPLAY MODE --- */
+                      /* --- DISPLAY MODE --- */
                       <>
                         <div className="flex-1 min-w-0">
-                          {/* DATE CREATED */}
-                          <div className="text-[10px] text-slate-400 font-bold tracking-widest uppercase mb-1.5 opacity-70">
-                            {item.created_at || item.createdAt ? formatDate(item.created_at || item.createdAt) : formatDate(new Date().toISOString())}
+                          <div className="flex justify-between items-center mb-1.5">
+                            <span className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">
+                              {item.created_at || item.createdAt ? formatDate(item.created_at || item.createdAt) : formatDate(new Date().toISOString())}
+                            </span>
+                            {item.assignedTo && (
+                              <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1">
+                                <User className="w-3 h-3 text-emerald-600" /> {item.assignedTo}
+                              </span>
+                            )}
                           </div>
                           
                           <p className={`text-sm whitespace-pre-wrap break-words ${activeModal === 'taskDone' ? 'line-through text-slate-400' : 'text-slate-800'}`}>

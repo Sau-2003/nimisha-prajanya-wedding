@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { 
-  Plus, Trash2, Pencil, X, Image as ImageIcon, FolderPlus, Check, Maximize2, ShoppingBag
+  Plus, Trash2, Pencil, X, Image as ImageIcon, FolderPlus, Check, Maximize2, ShoppingBag 
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -14,6 +14,7 @@ export default function OptionsPage() {
     activeTab,
     setActiveTab,
     addTab,
+    renameTab,
     deleteTab,
     items,
     addOptionItem,
@@ -27,10 +28,22 @@ export default function OptionsPage() {
   const [isAddingTab, setIsAddingTab] = useState(false);
   const [newTabLabel, setNewTabLabel] = useState("");
 
-  // New Item Input State
+  // Edit Tab State
+  const [editingTabId, setEditingTabId] = useState<string | null>(null);
+  const [editingTabLabel, setEditingTabLabel] = useState("");
+
+  // Toggle for Add Option Section Modal/Drawer/Dropdown
+  const [isAddingOptionOpen, setIsAddingOptionOpen] = useState(false);
+
+  // New Item Input State (Requires Image)
   const [caption, setCaption] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
+
+  // New Link Input States
+  const [newLinkTitle, setNewLinkTitle] = useState("");
+  const [newLinkUrl, setNewLinkUrl] = useState("");
+  const [addingLink, setAddingLink] = useState(false);
 
   // Edit Mode State
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
@@ -40,9 +53,18 @@ export default function OptionsPage() {
 
   // Handlers
   const handleAddTabSubmit = () => {
-    addTab(newTabLabel);
+    if (!newTabLabel.trim()) return;
+    addTab(newTabLabel.trim());
     setNewTabLabel("");
     setIsAddingTab(false);
+  };
+
+  const handleRenameTabSubmit = (id: string) => {
+    if (editingTabLabel.trim() && renameTab) {
+      renameTab(id, editingTabLabel.trim());
+    }
+    setEditingTabId(null);
+    setEditingTabLabel("");
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, isEdit = false) => {
@@ -59,10 +81,31 @@ export default function OptionsPage() {
   };
 
   const handleCreateOption = async () => {
+    if (!selectedFile) return; 
     await addOptionItem(caption, selectedFile);
     setCaption("");
     setSelectedFile(null);
     setFilePreview(null);
+    setIsAddingOptionOpen(false); // Close form after submission
+  };
+
+  const handleAddLink = async () => {
+    if (!newLinkUrl.trim() || !selectedFile) return; 
+    setAddingLink(true);
+    try {
+      const formattedCaption = newLinkTitle.trim() 
+        ? `${newLinkTitle.trim()}: ${newLinkUrl.trim()}` 
+        : newLinkUrl.trim();
+      
+      await addOptionItem(formattedCaption, selectedFile);
+      setNewLinkTitle("");
+      setNewLinkUrl("");
+      setSelectedFile(null);
+      setFilePreview(null);
+      setIsAddingOptionOpen(false); // Close form after submission
+    } finally {
+      setAddingLink(false);
+    }
   };
 
   const startEditing = (item: OptionItem) => {
@@ -89,11 +132,13 @@ export default function OptionsPage() {
         </p>
       </div>
 
-      {/* --- TOP TABS BAR WITH DELETE TAB OPTION --- */}
-      <div className="border-b border-slate-200 pb-3">
+      {/* --- TOP TABS BAR WITH EDIT & DELETE TAB OPTIONS --- */}
+      <div className="border-b border-slate-200 pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id;
+            const isEditingThisTab = editingTabId === tab.id;
+
             return (
               <div
                 key={tab.id}
@@ -103,29 +148,71 @@ export default function OptionsPage() {
                     : "bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                 }`}
               >
-                <button
-                  onClick={() => {
-                    setActiveTab(tab.id);
-                    setEditingItemId(null);
-                  }}
-                  className="outline-none"
-                >
-                  {tab.label}
-                </button>
+                {isEditingThisTab ? (
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="text"
+                      value={editingTabLabel}
+                      onChange={(e) => setEditingTabLabel(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleRenameTabSubmit(tab.id)}
+                      className="text-xs px-2 py-1 border rounded-md outline-none text-slate-900 w-28 bg-white"
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => handleRenameTabSubmit(tab.id)}
+                      className="p-1 text-emerald-600 hover:text-emerald-700 bg-white rounded-md"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setEditingTabId(null)}
+                      className="p-1 text-slate-400 hover:text-slate-600 bg-white rounded-md"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => {
+                        setActiveTab(tab.id);
+                        setEditingItemId(null);
+                      }}
+                      className="outline-none"
+                    >
+                      {tab.label}
+                    </button>
 
-                {/* Delete Tab Icon */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deleteTab(tab.id);
-                  }}
-                  className={`p-0.5 rounded-full hover:bg-black/10 transition-colors ${
-                    isActive ? "text-emerald-200 hover:text-white" : "text-slate-400 hover:text-red-500"
-                  }`}
-                  title={`Delete ${tab.label} Tab`}
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
+                    {/* Edit Tab Icon */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingTabId(tab.id);
+                        setEditingTabLabel(tab.label);
+                      }}
+                      className={`p-0.5 rounded-full hover:bg-black/10 transition-colors ${
+                        isActive ? "text-emerald-200 hover:text-white" : "text-slate-400 hover:text-slate-700"
+                      }`}
+                      title={`Edit ${tab.label} Tab`}
+                    >
+                      <Pencil className="w-3 h-3" />
+                    </button>
+
+                    {/* Delete Tab Icon */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteTab(tab.id);
+                      }}
+                      className={`p-0.5 rounded-full hover:bg-black/10 transition-colors ${
+                        isActive ? "text-emerald-200 hover:text-white" : "text-slate-400 hover:text-red-500"
+                      }`}
+                      title={`Delete ${tab.label} Tab`}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                )}
               </div>
             );
           })}
@@ -158,73 +245,129 @@ export default function OptionsPage() {
             </button>
           )}
         </div>
+
+        {/* Action Button to Open Add Option Form */}
+        {activeTab && (
+          <Button 
+            onClick={() => setIsAddingOptionOpen(!isAddingOptionOpen)}
+            className="bg-emerald-800 hover:bg-emerald-900 text-white shrink-0 shadow-sm"
+          >
+            <Plus className="w-4 h-4 mr-2" /> 
+            {isAddingOptionOpen ? "Close Form" : "Add New Option"}
+          </Button>
+        )}
       </div>
 
-      {/* --- ADD NEW OPTION FORM --- */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-        <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider">
-          {activeTab 
-            ? `Add New Option to "${tabs.find((t) => t.id === activeTab)?.label || activeTab}"` 
-            : "Create a Tab First to Add Options"}
-        </h2>
-
-        <div className="space-y-3">
-          <textarea
-            className="w-full border p-3 rounded-xl outline-none focus:border-emerald-500 text-sm resize-none"
-            placeholder="Write a caption or details..."
-            rows={2}
-            value={caption}
-            disabled={!activeTab}
-            onChange={(e) => setCaption(e.target.value)}
-          />
-
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <div className="flex-1 relative h-11">
-              <input
-                type="file"
-                accept="image/*"
-                id="add-option-image"
-                className="hidden"
-                disabled={!activeTab}
-                onChange={(e) => handleFileChange(e, false)}
-              />
-              <label
-                htmlFor="add-option-image"
-                className={`flex items-center justify-center w-full h-full border border-dashed rounded-xl cursor-pointer text-sm font-medium transition-colors ${
-                  filePreview
-                    ? "bg-emerald-50 border-emerald-500 text-emerald-700"
-                    : "bg-slate-50 border-slate-300 text-slate-500 hover:bg-slate-100"
-                } ${!activeTab ? "pointer-events-none opacity-50" : ""}`}
-              >
-                <ImageIcon className="w-4 h-4 mr-2" />
-                {filePreview ? "Photo Selected ✓" : "Upload Image"}
-              </label>
-
-              {filePreview && (
-                <button
-                  onClick={() => {
-                    setSelectedFile(null);
-                    setFilePreview(null);
-                  }}
-                  className="absolute -top-2 -right-2 bg-red-100 text-red-500 rounded-full p-1 hover:bg-red-200"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            <Button onClick={handleCreateOption} disabled={!activeTab} className="bg-emerald-800 hover:bg-emerald-900 h-11 px-6">
-              <Plus className="w-4 h-4 mr-1" /> Add Option
-            </Button>
+      {/* --- ADD NEW OPTION FORM (Toggled via Button & Requires Image First) --- */}
+      {isAddingOptionOpen && activeTab && (
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider">
+              {`Add New Option to "${tabs.find((t) => t.id === activeTab)?.label || activeTab}"`}
+            </h2>
+            <button 
+              onClick={() => setIsAddingOptionOpen(false)}
+              className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
 
-          {filePreview && (
-            <div className="relative w-28 h-28 rounded-xl overflow-hidden border border-emerald-300 mt-2 shadow-sm">
-              <img src={filePreview} alt="Upload preview" className="w-full h-full object-cover" />
+          <div className="space-y-3">
+            {/* Step 1: Image Upload Selector (Required first) */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <div className="flex-1 relative h-11">
+                <input
+                  type="file"
+                  accept="image/*"
+                  id="add-option-image"
+                  className="hidden"
+                  onChange={(e) => handleFileChange(e, false)}
+                />
+                <label
+                  htmlFor="add-option-image"
+                  className={`flex items-center justify-center w-full h-full border border-dashed rounded-xl cursor-pointer text-sm font-medium transition-colors ${
+                    filePreview
+                      ? "bg-emerald-50 border-emerald-500 text-emerald-700"
+                      : "bg-slate-50 border-slate-300 text-slate-500 hover:bg-slate-100"
+                  }`}
+                >
+                  <ImageIcon className="w-4 h-4 mr-2" />
+                  {filePreview ? "Photo Selected ✓ (Required)" : "Upload Image (Required First)"}
+                </label>
+
+                {filePreview && (
+                  <button
+                    onClick={() => {
+                      setSelectedFile(null);
+                      setFilePreview(null);
+                    }}
+                    className="absolute -top-2 -right-2 bg-red-100 text-red-500 rounded-full p-1 hover:bg-red-200"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
-          )}
+
+            {filePreview && (
+              <div className="relative w-28 h-28 rounded-xl overflow-hidden border border-emerald-300 mt-2 shadow-sm">
+                <img src={filePreview} alt="Upload preview" className="w-full h-full object-cover" />
+              </div>
+            )}
+
+            {/* Step 2: Captions & Details (Enabled ONLY when an image is uploaded) */}
+            <div className={`space-y-3 transition-opacity ${!filePreview ? "opacity-50 pointer-events-none" : "opacity-100"}`}>
+              <textarea
+                className="w-full border p-3 rounded-xl outline-none focus:border-emerald-500 text-sm resize-none bg-white"
+                placeholder={filePreview ? "Write a caption or details..." : "Upload an image above to unlock captions & details..."}
+                rows={2}
+                value={caption}
+                disabled={!filePreview}
+                onChange={(e) => setCaption(e.target.value)}
+              />
+
+              <div className="flex justify-end">
+                <Button 
+                  onClick={handleCreateOption} 
+                  disabled={!filePreview} 
+                  className="bg-emerald-800 hover:bg-emerald-900 h-11 px-6"
+                >
+                  <Plus className="w-4 h-4 mr-1" /> Save Option
+                </Button>
+              </div>
+            </div>
+
+            {/* Link Input Row (Also gated behind image upload) */}
+            <div className={`bg-slate-50 border p-4 rounded-xl flex flex-col md:flex-row gap-3 items-stretch md:items-center transition-opacity ${!filePreview ? "opacity-50 pointer-events-none" : "opacity-100"}`}>
+              <input 
+                type="text" 
+                placeholder="Link title/label (optional)..."
+                value={newLinkTitle}
+                onChange={(e) => setNewLinkTitle(e.target.value)}
+                disabled={!filePreview}
+                className="w-full md:w-1/3 border p-2 rounded-lg bg-white outline-none text-sm focus:border-emerald-500"
+              />
+              <input 
+                type="url" 
+                placeholder="Paste link here (e.g., myntra.com/...)"
+                value={newLinkUrl}
+                onChange={(e) => setNewLinkUrl(e.target.value)}
+                disabled={!filePreview}
+                className="flex-1 border p-2 rounded-lg bg-white outline-none text-sm focus:border-emerald-500"
+              />
+              <Button 
+                onClick={handleAddLink} 
+                disabled={addingLink || !newLinkUrl.trim() || !filePreview}
+                variant="outline"
+                className="border-emerald-600 text-emerald-700 hover:bg-emerald-50 whitespace-nowrap"
+              >
+                Save Link Option
+              </Button>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* --- OPTIONS GRID --- */}
       <div>
@@ -236,7 +379,7 @@ export default function OptionsPage() {
           <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50">
             <FolderPlus className="w-10 h-10 text-slate-300 mx-auto mb-2" />
             <p className="text-slate-500 text-sm font-medium">
-              {activeTab ? "No options added under this tab yet." : "Please add a tab above to get started."}
+              {activeTab ? "No options added under this tab yet." : "Please select or add a tab above to get started."}
             </p>
           </div>
         ) : (
@@ -269,23 +412,6 @@ export default function OptionsPage() {
                         </button>
                       </div>
                     )}
-
-                    <div className="relative h-9">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        id={`edit-file-${item.id}`}
-                        className="hidden"
-                        onChange={(e) => handleFileChange(e, true)}
-                      />
-                      <label
-                        htmlFor={`edit-file-${item.id}`}
-                        className="flex items-center justify-center w-full h-full border border-dashed rounded-lg cursor-pointer text-xs text-slate-500 bg-slate-50 hover:bg-slate-100"
-                      >
-                        <ImageIcon className="w-3 h-3 mr-1" />
-                        {editingPreview ? "Replace Image" : "Upload Image"}
-                      </label>
-                    </div>
 
                     <div className="flex justify-end gap-2 pt-2">
                       <button
