@@ -214,19 +214,29 @@ export default function TasksPage() {
 
   return (
     <div className="p-6 md:p-12 max-w-6xl mx-auto">
-      <div className="flex justify-between items-start mb-10">
-        <div>
-          <h1 className="flex items-center gap-3 text-3xl font-serif font-bold text-emerald-900 mb-2">
-            <ClipboardList className="w-8 h-8 text-emerald-700" /> Global Task Board
-          </h1>
-          <p className="text-slate-500">Manage everything you need to do before the big day.</p>
-        </div>
-        <div className="flex gap-2">
-          <Button onClick={() => setIsTeamModalOpen(true)} variant="outline" className="border-slate-300 text-slate-700">
-            <Settings className="w-4 h-4 mr-2" /> Manage Team
+      <div className="mb-10">
+        <h1 className="flex items-center gap-3 text-3xl font-serif font-bold text-emerald-900 mb-2">
+          <ClipboardList className="w-8 h-8 text-emerald-700" />
+          Global Task Board
+        </h1>
+        <p className="text-slate-500 mb-4">
+          Manage everything you need to do before the big day.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            onClick={() => setIsTeamModalOpen(true)}
+            variant="outline"
+            className="border-slate-300 text-slate-700"
+            >
+            <Settings className="w-4 h-4 mr-2" />
+            Manage Team
           </Button>
-          <Button onClick={() => setIsDialogOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 shadow-sm">
-            <Plus className="w-4 h-4 mr-2" /> New Task
+          
+          <Button
+            onClick={() => setIsDialogOpen(true)}
+            className="bg-emerald-600 hover:bg-emerald-700 shadow-sm">
+            <Plus className="w-4 h-4 mr-2" />
+            New Task
           </Button>
         </div>
       </div>
