@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { 
-  Plus, X, FileText, Edit2, Check, Trash2, ChevronRight, FileSpreadsheet, FileDown, ExternalLink, SquareMenu, Eye
+  Plus, X, FileText, Edit2, Check, Trash2, ChevronRight, FileSpreadsheet, FileDown, ExternalLink, SquareMenu, Eye, Pin
 } from 'lucide-react';
 import { useMenus, Tab } from '@/hooks/useMenus';
 
@@ -147,19 +147,50 @@ export default function MenuPage() {
   const [customCategoryName, setCustomCategoryName] = useState("");
   const [categoryCaption, setCategoryCaption] = useState("");
 
+  // Editing Category state
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editCategoryName, setEditCategoryName] = useState("");
+  const [editCategoryCaption, setEditCategoryCaption] = useState("");
+
   const [newItemNames, setNewItemNames] = useState<{ [categoryId: string]: string }>({});
   const [newItemCaptions, setNewItemCaptions] = useState<{ [categoryId: string]: string }>({});
   
   const [activeAddDishCategoryId, setActiveAddDishCategoryId] = useState<string | null>(null);
   
-  // State to toggle the "Add Menu Category" form via button
+  // Editing Dish state
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editItemName, setEditItemName] = useState("");
+  const [editItemCaption, setEditItemCaption] = useState("");
+
   const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
 
+  // Sorted tabs: pinned tabs first, then unpinned tabs
+  // const sortedMenus = useMemo(() => {
+  //   return [...menus].sort((a, b) => {
+  //     const aPinned = (a as any).is_pinned ? 1 : 0;
+  //     const bPinned = (b as any).is_pinned ? 1 : 0;
+  //     return bPinned - aPinned;
+  //   });
+  // }, [menus]);
+  // Sorted tabs: pinned tabs first, but keep active tab stable or sort normally without shifting current view
+  const sortedMenus = useMemo(() => {
+    return [...menus].sort((a, b) => {
+      // If one of them is the active tab, you can choose to keep it in place or sort normally.
+      // Standard pin sort:
+      const aPinned = (a as any).is_pinned ? 1 : 0;
+      const bPinned = (b as any).is_pinned ? 1 : 0;
+      if (aPinned !== bPinned) {
+        return bPinned - aPinned;
+      }
+      return 0;
+    });
+  }, [menus]);
+
   useMemo(() => {
-    if (!activeTabId && menus.length > 0) {
-      setActiveTabId(menus[0].id);
+    if (!activeTabId && sortedMenus.length > 0) {
+      setActiveTabId(sortedMenus[0].id);
     }
-  }, [menus, activeTabId]);
+  }, [sortedMenus, activeTabId]);
 
   const activeTab = menus.find(t => t.id === activeTabId);
 
@@ -179,6 +210,11 @@ export default function MenuPage() {
     e.stopPropagation();
     await deleteTab(tabId);
     if (activeTabId === tabId) setActiveTabId(null);
+  };
+
+  const handleTogglePinTab = async (tabId: string, currentPinned?: boolean, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    await updateTab(tabId, { is_pinned: !currentPinned } as any);
   };
 
   const saveTabName = async (tabId: string) => {
@@ -208,7 +244,23 @@ export default function MenuPage() {
     setSelectedCategoryName("");
     setCustomCategoryName("");
     setCategoryCaption("");
-    setIsAddCategoryOpen(false); // Close the form after adding
+    setIsAddCategoryOpen(false);
+  };
+
+  const handleSaveCategory = async (categoryId: string) => {
+    if (!activeTab) return;
+    const newCategories = activeTab.categories.map(cat => {
+      if (cat.id === categoryId) {
+        return {
+          ...cat,
+          name: editCategoryName.trim() || cat.name,
+          caption: editCategoryCaption.trim()
+        };
+      }
+      return cat;
+    });
+    await updateTab(activeTab.id, { categories: newCategories });
+    setEditingCategoryId(null);
   };
 
   const handleDeleteCategory = async (categoryId: string) => {
@@ -237,6 +289,28 @@ export default function MenuPage() {
     setNewItemNames({ ...newItemNames, [categoryId]: "" });
     setNewItemCaptions({ ...newItemCaptions, [categoryId]: "" });
     setActiveAddDishCategoryId(null);
+  };
+
+  const handleSaveItem = async (categoryId: string, itemId: string) => {
+    if (!activeTab) return;
+    const newCategories = activeTab.categories.map(cat => {
+      if (cat.id === categoryId) {
+        const updatedItems = cat.items.map(item => {
+          if (item.id === itemId) {
+            return {
+              ...item,
+              name: editItemName.trim() || item.name,
+              caption: editItemCaption.trim()
+            };
+          }
+          return item;
+        });
+        return { ...cat, items: updatedItems };
+      }
+      return cat;
+    });
+    await updateTab(activeTab.id, { categories: newCategories });
+    setEditingItemId(null);
   };
 
   const handleDeleteItem = async (categoryId: string, itemId: string) => {
@@ -368,66 +442,110 @@ export default function MenuPage() {
         </div>
       </div>
 
-      {/* Tabs Layout */}
-      <div className="flex items-center gap-2 border-b mb-8 overflow-x-auto pb-2 scrollbar-thin">
-        {menus.map(tab => (
-          <div 
-            key={tab.id}
-            onClick={() => setActiveTabId(tab.id)}
-            onDoubleClick={(e) => { e.stopPropagation(); setEditingTabId(tab.id); setEditTabName(tab.tab_name); setEditTabCaption(tab.caption || ""); }}
-            className={`px-4 py-2 rounded-t-lg flex items-center gap-2 whitespace-nowrap cursor-pointer group flex-shrink-0 ${
-              activeTabId === tab.id ? "bg-emerald-50 border-b-2 border-emerald-600 text-emerald-700 shadow-sm" : "hover:bg-slate-50 border-transparent text-slate-600"
-            }`}
+      {/* Menu Tabs Section */}
+      <div className="mb-8">
+        {/* Add Menu Tab Button */}
+        <div className="flex justify-start mb-2">
+          <button 
+            type="button"
+            onClick={handleAddTab}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-300 border-dashed rounded-lg transition-colors shadow-sm cursor-pointer"
           >
-            {editingTabId === tab.id ? (
-              <div className="flex flex-col gap-1 py-1">
-                <div className="flex items-center gap-2">
-                  <input 
-                    autoFocus
-                    placeholder={tab.tab_name}
-                    value={editTabName}
-                    onChange={(e) => setEditTabName(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && saveTabName(tab.id)}
-                    className="px-2 py-1 text-sm border rounded outline-none border-emerald-300 w-36 bg-white text-slate-800"
-                  />
-                  <button onClick={() => saveTabName(tab.id)} className="p-1 hover:text-emerald-600"><Check className="w-4 h-4" /></button>
-                </div>
-                <input 
-                  placeholder="Tab caption/notes..."
-                  value={editTabCaption}
-                  onChange={(e) => setEditTabCaption(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && saveTabName(tab.id)}
-                  className="px-2 py-0.5 text-xs border rounded outline-none border-slate-300 bg-white text-slate-600"
-                />
-              </div>
-            ) : (
-              <div className="flex flex-col">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium select-none">{tab.tab_name}</span>
-                  <span className="bg-slate-200 text-xs px-2 py-0.5 rounded-full text-slate-700">
-                    {tab.categories.reduce((acc, cat) => acc + cat.items.length, 0)} Items
-                  </span>
-                  
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); setEditingTabId(tab.id); setEditTabName(tab.tab_name); setEditTabCaption(tab.caption || ""); }}
-                    className="p-1 text-slate-400 hover:text-emerald-600 opacity-50 md:opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <Edit2 className="w-3 h-3" />
-                  </button>
-                  <button onClick={(e) => handleDeleteTab(tab.id, e)} className="p-1 text-slate-400 hover:text-red-500">
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-                {tab.caption && (
-                  <span className="text-[11px] text-slate-500">{tab.caption}</span>
+            <Plus className="w-4 h-4 text-slate-500" /> Add Menu Tab
+          </button>
+        </div>
+
+        {/* Tabs Layout (Long rectangle tabs) */}
+        <div className="flex items-center gap-2 border border-slate-200 bg-slate-50/50 p-2.5 rounded-xl overflow-x-auto scrollbar-thin">
+          {sortedMenus.map(tab => {
+            const isPinned = (tab as any).is_pinned;
+            const isSelected = activeTabId === tab.id;
+
+            return (
+              <div 
+                key={tab.id}
+                onClick={() => setActiveTabId(tab.id)}
+                onDoubleClick={(e) => { 
+                  e.stopPropagation(); 
+                  setEditingTabId(tab.id); 
+                  setEditTabName(tab.tab_name); 
+                  setEditTabCaption(tab.caption || ""); 
+                }}
+                className={`px-5 py-3 rounded-lg flex items-center gap-3 whitespace-nowrap cursor-pointer group flex-shrink-0 transition-all select-none ${
+                  isSelected 
+                    ? "bg-white border-2 border-emerald-600 text-emerald-900 shadow-sm font-semibold" 
+                    : "bg-white/70 hover:bg-white border border-slate-200 text-slate-600"
+                }`}
+              >
+                {editingTabId === tab.id ? (
+                  <div className="flex flex-col gap-1 py-0.5" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center gap-2">
+                      <input 
+                        autoFocus
+                        placeholder={tab.tab_name}
+                        value={editTabName}
+                        onChange={(e) => setEditTabName(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && saveTabName(tab.id)}
+                        className="px-2 py-1 text-sm border rounded outline-none border-emerald-300 w-36 bg-white text-slate-800"
+                      />
+                      <button type="button" onClick={() => saveTabName(tab.id)} className="p-1 hover:text-emerald-600"><Check className="w-4 h-4" /></button>
+                    </div>
+                    <input 
+                      placeholder="Tab caption/notes..."
+                      value={editTabCaption}
+                      onChange={(e) => setEditTabCaption(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && saveTabName(tab.id)}
+                      className="px-2 py-0.5 text-xs border rounded outline-none border-slate-300 bg-white text-slate-600"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-2.5">
+                      <button 
+                        type="button"
+                        onClick={(e) => handleTogglePinTab(tab.id, isPinned, e)}
+                        title={isPinned ? "Unpin tab" : "Pin tab"}
+                        className={`p-0.5 transition-colors ${isPinned ? "text-emerald-600" : "text-slate-300 hover:text-slate-500"}`}
+                      >
+                        <Pin className={`w-3.5 h-3.5 ${isPinned ? "fill-emerald-600" : ""}`} />
+                      </button>
+                      
+                      <span className="text-sm font-medium">{tab.tab_name}</span>
+                      
+                      <span className="bg-slate-100 text-xs px-2 py-0.5 rounded-full text-slate-600">
+                        {tab.categories.reduce((acc, cat) => acc + cat.items.length, 0)} Items
+                      </span>
+                      
+                      <button 
+                        type="button"
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          setEditingTabId(tab.id); 
+                          setEditTabName(tab.tab_name); 
+                          setEditTabCaption(tab.caption || ""); 
+                        }}
+                        className="p-1 text-slate-400 hover:text-emerald-600 opacity-50 md:opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Edit2 className="w-3 h-3" />
+                      </button>
+                      
+                      <button 
+                        type="button"
+                        onClick={(e) => handleDeleteTab(tab.id, e)} 
+                        className="p-1 text-slate-400 hover:text-red-500"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                    {tab.caption && (
+                      <span className="text-[11px] text-slate-500 ml-6">{tab.caption}</span>
+                    )}
+                  </div>
                 )}
               </div>
-            )}
-          </div>
-        ))}
-        <button onClick={handleAddTab} className="flex items-center gap-1 px-4 py-2 text-sm font-medium text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg whitespace-nowrap flex-shrink-0">
-          <Plus className="w-4 h-4" /> Add Menu Tab
-        </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Active Tab Content */}
@@ -452,9 +570,8 @@ export default function MenuPage() {
                 }`}
               >
                 {isAddCategoryOpen ? <X className="w-3.5 h-3.5 text-white" /> : <Plus className="w-3.5 h-3.5 text-emerald-600" />} 
-                {isAddCategoryOpen ? "Close " : "Add Menu Category"}
+                {isAddCategoryOpen ? "Close" : "Add Menu Category"}
               </Button>
-                                      
 
               {isAddCategoryOpen && (
                 <div className="flex flex-col gap-3 bg-slate-50 p-5 rounded-lg border border-slate-200 mt-4 animate-in fade-in duration-200">
@@ -504,35 +621,78 @@ export default function MenuPage() {
               {activeTab.categories.map(category => {
                 const predefinedItems = PREDEFINED_MENU[category.name] || [];
                 const isAddingToThisCategory = activeAddDishCategoryId === category.id;
+                const isEditingThisCategory = editingCategoryId === category.id;
 
                 return (
                   <div key={category.id} className="border border-slate-200 rounded-lg overflow-hidden">
                     {/* Category Header */}
-                    <div className="bg-slate-50 px-4 py-3 flex justify-between items-start border-b border-slate-200">
-                      <div>
-                        <h3 className="font-semibold text-emerald-900 flex items-center gap-2 text-lg">
-                          <ChevronRight className="w-5 h-5 text-emerald-600" />
-                          {category.name}
-                        </h3>
-                        {category.caption && <p className="text-sm text-slate-500 ml-7 mt-1">{category.caption}</p>}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => setActiveAddDishCategoryId(isAddingToThisCategory ? null : category.id)}
-                        className={`text-xs h-8 flex gap-1 ${
-                          isAddingToThisCategory 
-                            ? "bg-emerald-700 text-white border-emerald-700 hover:bg-emerald-800" 
-                            : "border-emerald-600 text-emerald-700 hover:bg-emerald-50"
-                        }`}
-                      >
-                        {isAddingToThisCategory ? <X className="w-3.5 h-3.5 text-white" /> : <Plus className="w-3.5 h-3.5 text-emerald-600" />} {isAddingToThisCategory ? "Close" : "Add Dish"}
-                      </Button>
+                    <div className="bg-slate-50 px-4 py-3 flex justify-between items-center border-b border-slate-200">
+                      {isEditingThisCategory ? (
+                        <div className="flex flex-col sm:flex-row gap-2 flex-1 mr-4">
+                          <input 
+                            autoFocus
+                            value={editCategoryName}
+                            onChange={(e) => setEditCategoryName(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSaveCategory(category.id)}
+                            className="px-2 py-1 text-sm border rounded border-emerald-300 bg-white text-slate-800 flex-1"
+                            placeholder="Category Name"
+                          />
+                          <input 
+                            value={editCategoryCaption}
+                            onChange={(e) => setEditCategoryCaption(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSaveCategory(category.id)}
+                            className="px-2 py-1 text-xs border rounded border-slate-300 bg-white text-slate-600 flex-1"
+                            placeholder="Caption (optional)"
+                          />
+                        </div>
+                      ) : (
+                        <div>
+                          <h3 className="font-semibold text-emerald-900 flex items-center gap-2 text-lg">
+                            <ChevronRight className="w-5 h-5 text-emerald-600" />
+                            {category.name}
+                          </h3>
+                          {category.caption && <p className="text-sm text-slate-500 ml-7 mt-1">{category.caption}</p>}
+                        </div>
+                      )}
 
-                        <Button variant="ghost" size="sm" onClick={() => handleDeleteCategory(category.id)} className="text-slate-400 hover:text-red-500 hover:bg-red-50 h-8 w-8 p-0">
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                      <div className="flex items-center gap-2">
+                        {isEditingThisCategory ? (
+                          <>
+                            <Button size="sm" onClick={() => handleSaveCategory(category.id)} className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white">
+                              <Check className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => setEditingCategoryId(null)} className="h-8">
+                              <X className="w-3.5 h-3.5" />
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => { setEditingCategoryId(category.id); setEditCategoryName(category.name); setEditCategoryCaption(category.caption || ""); }}
+                              className="text-slate-400 hover:text-emerald-600 h-8 w-8 p-0"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => setActiveAddDishCategoryId(isAddingToThisCategory ? null : category.id)}
+                              className={`text-xs h-8 flex gap-1 ${
+                                isAddingToThisCategory 
+                                  ? "bg-emerald-700 text-white border-emerald-700 hover:bg-emerald-800" 
+                                  : "border-emerald-600 text-emerald-700 hover:bg-emerald-50"
+                              }`}
+                            >
+                              {isAddingToThisCategory ? <X className="w-3.5 h-3.5 text-white" /> : <Plus className="w-3.5 h-3.5 text-emerald-600" />} {isAddingToThisCategory ? "Close" : "Add Dish"}
+                            </Button>
+
+                            <Button variant="ghost" size="sm" onClick={() => handleDeleteCategory(category.id)} className="text-slate-400 hover:text-red-500 hover:bg-red-50 h-8 w-8 p-0">
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </div>
 
@@ -542,17 +702,62 @@ export default function MenuPage() {
                         {category.items.length === 0 ? (
                           <li className="text-xs text-slate-400 italic px-2"></li>
                         ) : (
-                          category.items.map(item => (
-                            <li key={item.id} className="flex items-start justify-between group px-4 py-3 hover:bg-slate-50 border border-transparent hover:border-slate-100 rounded-md transition-colors">
-                              <div>
-                                <span className="text-[15px] font-medium text-slate-800">{item.name}</span>
-                                {item.caption && <p className="text-xs text-slate-500 mt-1">{item.caption}</p>}
-                              </div>
-                              <button onClick={() => handleDeleteItem(category.id, item.id)} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity mt-1">
-                                <X className="w-4 h-4" />
-                              </button>
-                            </li>
-                          ))
+                          category.items.map(item => {
+                            const isEditingThisItem = editingItemId === item.id;
+                            return (
+                              <li key={item.id} className="flex items-center justify-between group px-4 py-3 hover:bg-slate-50 border border-transparent hover:border-slate-100 rounded-md transition-colors">
+                                {isEditingThisItem ? (
+                                  <div className="flex flex-col sm:flex-row gap-2 flex-1 mr-4">
+                                    <input 
+                                      autoFocus
+                                      value={editItemName}
+                                      onChange={(e) => setEditItemName(e.target.value)}
+                                      onKeyDown={(e) => e.key === 'Enter' && handleSaveItem(category.id, item.id)}
+                                      className="px-2 py-1 text-sm border rounded border-emerald-300 bg-white text-slate-800 flex-1"
+                                      placeholder="Dish Name"
+                                    />
+                                    <input 
+                                      value={editItemCaption}
+                                      onChange={(e) => setEditItemCaption(e.target.value)}
+                                      onKeyDown={(e) => e.key === 'Enter' && handleSaveItem(category.id, item.id)}
+                                      className="px-2 py-1 text-xs border rounded border-slate-300 bg-white text-slate-600 flex-1"
+                                      placeholder="Note/Caption"
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="flex-1">
+                                    <span className="text-[15px] font-medium text-slate-800">{item.name}</span>
+                                    {item.caption && <p className="text-xs text-slate-500 mt-1">{item.caption}</p>}
+                                  </div>
+                                )}
+
+                                <div className="flex items-center gap-1">
+                                  {isEditingThisItem ? (
+                                    <>
+                                      <Button size="sm" onClick={() => handleSaveItem(category.id, item.id)} className="h-7 bg-emerald-600 hover:bg-emerald-700 text-white">
+                                        <Check className="w-3.5 h-3.5" />
+                                      </Button>
+                                      <Button size="sm" variant="outline" onClick={() => setEditingItemId(null)} className="h-7">
+                                        <X className="w-3.5 h-3.5" />
+                                      </Button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <button 
+                                        onClick={() => { setEditingItemId(item.id); setEditItemName(item.name); setEditItemCaption(item.caption || ""); }}
+                                        className="text-emerald-500 hover:text-emerald-800 opacity-50 group-hover:opacity-100 transition-opacity p-1"
+                                      >
+                                        <Edit2 className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button onClick={() => handleDeleteItem(category.id, item.id)} className="text-red-500 hover:text-red-800 opacity-50 group-hover:opacity-100 transition-opacity p-1">
+                                        <X className="w-4 h-4" />
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              </li>
+                            );
+                          })
                         )}
                       </ul>
 

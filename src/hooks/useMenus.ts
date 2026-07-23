@@ -20,7 +20,18 @@ export interface Tab {
   id: string;
   tab_name: string;
   caption?: string;
-  categories: Category[];
+  serial_no?: number;
+  is_pinned?: boolean;
+  categories: {
+    id: string;
+    name: string;
+    caption?: string;
+    items: {
+      id: string;
+      name: string;
+      caption?: string;
+    }[];
+  }[];
 }
 
 export function useMenus() {
@@ -29,7 +40,11 @@ export function useMenus() {
 
   const fetchMenus = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase.from("menus").select("*").order("created_at", { ascending: true });
+    const { data, error } = await supabase
+      .from("menus")
+      .select("*")
+      .order("serial_no", { ascending: true, nullsFirst: false });
+
     if (error) {
       console.error("Error fetching menus from Supabase:", error);
     } else if (data) {
@@ -45,7 +60,13 @@ export function useMenus() {
   const addTab = async (tab_name: string, caption = "") => {
     const { data, error } = await supabase
       .from("menus")
-      .insert([{ tab_name, caption, categories: [] }])
+      .insert([{ 
+        tab_name, 
+        caption, 
+        categories: [], 
+        serial_no: menus.length + 1,
+        is_pinned: false 
+      }])
       .select();
 
     if (error) {
