@@ -5,11 +5,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Plus, CheckCircle2, Trash2, Phone, IndianRupee, Pencil, Handshake, X, Link as LinkIcon } from "lucide-react";
+import { Plus, CheckCircle2, Trash2, Phone, IndianRupee, Pencil, Handshake, X, Link as LinkIcon, ChevronUp, ChevronDown, Pin } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useVendors } from "@/hooks/useVendors";
 
-type BookingStatus = 'Not Started' | 'Not Booked' | 'Enquired' | 'Negotiating' | 'Booked' | 'Confirmed';
+type BookingStatus = 'Not Started' | 'Enquired' | 'Negotiating' | 'Confirmed' | 'Recommendation';
 
 interface VendorOption {
   id: string;
@@ -22,17 +22,16 @@ interface VendorOption {
 
 const initialCategories = [
   "Venue", "Wedding Planner", "Panditji", "Decorator", "Makeup Artist", "Nail Artist",
-  "Photographer", "Mehendi Artist", "DJ / Music", "Transport / Cars",
-  "Invitations", "Wedding Favors"
+  "Photographer/Videographer/Content Creater", "Mehendi Artist", "DJ / Music / Band", "Transport / Cars",
+  "Invitations", "Wedding Favors", "Bhajan Jamming"
 ];
 
-// --- NEW Component: Link Preview ---
+// --- Component: Link Preview ---
 const LinkPreview = ({ url }: { url: string }) => {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Using Microlink's free API to fetch link metadata (title, description, image)
     fetch(`https://api.microlink.io/?url=${encodeURIComponent(url)}`)
       .then((res) => res.json())
       .then((json) => {
@@ -50,7 +49,6 @@ const LinkPreview = ({ url }: { url: string }) => {
     return <div className="animate-pulse bg-slate-100 h-20 rounded-lg border border-slate-200 w-full mt-2"></div>;
   }
 
-  // Fallback if no preview data could be fetched
   if (!data) return null; 
 
   const domain = new URL(url).hostname.replace('www.', '');
@@ -83,7 +81,7 @@ const LinkPreview = ({ url }: { url: string }) => {
   );
 };
 
-// --- UPDATED: Helper to make URLs clickable and render previews ---
+// --- Helper: Render Text with Clickable Links and Previews ---
 const renderTextWithLinks = (text: string) => {
   if (!text) return null;
   const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -112,7 +110,6 @@ const renderTextWithLinks = (text: string) => {
         })}
       </div>
       
-      {/* Render rich link previews for every URL found in the text */}
       {extractedUrls.length > 0 && (
         <div className="flex flex-col gap-2 pt-1">
           {extractedUrls.map((url, idx) => (
@@ -125,7 +122,22 @@ const renderTextWithLinks = (text: string) => {
 };
 
 function VendorsTracker() {
-  const { dbVendors, loading, fetchData } = useVendors();
+  const { dbVendors, loading: vendorsLoading, fetchData: fetchVendors } = useVendors();
+
+  // Category Management State (Synced with Supabase)
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const [hiddenCategories, setHiddenCategories] = useState<string[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  
+  // Custom Reordering State
+  const [categoryOrder, setCategoryOrder] = useState<string[]>([]);
+
+  // Rename Category State
+  const [editingCategoryTitle, setEditingCategoryTitle] = useState<string | null>(null);
+  const [editCategoryInput, setEditCategoryInput] = useState("");
+
+  const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
 
   // Modal State
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -133,7 +145,7 @@ function VendorsTracker() {
 
   // Add Mode State
   const [newOptionName, setNewOptionName] = useState("");
-  const [newOptionStatus, setNewOptionStatus] = useState<BookingStatus>("Enquired");
+  const [newOptionStatus, setNewOptionStatus] = useState<BookingStatus>("Not Started");
   const [newEstimatedCost, setNewEstimatedCost] = useState<string>("");
   const [newContactNumbers, setNewContactNumbers] = useState<string[]>([""]);
   const [newNotes, setNewNotes] = useState("");
@@ -145,34 +157,212 @@ function VendorsTracker() {
   const [editContactNumbers, setEditContactNumbers] = useState<string[]>([""]);
   const [editNotes, setEditNotes] = useState("");
 
-  // Process and map database entries to our fixed categories
-  const displayCategories = initialCategories.map((categoryName) => {
-    const matches: VendorOption[] = dbVendors
-      ?.filter((v) => v.category === categoryName)
-      .map((v: any) => ({
-        id: v.id,
-        name: v.assigned_vendor || "Unnamed Vendor",
-        status: v.status as BookingStatus,
-        estimatedCost: v.estimated_cost || 0,
-        contactNumber: v.contact_numbers ?? [],
-        notes: v.notes || "",
-      })) || [];
+  // Fetch categories from Supabase on mount
+  const fetchCategories = async () => {
+    setCategoriesLoading(true);
+    const { data, error } = await supabase
+      .from('vendor_categories')
+      .select('*')
+      .order('order_index', { ascending: true }) 
+      .order('created_at', { ascending: true });
     
-    const confirmedOptions = matches.filter((opt) => opt.status === "Confirmed");
+    if (error) {
+      console.error("Error fetching categories:", error);
+    } else if (data) {
+      const hidden = data.filter(c => c.is_hidden).map(c => c.category_name);
+      const custom = data.filter(c => c.is_custom && !c.is_hidden).map(c => c.category_name);
+      const savedOrder = data.filter(c => !c.is_hidden).map(c => c.category_name);
+      
+      setHiddenCategories(hidden);
+      setCustomCategories(custom);
+      setCategoryOrder(savedOrder);
+    }
+    setCategoriesLoading(false);
+  };
 
-    return {
-      name: categoryName,
-      options: matches,
-      confirmedOptions,
-    };
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  // Merge categories dynamically & filter out hidden ones
+  const allCategories = Array.from(new Set([
+    ...initialCategories,
+    ...customCategories,
+    ...(dbVendors?.map((v: any) => v.category) || [])
+  ])).filter(c => !hiddenCategories.includes(c));
+
+  // Sort them based on saved user preference. Unsaved/Untracked ones go to the bottom.
+  const orderedCategories = allCategories.slice().sort((a, b) => {
+    const iA = categoryOrder.indexOf(a);
+    const iB = categoryOrder.indexOf(b);
+    
+    if (iA !== -1 && iB !== -1) return iA - iB;
+    if (iA !== -1) return -1;
+    if (iB !== -1) return 1;
+    return 0;
   });
 
+  // Map to data structure AND Pin confirmed categories to the top
+  const displayCategories = orderedCategories
+    .map((categoryName) => {
+      const matches: VendorOption[] = dbVendors
+        ?.filter((v) => v.category === categoryName)
+        .map((v: any) => ({
+          id: v.id,
+          name: v.assigned_vendor || "Unnamed Vendor",
+          status: v.status as BookingStatus,
+          estimatedCost: v.estimated_cost || 0,
+          contactNumber: v.contact_numbers ?? [],
+          notes: v.notes || "",
+        })) || [];
+      
+      const confirmedOptions = matches.filter((opt) => opt.status === "Confirmed");
+
+      return {
+        name: categoryName,
+        options: matches,
+        confirmedOptions,
+      };
+    })
+    .sort((a, b) => {
+      const aPinned = a.confirmedOptions.length > 0;
+      const bPinned = b.confirmedOptions.length > 0;
+      if (aPinned && !bPinned) return -1;
+      if (!aPinned && bPinned) return 1;
+      return 0;
+    });
+
   const currentCategoryData = displayCategories.find((c) => c.name === editingCategory);
+
+  // Move Category Up / Down Handler
+  const handleMoveCategory = async (index: number, direction: 'up' | 'down') => {
+    const visualOrderNames = displayCategories.map((c) => c.name);
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+
+    if (targetIndex < 0 || targetIndex >= visualOrderNames.length) return;
+
+    const itemToMove = visualOrderNames[index];
+    visualOrderNames.splice(index, 1);
+    visualOrderNames.splice(targetIndex, 0, itemToMove);
+
+    setCategoryOrder(visualOrderNames);
+
+    const updates = visualOrderNames.map((cat, idx) => ({
+      category_name: cat,
+      order_index: idx,
+      is_hidden: false,
+      is_custom: !initialCategories.includes(cat)
+    }));
+
+    const { error } = await supabase.from('vendor_categories').upsert(updates, { onConflict: 'category_name' });
+    if (error) console.error("Error saving new order to DB:", error);
+  };
+
+  const handleAddCustomCategory = async () => {
+    const trimmed = newCategoryName.trim();
+    if (trimmed) {
+      const updatedOrder = Array.from(new Set([trimmed, ...orderedCategories.filter(c => c !== trimmed)]));
+      
+      const updates = updatedOrder.map((cat, idx) => ({
+        category_name: cat,
+        order_index: idx,
+        is_hidden: false,
+        is_custom: !initialCategories.includes(cat)
+      }));
+
+      const { error } = await supabase.from('vendor_categories').upsert(updates, { onConflict: 'category_name' });
+
+      if (error) {
+        console.error("Error adding category:", error);
+        alert("Failed to add category.");
+      } else {
+        await fetchCategories();
+      }
+    }
+    setNewCategoryName("");
+    setIsAddCategoryOpen(false);
+  };
+
+  const handleSaveCategoryName = async (oldName: string) => {
+    const newName = editCategoryInput.trim();
+    
+    if (!newName || newName === oldName) {
+      setEditingCategoryTitle(null);
+      return;
+    }
+    
+    if (allCategories.includes(newName)) {
+      alert("A category with this name already exists.");
+      return;
+    }
+
+    const currentIndex = categoryOrder.indexOf(oldName);
+
+    const { error: vendorUpdateError } = await supabase.from('vendors').update({ category: newName }).eq('category', oldName);
+    if (vendorUpdateError) {
+      console.error("Error updating vendor categories:", vendorUpdateError);
+      alert("Failed to update category name on existing vendors.");
+      return;
+    }
+
+    if (initialCategories.includes(oldName)) {
+      await supabase.from('vendor_categories').upsert(
+        { category_name: oldName, is_hidden: true, is_custom: false },
+        { onConflict: 'category_name' }
+      );
+    } else {
+      await supabase.from('vendor_categories').delete().eq('category_name', oldName);
+    }
+
+    await supabase.from('vendor_categories').upsert(
+      { category_name: newName, order_index: currentIndex > -1 ? currentIndex : 0, is_hidden: false, is_custom: true },
+      { onConflict: 'category_name' }
+    );
+
+    setCategoryOrder(prev => prev.map(name => name === oldName ? newName : name));
+    setEditingCategoryTitle(null);
+    await fetchCategories();
+    await fetchVendors();
+  };
+
+  const handleDeleteCategory = async (categoryName: string, vendorCount: number) => {
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete the "${categoryName}" category${
+        vendorCount > 0 ? ` and its ${vendorCount} vendor(s)` : ""
+      }?`
+    );
+
+    if (!confirmDelete) return;
+
+    if (vendorCount > 0) {
+      const { error: vendorError } = await supabase.from("vendors").delete().eq("category", categoryName);
+      if (vendorError) {
+        console.error("Error deleting vendors:", vendorError);
+        alert("Failed to delete category vendors.");
+        return;
+      }
+    }
+
+    const { error: catError } = await supabase.from('vendor_categories').upsert({
+      category_name: categoryName,
+      is_hidden: true,
+      is_custom: !initialCategories.includes(categoryName)
+    }, { onConflict: 'category_name' });
+
+    if (catError) {
+      console.error("Error deleting category setting:", catError);
+      alert("Failed to delete category.");
+    } else {
+      setCategoryOrder(prev => prev.filter(name => name !== categoryName)); 
+      await fetchCategories();
+      await fetchVendors();
+    }
+  };
 
   const openDialog = (categoryName: string) => {
     setEditingCategory(categoryName);
     setNewOptionName("");
-    setNewOptionStatus("Enquired");
+    setNewOptionStatus("Not Started");
     setNewEstimatedCost("");
     setNewContactNumbers([""]);
     setNewNotes("");
@@ -202,12 +392,12 @@ function VendorsTracker() {
     }
 
     setNewOptionName("");
-    setNewOptionStatus("Enquired");
+    setNewOptionStatus("Not Started");
     setNewEstimatedCost("");
     setNewContactNumbers([""]);
     setNewNotes("");
     
-    await fetchData();
+    await fetchVendors();
   };
 
   const startEditing = (opt: VendorOption) => {
@@ -240,12 +430,12 @@ function VendorsTracker() {
     }
 
     setEditingOptionId(null);
-    await fetchData();
+    await fetchVendors();
   };
 
   const handleStatusChange = async (optionId: string, status: BookingStatus) => {
     await supabase.from("vendors").update({ status }).eq("id", optionId);
-    await fetchData();
+    await fetchVendors();
   };
 
   const handleDeleteOption = async (optionId: string) => {
@@ -256,44 +446,135 @@ function VendorsTracker() {
 
     const { error } = await supabase.from("vendors").delete().eq("id", optionId);
     if (error) alert("Failed to delete. Check console.");
-    else await fetchData(); 
+    else await fetchVendors(); 
   };
 
-  if (loading) return <div className="p-12 text-center text-emerald-600 font-medium">Loading Vendors...</div>;
+  if (vendorsLoading || categoriesLoading) {
+    return <div className="p-12 text-center text-emerald-600 font-medium">Loading Vendors...</div>;
+  }
 
   return (
     <>
+      <div className="space-y-4 mb-2">
+        <div>
+          <h1 className="text-3xl font-serif font-bold text-emerald-900 flex items-center gap-3">
+            <Handshake className="w-8 h-8 text-emerald-700" /> Vendors
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Keep track of options and confirmed selections of your wedding team.
+          </p>
+        </div>
+        <div>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setIsAddCategoryOpen(true)}
+            className="text-xs font-medium text-emerald-700 border-emerald-200 hover:bg-emerald-50 h-8 shadow-sm transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5 mr-1" /> Add Category
+          </Button>
+        </div>
+      </div>
+
       <Card className="col-span-full border-slate-200 shadow-sm">
         <CardContent className="pt-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {displayCategories.map((item) => {
+            {displayCategories.map((item, index) => {
               const hasConfirmed = item.confirmedOptions.length > 0;
 
               return (
                 <div
                   key={item.name}
-                  className={`p-4 rounded-xl border transition-colors shadow-sm flex flex-col justify-between min-h-[130px] ${
+                  className={`group/category p-4 rounded-xl border transition-colors shadow-sm flex flex-col justify-between min-h-[130px] ${
                     hasConfirmed ? "border-emerald-200 bg-emerald-50/30" : "border-slate-100 bg-white hover:border-slate-300"
                   }`}
                 >
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-medium text-slate-800">{item.name}</h3>                    
-                    <Badge
-                      className={`${
-                        hasConfirmed
-                          ? "bg-emerald-100 text-emerald-700"
+                  
+                  {/* CATEGORY HEADER ROW */}
+                  {editingCategoryTitle === item.name ? (
+                    <div className="flex items-center gap-1.5 w-full mb-3">
+                      <input 
+                        type="text" 
+                        value={editCategoryInput}
+                        onChange={(e) => setEditCategoryInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveCategoryName(item.name);
+                          if (e.key === 'Escape') setEditingCategoryTitle(null);
+                        }}
+                        className="flex-1 border border-emerald-500 p-1 rounded text-sm focus:outline-none"
+                        autoFocus
+                      />
+                      <button onClick={() => handleSaveCategoryName(item.name)} className="p-1 text-emerald-600 bg-emerald-50 rounded border border-emerald-100 hover:bg-emerald-100">
+                        <CheckCircle2 className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => setEditingCategoryTitle(null)} className="p-1 text-slate-400 bg-slate-100 rounded border border-slate-200 hover:bg-slate-200">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex justify-between items-start mb-2 w-full gap-2">
+                      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                        <h3 className="font-medium text-slate-800 truncate">{item.name}</h3>
+                        {hasConfirmed && (
+                          <span title="Pinned to top">
+                            <Pin className="w-3.5 h-3.5 text-emerald-500 fill-emerald-500/20 flex-shrink-0" />
+                          </span>
+                        )}
+                        
+                        {/* 50% opacity on mobile, hidden on desktop until hovered */}
+                        <div className="flex items-center opacity-50 lg:opacity-0 group-hover/category:opacity-100 transition-opacity flex-shrink-0 bg-white rounded-md border border-slate-100 overflow-hidden shadow-sm">
+                          <button
+                            onClick={() => handleMoveCategory(index, 'up')}
+                            disabled={index === 0}
+                            className="text-slate-400 hover:text-emerald-600 p-1 hover:bg-emerald-50 transition-colors border-r border-slate-100 disabled:opacity-30 disabled:hover:bg-transparent"
+                            title="Move Up"
+                          >
+                            <ChevronUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleMoveCategory(index, 'down')}
+                            disabled={index === displayCategories.length - 1}
+                            className="text-slate-400 hover:text-emerald-600 p-1 hover:bg-emerald-50 transition-colors border-r border-slate-100 disabled:opacity-30 disabled:hover:bg-transparent"
+                            title="Move Down"
+                          >
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingCategoryTitle(item.name);
+                              setEditCategoryInput(item.name);
+                            }}
+                            className="text-slate-400 hover:text-emerald-600 p-1 hover:bg-emerald-50 transition-colors border-r border-slate-100"
+                            title="Edit Category Name"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteCategory(item.name, item.options.length)}
+                            className="text-slate-400 hover:text-red-500 p-1 hover:bg-red-50 transition-colors"
+                            title="Delete Category"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>                  
+                      <Badge
+                        className={`${
+                          hasConfirmed
+                            ? "bg-emerald-100 text-emerald-700"
+                            : item.options.length > 0
+                            ? "bg-orange-100 text-orange-700"
+                            : "bg-slate-100 text-slate-600"
+                        } border-none shadow-none font-medium whitespace-nowrap`}
+                      >
+                        {hasConfirmed
+                          ? `${item.confirmedOptions.length} Confirmed`
                           : item.options.length > 0
-                          ? "bg-orange-100 text-orange-700"
-                          : "bg-slate-100 text-slate-600"
-                      } border-none shadow-none font-medium`}
-                    >
-                      {hasConfirmed
-                        ? `${item.confirmedOptions.length} Confirmed`
-                        : item.options.length > 0
-                        ? `${item.options.length} Options`
-                        : "Not Started"}
-                    </Badge>
-                  </div>
+                          ? `${item.options.length} Options`
+                          : "Not Started"}
+                      </Badge>
+                    </div>
+                  )}
 
                   <div className="mt-2 space-y-2">
                     {/* CONFIRMED STATE */}
@@ -354,18 +635,43 @@ function VendorsTracker() {
                       /* UNCONFIRMED MULTI-OPTION STATE */
                       <div>
                         {item.options.length > 0 ? (
-                          <div className="space-y-1.5">
+                          <div className="space-y-2">
                             {item.options.map((opt) => (
-                              <div key={opt.id} className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 px-2.5 py-1.5 rounded border border-slate-100">
-                                <div className="flex items-center gap-2 truncate">
-                                  <span className="font-medium truncate max-w-[120px]">{opt.name}</span>
-                                  {opt.estimatedCost ? (
-                                    <span className="text-[11px] text-slate-500 flex items-center">
-                                      ₹{opt.estimatedCost.toLocaleString("en-IN")}
-                                    </span>
-                                  ) : null}
+                              <div key={opt.id} className="flex flex-col gap-1.5 text-xs text-slate-600 bg-slate-50 p-2.5 rounded border border-slate-100">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2 truncate">
+                                    <span className="font-medium text-slate-700 truncate max-w-[120px]">{opt.name}</span>
+                                    {opt.estimatedCost ? (
+                                      <span className="text-[11px] text-slate-500 flex items-center">
+                                        ₹{opt.estimatedCost.toLocaleString("en-IN")}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  <span className="text-[10px] text-slate-500 bg-slate-200/60 px-1.5 py-0.5 rounded">{opt.status}</span>
                                 </div>
-                                <span className="text-[10px] text-slate-500 bg-slate-200/60 px-1.5 py-0.5 rounded">{opt.status}</span>
+                                
+                                {/* Always Show Contact Numbers */}
+                                {opt.contactNumber && opt.contactNumber.length > 0 && (
+                                  <div className="flex flex-wrap gap-3">
+                                    {opt.contactNumber.map((phone, i) => (
+                                      <a
+                                        key={i}
+                                        href={`tel:${phone}`}
+                                        className="flex items-center gap-1 text-[11px] hover:text-emerald-600 transition-colors"
+                                      >
+                                        <Phone className="w-3 h-3" />
+                                        {phone}
+                                      </a>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {/* Always Show Notes & Links */}
+                                {opt.notes && (
+                                  <div className="mt-1 pt-1.5 border-t border-slate-200/60 text-[11px] text-slate-500">
+                                    {renderTextWithLinks(opt.notes)}
+                                  </div>
+                                )}
                               </div>
                             ))}
                             <button
@@ -392,6 +698,29 @@ function VendorsTracker() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ADD CUSTOM CATEGORY MODAL */}
+      <Dialog open={isAddCategoryOpen} onOpenChange={setIsAddCategoryOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Vendor Category</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <input
+              type="text"
+              placeholder="e.g. Caterer, Choreographer, Security..."
+              className="w-full border border-slate-300 p-2.5 rounded-lg text-sm focus:outline-none focus:border-emerald-500"
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddCustomCategory()}
+              autoFocus
+            />
+            <Button onClick={handleAddCustomCategory} className="w-full bg-emerald-600 hover:bg-emerald-700">
+              Add Category
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* MANAGE OPTIONS MODAL */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -498,9 +827,10 @@ function VendorsTracker() {
                                 opt.status === "Confirmed" ? "bg-emerald-100 text-emerald-800 border-emerald-300" : "bg-white border-slate-300"
                               }`}
                             >
+                              <option value="Not Started">Not Started</option>
                               <option value="Enquired">Enquired</option>
                               <option value="Negotiating">Negotiating</option>
-                              <option value="Booked">Booked</option>
+                              <option value="Recommendation">Recommendation</option>
                               <option value="Confirmed">Confirmed</option>
                             </select>
                             <button onClick={() => startEditing(opt)} className="p-1 text-slate-400 hover:text-emerald-600 rounded bg-white border border-slate-200 transition-colors">
@@ -569,7 +899,8 @@ function VendorsTracker() {
                 >
                   <option value="Enquired">Enquired</option>
                   <option value="Negotiating">Negotiating</option>
-                  <option value="Booked">Booked</option>
+                  <option value="Recommendation">Recommendation</option>
+                  <option value="Not Started">Not Started</option>
                   <option value="Confirmed">Confirmed</option>
                 </select>
               </div>
@@ -643,17 +974,8 @@ function VendorsTracker() {
 }
 
 export default function VendorsPage() {
-  
   return (
-    <div className="p-6 md:p-12 max-w-[1600px] mx-auto space-y-8 h-full flex flex-col">
-      <div>
-        <h1 className="text-3xl font-serif font-bold text-emerald-900 flex items-center gap-3">
-          <Handshake className="w-8 h-8 text-emerald-700" /> Vendors
-        </h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Keep track of options and confirmed selections of your wedding team.
-        </p>
-      </div>     
+    <div className="p-6 md:p-12 max-w-[1600px] mx-auto space-y-6 h-full flex flex-col">
       <VendorsTracker />
     </div>
   );

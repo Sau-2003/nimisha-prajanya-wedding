@@ -208,7 +208,7 @@ export default function GuestsPage() {
     });
 
     try {
-      const response = await fetch("/api/export-sheets", {
+      const response = await fetch("/api/export-guests-sheets", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

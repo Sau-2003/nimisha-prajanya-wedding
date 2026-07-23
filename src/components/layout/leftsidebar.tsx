@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { 
   LayoutDashboard, Gem, CalendarHeart, ClipboardList, Gift,
-  ShoppingBag, Users, IndianRupee, Menu, X, BookIcon, CalendarClock,Handshake  // Import CalendarClock
+  ShoppingBag, Users, IndianRupee, Menu, X, BookIcon, CalendarClock,Handshake, SquareMenu  
 } from 'lucide-react';
 import Image from "next/image";
 import { DressIcon } from '@phosphor-icons/react';
@@ -14,15 +14,16 @@ import { DressIcon } from '@phosphor-icons/react';
 const mainNav = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Global Task Board', href: '/master-task', icon: ClipboardList },
+  { name: 'Menu', href: '/menu', icon:SquareMenu  },
   { name: 'Vendor Tracker', href: '/vendors', icon: Handshake  },
   { name: 'Budget', href: '/budget', icon: IndianRupee },
   { name: 'Guests', href: '/guests', icon: Users },
-  { name: 'Notes', href: '/notes', icon: BookIcon }, // Added missing comma here
-  { name: 'Task Schedule', href: '/task-schedule', icon: CalendarClock }, // Corrected Clock to CalendarClock
+  { name: 'Notes', href: '/notes', icon: BookIcon },
+  { name: 'Task Schedule', href: '/task-schedule', icon: CalendarClock },
   { name: 'Chadana', href: '/chadana', icon: Gem },
   { name: 'Gifts', href: '/gifts', icon: Gift },
   { name: 'Shoping', href: '/shoping', icon: ShoppingBag },
-  { name: 'All Outfits', href: '/all_outfits', icon:DressIcon  },
+  { name: 'All Outfits', href: '/all_outfits', icon:DressIcon  },  
 ];
 const eventNav = [
   { name: 'Puja',      href: '/events/puja',      color: 'bg-orange-500' },
