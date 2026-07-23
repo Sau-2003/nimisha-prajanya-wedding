@@ -149,8 +149,12 @@ export default function MenuPage() {
 
   const [newItemNames, setNewItemNames] = useState<{ [categoryId: string]: string }>({});
   const [newItemCaptions, setNewItemCaptions] = useState<{ [categoryId: string]: string }>({});
+  
+  const [activeAddDishCategoryId, setActiveAddDishCategoryId] = useState<string | null>(null);
+  
+  // State to toggle the "Add Menu Category" form via button
+  const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
 
-  // Safely set active tab on load if none selected
   useMemo(() => {
     if (!activeTabId && menus.length > 0) {
       setActiveTabId(menus[0].id);
@@ -204,6 +208,7 @@ export default function MenuPage() {
     setSelectedCategoryName("");
     setCustomCategoryName("");
     setCategoryCaption("");
+    setIsAddCategoryOpen(false); // Close the form after adding
   };
 
   const handleDeleteCategory = async (categoryId: string) => {
@@ -231,6 +236,7 @@ export default function MenuPage() {
     await updateTab(activeTab.id, { categories: newCategories });
     setNewItemNames({ ...newItemNames, [categoryId]: "" });
     setNewItemCaptions({ ...newItemCaptions, [categoryId]: "" });
+    setActiveAddDishCategoryId(null);
   };
 
   const handleDeleteItem = async (categoryId: string, itemId: string) => {
@@ -344,7 +350,7 @@ export default function MenuPage() {
         </div>
       </div>
 
-      {/* Tabs Layout - Restored horizontal scrolling for desktop and mobile */}
+      {/* Tabs Layout */}
       <div className="flex items-center gap-2 border-b mb-8 overflow-x-auto pb-2 scrollbar-thin">
         {menus.map(tab => (
           <div 
@@ -414,10 +420,73 @@ export default function MenuPage() {
             <p>No menu tab selected.</p>
           </div>
         ) : (
-          <div className="p-6">
+          <div className="p-6 space-y-8">
+            
+            {/* Add Menu Category Toggle Button & Form */}
+            <div className="pb-6 border-b border-slate-200">
+              <Button 
+                onClick={() => setIsAddCategoryOpen(!isAddCategoryOpen)}
+                variant={isAddCategoryOpen ? "default" : "outline"}
+                className={`text-xs h-8 flex gap-1 ${
+                  isAddCategoryOpen 
+                    ? "bg-emerald-700 text-white border-emerald-700 hover:bg-emerald-800" 
+                    : "border-emerald-600 text-emerald-700 hover:bg-emerald-50"
+                }`}
+              >
+                {isAddCategoryOpen ? <X className="w-3.5 h-3.5 text-white" /> : <Plus className="w-3.5 h-3.5 text-emerald-600" />} 
+                {isAddCategoryOpen ? "Close " : "Add Menu Category"}
+              </Button>
+                                      
+
+              {isAddCategoryOpen && (
+                <div className="flex flex-col gap-3 bg-slate-50 p-5 rounded-lg border border-slate-200 mt-4 animate-in fade-in duration-200">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                    <select 
+                      value={selectedCategoryName}
+                      onChange={(e) => { setSelectedCategoryName(e.target.value); setCustomCategoryName(""); }}
+                      className="flex-1 w-full px-3 py-2 text-sm border border-slate-300 bg-white rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    >
+                      <option value="">-- Predefined Category --</option>
+                      {Object.keys(PREDEFINED_MENU).map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+
+                    <span className="text-slate-400 text-xs font-semibold px-2">OR</span>
+
+                    <input 
+                      type="text"
+                      placeholder="Custom category name..."
+                      value={customCategoryName}
+                      onChange={(e) => { setCustomCategoryName(e.target.value); setSelectedCategoryName(""); }}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
+                      className="flex-1 w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-3 mt-1">
+                    <input 
+                      type="text"
+                      placeholder="Category Note / Caption (optional, e.g., 'Served 8pm-10pm')"
+                      value={categoryCaption}
+                      onChange={(e) => setCategoryCaption(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
+                      className="flex-1 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                    <Button onClick={handleAddCategory} className="bg-slate-800 hover:bg-slate-900 text-white w-full sm:w-auto">
+                      Save Category
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Categories List */}
             <div className="space-y-8">
               {activeTab.categories.map(category => {
                 const predefinedItems = PREDEFINED_MENU[category.name] || [];
+                const isAddingToThisCategory = activeAddDishCategoryId === category.id;
+
                 return (
                   <div key={category.id} className="border border-slate-200 rounded-lg overflow-hidden">
                     {/* Category Header */}
@@ -429,112 +498,89 @@ export default function MenuPage() {
                         </h3>
                         {category.caption && <p className="text-sm text-slate-500 ml-7 mt-1">{category.caption}</p>}
                       </div>
-                      <Button variant="ghost" size="sm" onClick={() => handleDeleteCategory(category.id)} className="text-slate-400 hover:text-red-500 hover:bg-red-50">
-                        <Trash2 className="w-4 h-4" />
+                      <div className="flex items-center gap-2">
+                        <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setActiveAddDishCategoryId(isAddingToThisCategory ? null : category.id)}
+                        className={`text-xs h-8 flex gap-1 ${
+                          isAddingToThisCategory 
+                            ? "bg-emerald-700 text-white border-emerald-700 hover:bg-emerald-800" 
+                            : "border-emerald-600 text-emerald-700 hover:bg-emerald-50"
+                        }`}
+                      >
+                        {isAddingToThisCategory ? <X className="w-3.5 h-3.5 text-white" /> : <Plus className="w-3.5 h-3.5 text-emerald-600" />} {isAddingToThisCategory ? "Close" : "Add Dish"}
                       </Button>
+
+                        <Button variant="ghost" size="sm" onClick={() => handleDeleteCategory(category.id)} className="text-slate-400 hover:text-red-500 hover:bg-red-50 h-8 w-8 p-0">
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </div>
 
                     {/* Category Items */}
                     <div className="p-4 bg-white">
-                      <ul className="space-y-2 mb-4">
-                        {category.items.map(item => (
-                          <li key={item.id} className="flex items-start justify-between group px-4 py-3 hover:bg-slate-50 border border-transparent hover:border-slate-100 rounded-md transition-colors">
-                            <div>
-                              <span className="text-[15px] font-medium text-slate-800">{item.name}</span>
-                              {item.caption && <p className="text-xs text-slate-500 mt-1">{item.caption}</p>}
-                            </div>
-                            <button onClick={() => handleDeleteItem(category.id, item.id)} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity mt-1">
-                              <X className="w-4 h-4" />
-                            </button>
-                          </li>
-                        ))}
+                      <ul className="space-y-2 mb-2">
+                        {category.items.length === 0 ? (
+                          <li className="text-xs text-slate-400 italic px-2"></li>
+                        ) : (
+                          category.items.map(item => (
+                            <li key={item.id} className="flex items-start justify-between group px-4 py-3 hover:bg-slate-50 border border-transparent hover:border-slate-100 rounded-md transition-colors">
+                              <div>
+                                <span className="text-[15px] font-medium text-slate-800">{item.name}</span>
+                                {item.caption && <p className="text-xs text-slate-500 mt-1">{item.caption}</p>}
+                              </div>
+                              <button onClick={() => handleDeleteItem(category.id, item.id)} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity mt-1">
+                                <X className="w-4 h-4" />
+                              </button>
+                            </li>
+                          ))
+                        )}
                       </ul>
 
-                      {/* Add Item Row */}
-                      <div className="flex flex-col lg:flex-row items-start lg:items-center gap-2 bg-slate-50 p-3 rounded-lg border border-slate-200 mt-4">
-                        <div className="flex-1 flex flex-col sm:flex-row gap-2 w-full">
-                          {predefinedItems.length > 0 ? (
-                            <select 
+                      {/* Add Item Row (Toggled via Add Dish Button) */}
+                      {isAddingToThisCategory && (
+                        <div className="flex flex-col lg:flex-row items-start lg:items-center gap-2 bg-slate-50 p-3 rounded-lg border border-slate-200 mt-4 animate-in fade-in duration-200">
+                          <div className="flex-1 flex flex-col sm:flex-row gap-2 w-full">
+                            {predefinedItems.length > 0 ? (
+                              <select 
+                                value={newItemNames[category.id] || ""}
+                                onChange={(e) => setNewItemNames({...newItemNames, [category.id]: e.target.value})}
+                                className="flex-1 px-3 py-2 text-sm border border-slate-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                              >
+                                <option value="">-- Select dish from menu --</option>
+                                {predefinedItems.map(item => <option key={item} value={item}>{item}</option>)}
+                              </select>
+                            ) : null}
+                            
+                            <input 
+                              type="text"
+                              placeholder={predefinedItems.length > 0 ? "Or type custom dish..." : "Type dish name..."}
                               value={newItemNames[category.id] || ""}
                               onChange={(e) => setNewItemNames({...newItemNames, [category.id]: e.target.value})}
-                              className="flex-1 px-3 py-2 text-sm border border-slate-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                            >
-                              <option value="">-- Select dish from menu --</option>
-                              {predefinedItems.map(item => <option key={item} value={item}>{item}</option>)}
-                            </select>
-                          ) : null}
-                          
+                              onKeyDown={(e) => e.key === 'Enter' && handleAddItem(category.id)}
+                              className="flex-1 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            />
+                          </div>
+
                           <input 
                             type="text"
-                            placeholder={predefinedItems.length > 0 ? "Or type custom dish..." : "Type dish name..."}
-                            value={newItemNames[category.id] || ""}
-                            onChange={(e) => setNewItemNames({...newItemNames, [category.id]: e.target.value})}
+                            placeholder="Note / Caption (optional)"
+                            value={newItemCaptions[category.id] || ""}
+                            onChange={(e) => setNewItemCaptions({...newItemCaptions, [category.id]: e.target.value})}
                             onKeyDown={(e) => e.key === 'Enter' && handleAddItem(category.id)}
-                            className="flex-1 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            className="w-full lg:w-64 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
                           />
+
+                          <Button onClick={() => handleAddItem(category.id)} className="w-full lg:w-auto bg-emerald-600 hover:bg-emerald-700 text-white">
+                            Save Dish
+                          </Button>
                         </div>
-
-                        <input 
-                          type="text"
-                          placeholder="Note / Caption (optional)"
-                          value={newItemCaptions[category.id] || ""}
-                          onChange={(e) => setNewItemCaptions({...newItemCaptions, [category.id]: e.target.value})}
-                          onKeyDown={(e) => e.key === 'Enter' && handleAddItem(category.id)}
-                          className="w-full lg:w-64 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                        />
-
-                        <Button onClick={() => handleAddItem(category.id)} className="w-full lg:w-auto bg-emerald-100 text-emerald-800 hover:bg-emerald-200">
-                          <Plus className="w-4 h-4 mr-2" /> Add Dish
-                        </Button>
-                      </div>
+                      )}
                     </div>
                   </div>
                 );
               })}
-            </div>
-
-            {/* Add New Category Section */}
-            <div className="mt-8 pt-6 border-t border-slate-200">
-              <h4 className="text-sm font-semibold text-slate-800 mb-4">Add Menu Category</h4>
-              <div className="flex flex-col gap-3 max-w-3xl bg-slate-50 p-5 rounded-lg border border-slate-200">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                  <select 
-                    value={selectedCategoryName}
-                    onChange={(e) => { setSelectedCategoryName(e.target.value); setCustomCategoryName(""); }}
-                    className="flex-1 w-full px-3 py-2 text-sm border border-slate-300 bg-white rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  >
-                    <option value="">-- Predefined Category --</option>
-                    {Object.keys(PREDEFINED_MENU).map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
-
-                  <span className="text-slate-400 text-xs font-semibold px-2">OR</span>
-
-                  <input 
-                    type="text"
-                    placeholder="Custom category name..."
-                    value={customCategoryName}
-                    onChange={(e) => { setCustomCategoryName(e.target.value); setSelectedCategoryName(""); }}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
-                    className="flex-1 w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-3 mt-1">
-                  <input 
-                    type="text"
-                    placeholder="Category Note / Caption (optional, e.g., 'Served 8pm-10pm')"
-                    value={categoryCaption}
-                    onChange={(e) => setCategoryCaption(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
-                    className="flex-1 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                  <Button onClick={handleAddCategory} className="bg-slate-800 hover:bg-slate-900 text-white w-full sm:w-auto">
-                    Add Category
-                  </Button>
-                </div>
-              </div>
             </div>
 
           </div>
