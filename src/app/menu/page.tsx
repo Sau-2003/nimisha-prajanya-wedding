@@ -8,21 +8,131 @@ import {
 import { useMenus, Tab } from '@/hooks/useMenus';
 
 const PREDEFINED_MENU: Record<string, string[]> = {
-  "Welcome Drink": ["Shirley Temple", "Virgin Watermelon Margarita", "Mint Mojito", "Fruit Punch", "Mango Mule", "Strawberry Watermelon Margarita"],
-  "Soup": ["Tomato Soup", "Sweet Corn Soup", "Cream Of Mushroom Soup", "Manchow Soup", "Hot N Sour Soup"],
-  "Salad": ["Garden Fresh Salad", "Pasta Salad", "Russian Salad", "Cucumber Salad"],
-  "Starter": ["Paneer Banjara Tikka", "Hara Bhara Kebab", "Paneer 65", "Spring Roll", "Crispy Corn"],
-  "Oriental & Thai Food Counter": ["Veg Hakka Noodles", "Veg Manchurian Gravy", "Veg Fried Rice"],
-  "Continental Food Counter": ["Baked Vegetables", "Penne Arabiata Pasta", "Macaroni Alfredo"],
-  "Chat Counter": ["Dahi Poori", "Aloo Tikki", "Pani Poori", "Dahi Bhalla"],
-  "South Indian": ["Idley With Sambhar & Chutney", "Masala Dosa", "Plain Dosa"],
-  "Paneer Dish": ["Paneer Butter Masala", "Kadhai Paneer", "Palak Paneer", "Matar Paneer"],
-  "Sabji": ["Mix Vegetable", "Malai Kofta", "Bhindi-Do-Pyaza"],
-  "Dal/Kadhi": ["Yello Dal Tadka", "Dal Makhani", "Panjabi Kadhi"],
-  "Rice": ["Steam Rice", "Jeera Rice", "Vegetable Biryani"],
-  "Assorted Indian Breads": ["Roti", "Naan", "Paratha", "Miss Roti", "Lachha Paratha"],
-  "Indian Dessert": ["Gulab Jamun", "Gajar Ka Halwa", "Rasmalai", "Jalebi"],
-  "Choice Of Ice-Cream": ["Vanilla", "Strawberry", "Butter Scotch", "Mango"]
+  "Welcome Drink": [
+    "Shirley Temple", "Virgin Watermelon Margarita", "Mint Mojito", "Ginger Peach Soda", 
+    "Wildcat", "Pineapple Cobbler", "Virgin Paloma", "Raspberry Bee's Knees", "kiwi Margarita", 
+    "Fruit Punch", "Mango Mule", "Rickey-Tiki-Tavi", "Cucumber Cobbler", "Pineapple Ginger Beer", 
+    "Virgin Cucumber Gimlet", "Orange Blossom", "Lychee Mojito", "Virgin Pina Colada", 
+    "Strawberry Watermelon Margarita", "Berry Burlesque", "Lavender Lemonade", "Lychee Sunrise"
+  ],
+  "Soup": [
+    "Tomato Soup", "Tomato basil Soup", "Tomato Corn Soup", "Cream Of Veg Soup", 
+    "Cream Of Broccoli Soup", "Hot N Sour Soup", "Manchow Soup", "Cream Of Veg With roasted Almond", 
+    "Leek & Potato Soup", "Sweet Corn Soup", "Lemon Coriander Soup", "Tomato Shorba", 
+    "Tomato Dhaniya", "Dalcha Shorba", "Cream Of Spinach Soup", "Veg Coriander Broth Soup", 
+    "Tom-Yum- Soup", "Noodle & Veg Clear Soup", "Cream Of Mushroom Soup", "Mulligatawny Soup", 
+    "Veg Clear Soup", "Almond Broccoli Soup", "Cream Of Mushroom", "Minestrone Soup", 
+    "Veg Talumein Soup", "Palak Ka Shorba", "Subz Shorba"
+  ],
+  "Salad": [
+    "Garden Fresh Salad", "Pasta Salad", "Noodle Salad", "Cucumber Salad", "Potato Mayonnaise", 
+    "Kimchi Salad", "Aloo Chat", "Potato Coran Salad", "Coleslaw Mexican Salad", "Russian Salad", 
+    "Mix Sprouted Salad", "Good Food Salad", "Marconi Salad", "Aloo Chana Chat", "Baked Bean Salad", 
+    "Creamy Corn Salad", "Healthy Organic", "Corn Pepper Salad", "Annanas Ki Chat", "Rajma Chat", 
+    "Tossed Salad", "Haiwaan Salad", "Waldorf Salad", "Aloo aur anar Ka chat", "Cucumber mint & feta salad"
+  ],
+  "Starter": [
+    "Paneer Banjara Tikka", "Bhatti Ka Paneer Tikka", "Paneer Malai Tikka", "Hara Bhara Kebab", 
+    "Aloo Pudina Tikki", "Chilly Mushroom Dry", "Tandoori Gobi", "Tandoori Aloo", "Paneer Chilli Dry", 
+    "Spring Roll", "Veg Kothy", "Veg Manchurian Dry", "Crispy Corn", "Paneer Pakoda", "Veg Cocktail Kebab", 
+    "Green Peas Or Pudina Ki Tikki", "Dahi Til Kebab", "Cheese Jalapeno Poppers", "Chilli Mushroom & Baby Corn", 
+    "Dragon Potato", "Corn Cheese Ball", "Cheese Bullet", "Veg Crispy Finger", "Subz Cocktail Kebab", 
+    "Subz Shammi Kebab", "Tulsi Paneer Tikka", "Paneer Ke Sholey", "Chukundar Kebab", "Till Dudhiya Kebab", 
+    "Mix Veg Pakoda", "Paneer Pundina Tikka", "Paneer Achari Tikka", "Paneer Kali Mirch Tikka", 
+    "Kale Chane Ke Kebab", "Paneer 65", "Kesariya Paneer Tikka", "Rajma Ke Kebab", "Cheese Finger", 
+    "Peanut Pudina Ka Roll", "Potato Croquettes", "Veg Cutlet", "Honey Chilly Potato", 
+    "Amritsari Paneer", "Veg Seekh Kebab"
+  ],
+  "Oriental & Thai Food Counter": [
+    "Veg Hakka Noodles", "Singapuri Noodles", "Veg Manchurian Gravy", "Paneer Chilli Gravy", 
+    "Gobi Manchurian", "Schezwan Noodles", "Veg Fried Rice", "Bell Pepper Fried Rice", "Sez Fried Rice", 
+    "Stir Fried Vegetable With Hot Garlic Sauce", 
+    "Stir Fried Cottage Cheese With Chilly Garlic Wok Toast Greens With Garlic Sauce", 
+    "Schezwan Veg Noodles", "Basil Stir Fried Vegetables", 
+    "Stir Fry Broccoli & Mushroom With Hot Garlic Sauce", "Burnt Garlic Fried Rice", 
+    "Vegetable Thai Curry (Yellow/Red/Green)", "Mix Veg In Hot Garlicsauce", "Stir Fry Chinese Greens", 
+    "Sautéed French Bean With Mushroom In Soya Sauce", 
+    "Stir Fried Baby Corn Broccoli In Spicy Sauce Veg Shanghai Noodles", "Corn & Ginger Noodles", 
+    "Shanghai Veg Fried Rice", "Exotic Veg Schewzan Noodles"
+  ],
+  "Continental Food Counter": [
+    "Baked Vegetables", "Veg Au Gratin", "Veg Stroganoff", "Spinach Corn Florentine", "Ratatouille", 
+    "And Sauteed Vegetables", "Spinach & Corn Au-Gratin", "Penne Arabiata Pasta", "Vegetable Risotto", 
+    "Grilled Cottage Cheese With Basil Sauce", "Spinach Corn Risotto", "Vegetable Stroganoff", 
+    "Pilaf Rice", "Mushroom Pilaf Rice", "Baked Spinach Corn & Mushroom", "Baked Parsley Potato", 
+    "Macaroni Alfredo", "Grilled Cottage Cheese With Pesto Sauce", "Baked Macaroni", "Mexican Fried Rice", 
+    "Baked Sphagatti Neapolitin", "Baked Cottage Cheese & Broccoli", "Mexican Vegetables", "Mushroom Risotto"
+  ],
+  "Chat Counter": [
+    "Dahi Poori", "Papadi chat", "Aloo Tikki", "Bhel Poori", "Moong Dal Cheela", "Besan Ka Cheela", 
+    "Paneer Cheela", "Dahi Bhalla", "Indori Patties", "Mangode", "Bhalla Papadi", "Bhel puri masala", 
+    "Garadu Chat", "Aloo garadu", "Aloo finger matar chaat", "Sweet corn chat", "Veg corn chat", 
+    "Bhutte ka kees", "Kashmiri chilla", "Katori Chat", "Mater Chat", "Chole Tikki", 
+    "Pani Poori", "Gathia Sev Chat", "Kalmi Vata", "Kanji Vada", "Khasta Chat", "Agra ka bhalla", 
+    "Lucknawi tikiya", "Agra wale bhale", "Bombey wale bhale", "Corn palak chaat", 
+    "Mangode green red chatni chaat", "Moong ke bhajiye", "Moonglet chilla", "Panjabi tikiya", 
+    "Kele ki tikiya", "Chole tikiya", "Shahi dahi vada", "Dahi gujiya", 
+    "Makhana dahi vada", "Diamond chat", "Dahi papdi chaat", "Dahi khasta chaat", "karela Chaat", 
+    "Delhi chaat", "Kaji vada", "Palak patta chaat", "Ragda patties", "Special paneer chilla", "moong dal chilla"
+  ],
+  "South Indian": [
+    "Idley With Sambhar & Chutney", "Vada With Sambhar & Chutney", "Fried Idly", "Paneer Dosa", 
+    "Onion uttapam", "Tomato uttapam", "Vegetable uttapam", "Masala Dosa", "Plain Dosa", "Pav Bhaji Dosa", 
+    "Hyderabadi Dosa", "Special Rawa Dosa", "Onion Cheese Dosa", "Special Uttapam", "Special Paneer Uttaoam"
+  ],
+  "Paneer Dish": [
+    "Paneer Awadhi Korma", "Paneer Makhani", "Paneer Butter Masala", "Paneer Lababdar", "Paneer Khurchan", 
+    "Palak Paneer", "Kadhai Paneer", "Paneer Pasanda", "Paneer Tikka Lababdar", "Lazeez Paneer Kaju Curry", 
+    "Paneer-Do-Pyaza", "Shahi Paneer", "Dum Ka Paneer", "Paneer Corn Capsicum", "Paneer Chatpate", 
+    "Amritsari Paneer Masala", "Matar Paneer", "Paneer Tawa Masala", "Paneer Afghani", "Paneer Zafrani", 
+    "Lachha Paneer", "Paneer Saagwala"
+  ],
+  "Sabji": [
+    "Tawa Khumb Hara Pyaaz", "Gobi Matar Masala", "Nizami Handi", "Hing Dhaniya Ke Chatpate Aloo", 
+    "Baingan Ka Bharta", "Makai Shehzadi", "Malai Kofta", "Methi Malai Matar", "Aloo Gobi Adraki", 
+    "Mix Vegetable", "Veg Kofta Curry", "Meloni Tarkari", "Bhindi-Do-Pyaza", "Kurkuri Bhindi", 
+    "Mushroom Matar Makhana", "Kadhai Mushroom", "Methi Kofta", "Palak Gravy", "Soya Keema Mater", 
+    "Dum Aloo Kashmiri", "Veg Kolhapuri", "Subz Jalfrezi", "Gatte Ki Sabji", "Aloo Palak", 
+    "Aloo Mater Tamatar Dry", "Baigan Mirch Ka Salan", "Lehsuni Corn Palak", "Subz Navratan Korma", 
+    "Tinda Masala", "Lauki Chana Dal", "Leshuni Dahi Palak", "Gajar Mater Ki Sabji", "Makai Ki Saji", 
+    "Dum Aloo Banarasi", "Aloo Methi", "Methi Palak Papad Ki Sabji", "Aloo Shimla Mirch", 
+    "Sev Tamatar Ki Sabji", "Aloo Udaygiri", "Mix Veg Achari", "Subz Kadhai", "Lauki Ke Kofte"
+  ],
+  "Dal/Kadhi": [
+    "Yello Dal Tadka", "Moong Dal Palak", "Dal Makhani", "Rajma Rasile", "Panjabi Kadhi", "Dal Panchmel", 
+    "Dal Bukhara", "Dal Sultani", "Dal Amritsari", "Chana Masala", "Rajma Masala", "Pindi Chole", 
+    "Dal Neembry", "Kadhi Pakodi", "Maa Ki Dal", "Afghani Kaali Dal", "Tari Wala Rajma", "Mash Ki Dal", 
+    "Rajasthani Gatta Kadhi", "Hari Moong Dal", "Chana Dal", "Masoor Ki Dal"
+  ],
+  "Rice": [
+    "Steam Rice", "Kashmiri Pulao", "Subz Pulao", "Vegetable Biryani", "Onion Jeera Pulao", "Tomato Rice", 
+    "Jeera Rice", "Lemon Rice", "Navratan Pulao", "Kabuli Pulao", "Methi Pulao", "Gatta Pulao", 
+    "Corn Pulao", "Aloo Ki Tehri", "Kale Moti Pulao", "Curd Rice", "Matar Pulao", "Gatta Ka Pulao", 
+    "Masaledar Chawal", "Jeera Kaju Pulao", "Onion Mint Pulao"
+  ],
+  "Assorted Indian Breads": [
+    "Roti", "Naan", "Paratha", "Miss Roti", "Lachha Paratha"
+  ],
+  "Accompaniments": [
+    "Aachar", "Papad", "Chutney"
+  ],
+  "Curd": [
+    "Mix Veg Raita", "Cucumber Raita", "Aloo Mint Raita", "Boondi Raita", "Pineapple Raita", "Fruit Raita", 
+    "Palak Raita", "Lauki Ka Raita", "Tadka Dahi", "Burani Raita", "Plain Curd", "Aloo Ka Raita", 
+    "Jeera Baigan Ka Raita", "Pudina Pyaz Ka Raita"
+  ],
+  "Indian Dessert": [
+    "Gulab Jamun", "Moong Dal Ka Halwa", "Gajar Ka Halwa", "Phirni", "Shahi Tukda", "Chena Kheer", 
+    "Seviyan Kheer", "Gulab Ki Kheer", "Fruit Custard", "Cham Cham", "Kala Jamun", "Santara Ki Rabdi (Seasonoal)", 
+    "Kesar Bati", "Kesari Rice Kheer", "Rasgulla", "Baked Boondi Gulab Jamun", "Rasmalai", "Lauki Ka Halwa", 
+    "Zaffrani Phirni", "Maalpua", "Pineapple Ki Kheer", "Anjeer Ki Kheer", "Chukundar Ka Halwa", 
+    "Makhane Ki Kheer", "Channa Dal Halwa", "Rajbhog", "Sheer Khurma", "Jalebi", "Indrani", "Mango Rabdi", 
+    "Imarti", "Stafal Rabdi", "Pineapple Ka Halwa", "Kaddu Ka Rishta", "Lambe Jamun", "Hot Kalakand"
+  ],
+  "Choice Of Ice-Cream": [
+    "Vanilla", "Strawberry", "Plain Pista", "Orange Ripple", "Orange Surprise", "Butter Scotch", 
+    "Mango", "Tutti-Futti", "Black Current", "Choco-Chips", "Pine Lemon"
+  ]
 };
 
 export default function MenuPage() {
