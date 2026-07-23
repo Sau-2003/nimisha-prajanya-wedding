@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, Image as ImageIcon, X, Pin, Gem } from "lucide-react";
+import { Plus, Trash2, Image as ImageIcon, X, Pin, BookIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
 import { useNotes } from "@/hooks/useNotes"; 
@@ -415,7 +415,7 @@ export default function NotePage() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-serif font-bold text-emerald-900 flex items-center gap-3">
-            <Gem className="w-8 h-8 text-emerald-700" /> Note
+            <BookIcon className="w-8 h-8 text-emerald-700" /> Notes
           </h1>
           <p className="text-sm text-slate-500 mt-1">
             Track Note ideas.
