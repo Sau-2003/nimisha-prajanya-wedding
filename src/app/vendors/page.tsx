@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, CheckCircle2, Trash2, Phone, IndianRupee, Pencil, Handshake, X, Link as LinkIcon, ChevronUp, ChevronDown, Pin } from "lucide-react";
+import { Plus, CheckCircle2, Trash2, Phone, Pencil, Handshake, X, Link as LinkIcon, ChevronUp, ChevronDown, Pin } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useVendors } from "@/hooks/useVendors";
 
@@ -124,40 +124,34 @@ const renderTextWithLinks = (text: string) => {
 function VendorsTracker() {
   const { dbVendors, loading: vendorsLoading, fetchData: fetchVendors } = useVendors();
 
-  // Category Management State (Synced with Supabase)
   const [customCategories, setCustomCategories] = useState<string[]>([]);
   const [hiddenCategories, setHiddenCategories] = useState<string[]>([]);
+  const [pinnedCategoriesList, setPinnedCategoriesList] = useState<string[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   
-  // Custom Reordering State
   const [categoryOrder, setCategoryOrder] = useState<string[]>([]);
 
-  // Rename Category State
   const [editingCategoryTitle, setEditingCategoryTitle] = useState<string | null>(null);
   const [editCategoryInput, setEditCategoryInput] = useState("");
 
   const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
 
-  // Modal State
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
 
-  // Add Mode State
   const [newOptionName, setNewOptionName] = useState("");
   const [newOptionStatus, setNewOptionStatus] = useState<BookingStatus>("Not Started");
   const [newEstimatedCost, setNewEstimatedCost] = useState<string>("");
   const [newContactNumbers, setNewContactNumbers] = useState<string[]>([""]);
   const [newNotes, setNewNotes] = useState("");
 
-  // Edit Mode State
   const [editingOptionId, setEditingOptionId] = useState<string | null>(null);
   const [editOptionName, setEditOptionName] = useState("");
   const [editEstimatedCost, setEditEstimatedCost] = useState<string>("");
   const [editContactNumbers, setEditContactNumbers] = useState<string[]>([""]);
   const [editNotes, setEditNotes] = useState("");
 
-  // Fetch categories from Supabase on mount
   const fetchCategories = async () => {
     setCategoriesLoading(true);
     const { data, error } = await supabase
@@ -171,10 +165,12 @@ function VendorsTracker() {
     } else if (data) {
       const hidden = data.filter(c => c.is_hidden).map(c => c.category_name);
       const custom = data.filter(c => c.is_custom && !c.is_hidden).map(c => c.category_name);
+      const pinned = data.filter(c => c.is_pinned && !c.is_hidden).map(c => c.category_name);
       const savedOrder = data.filter(c => !c.is_hidden).map(c => c.category_name);
       
       setHiddenCategories(hidden);
       setCustomCategories(custom);
+      setPinnedCategoriesList(pinned);
       setCategoryOrder(savedOrder);
     }
     setCategoriesLoading(false);
@@ -184,28 +180,31 @@ function VendorsTracker() {
     fetchCategories();
   }, []);
 
-  // Merge categories dynamically & filter out hidden ones
-  const allCategories = Array.from(new Set([
-    ...initialCategories,
-    ...customCategories,
-    ...(dbVendors?.map((v: any) => v.category) || [])
-  ])).filter(c => !hiddenCategories.includes(c));
+  // --- MEMOIZED DERIVED STATES ---
 
-  // Sort them based on saved user preference. Unsaved/Untracked ones go to the bottom.
-  const orderedCategories = allCategories.slice().sort((a, b) => {
-    const iA = categoryOrder.indexOf(a);
-    const iB = categoryOrder.indexOf(b);
-    
-    if (iA !== -1 && iB !== -1) return iA - iB;
-    if (iA !== -1) return -1;
-    if (iB !== -1) return 1;
-    return 0;
-  });
+  const allCategories = useMemo(() => {
+    return Array.from(new Set([
+      ...initialCategories,
+      ...customCategories,
+      ...(dbVendors?.map((v: any) => v.category) || [])
+    ])).filter(c => !hiddenCategories.includes(c));
+  }, [customCategories, dbVendors, hiddenCategories]);
 
-  // Map to data structure AND Pin confirmed categories to the top
-  const displayCategories = orderedCategories
-    .map((categoryName) => {
-      const matches: VendorOption[] = dbVendors
+  const orderedCategories = useMemo(() => {
+    return allCategories.slice().sort((a, b) => {
+      const iA = categoryOrder.indexOf(a);
+      const iB = categoryOrder.indexOf(b);
+      
+      if (iA !== -1 && iB !== -1) return iA - iB;
+      if (iA !== -1) return -1;
+      if (iB !== -1) return 1;
+      return 0;
+    });
+  }, [allCategories, categoryOrder]);
+
+  const rawDisplayCategories = useMemo(() => {
+    return orderedCategories.map((categoryName) => {
+      let matches: VendorOption[] = dbVendors
         ?.filter((v) => v.category === categoryName)
         .map((v: any) => ({
           id: v.id,
@@ -215,47 +214,86 @@ function VendorsTracker() {
           contactNumber: v.contact_numbers ?? [],
           notes: v.notes || "",
         })) || [];
+        
+      // SORT: Bring "Confirmed" vendors to the top of the modal list
+      matches = matches.sort((a, b) => {
+        if (a.status === 'Confirmed' && b.status !== 'Confirmed') return -1;
+        if (b.status === 'Confirmed' && a.status !== 'Confirmed') return 1;
+        return 0;
+      });
       
       const confirmedOptions = matches.filter((opt) => opt.status === "Confirmed");
+      const hasConfirmed = confirmedOptions.length > 0;
+      
+      const isManuallyPinned = pinnedCategoriesList.includes(categoryName);
+      const isPinned = isManuallyPinned || hasConfirmed; 
 
       return {
         name: categoryName,
         options: matches,
         confirmedOptions,
+        hasConfirmed,
+        isManuallyPinned,
+        isPinned
       };
-    })
-    .sort((a, b) => {
-      const aPinned = a.confirmedOptions.length > 0;
-      const bPinned = b.confirmedOptions.length > 0;
-      if (aPinned && !bPinned) return -1;
-      if (!aPinned && bPinned) return 1;
-      return 0;
     });
+  }, [orderedCategories, dbVendors, pinnedCategoriesList]);
 
-  const currentCategoryData = displayCategories.find((c) => c.name === editingCategory);
+  const pinnedGroup = useMemo(() => rawDisplayCategories.filter(c => c.isPinned), [rawDisplayCategories]);
+  const unpinnedGroup = useMemo(() => rawDisplayCategories.filter(c => !c.isPinned), [rawDisplayCategories]);
+  const displayCategories = useMemo(() => [...pinnedGroup, ...unpinnedGroup], [pinnedGroup, unpinnedGroup]);
+  const currentCategoryData = useMemo(() => displayCategories.find((c) => c.name === editingCategory), [displayCategories, editingCategory]);
 
-  // Move Category Up / Down Handler
-  const handleMoveCategory = async (index: number, direction: 'up' | 'down') => {
-    const visualOrderNames = displayCategories.map((c) => c.name);
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+  // --- ACTIONS ---
 
-    if (targetIndex < 0 || targetIndex >= visualOrderNames.length) return;
+  const handleTogglePin = async (categoryName: string, currentPinnedState: boolean) => {
+    const newPinnedState = !currentPinnedState;
+    const { error } = await supabase.from('vendor_categories').upsert({
+      category_name: categoryName,
+      is_pinned: newPinnedState,
+      is_hidden: false,
+      is_custom: !initialCategories.includes(categoryName)
+    }, { onConflict: 'category_name' });
 
-    const itemToMove = visualOrderNames[index];
-    visualOrderNames.splice(index, 1);
-    visualOrderNames.splice(targetIndex, 0, itemToMove);
+    if (error) {
+      console.error("Error updating pin state:", error);
+      alert("Failed to pin/unpin category.");
+    } else {
+      await fetchCategories();
+    }
+  };
 
-    setCategoryOrder(visualOrderNames);
+  const handleMoveCategory = async (categoryName: string, direction: 'up' | 'down', isPinnedGroup: boolean) => {
+    const group = isPinnedGroup ? pinnedGroup : unpinnedGroup;
+    const currentIndex = group.findIndex((c) => c.name === categoryName);
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
 
-    const updates = visualOrderNames.map((cat, idx) => ({
+    if (targetIndex < 0 || targetIndex >= group.length) return;
+
+    const groupNames = group.map(c => c.name);
+    const [movedItem] = groupNames.splice(currentIndex, 1);
+    groupNames.splice(targetIndex, 0, movedItem);
+
+    const newPinnedNames = isPinnedGroup ? groupNames : pinnedGroup.map(c => c.name);
+    const newUnpinnedNames = !isPinnedGroup ? groupNames : unpinnedGroup.map(c => c.name);
+    
+    const updatedFullOrder = [...newPinnedNames, ...newUnpinnedNames];
+    setCategoryOrder(updatedFullOrder);
+
+    const updates = updatedFullOrder.map((cat, idx) => ({
       category_name: cat,
       order_index: idx,
       is_hidden: false,
+      is_pinned: pinnedCategoriesList.includes(cat),
       is_custom: !initialCategories.includes(cat)
     }));
 
     const { error } = await supabase.from('vendor_categories').upsert(updates, { onConflict: 'category_name' });
-    if (error) console.error("Error saving new order to DB:", error);
+    if (error) {
+      console.error("Error saving new order to DB:", error);
+    } else {
+      await fetchCategories();
+    }
   };
 
   const handleAddCustomCategory = async () => {
@@ -267,6 +305,7 @@ function VendorsTracker() {
         category_name: cat,
         order_index: idx,
         is_hidden: false,
+        is_pinned: pinnedCategoriesList.includes(cat),
         is_custom: !initialCategories.includes(cat)
       }));
 
@@ -297,6 +336,7 @@ function VendorsTracker() {
     }
 
     const currentIndex = categoryOrder.indexOf(oldName);
+    const isCurrentlyPinned = pinnedCategoriesList.includes(oldName);
 
     const { error: vendorUpdateError } = await supabase.from('vendors').update({ category: newName }).eq('category', oldName);
     if (vendorUpdateError) {
@@ -315,7 +355,7 @@ function VendorsTracker() {
     }
 
     await supabase.from('vendor_categories').upsert(
-      { category_name: newName, order_index: currentIndex > -1 ? currentIndex : 0, is_hidden: false, is_custom: true },
+      { category_name: newName, order_index: currentIndex > -1 ? currentIndex : 0, is_hidden: false, is_pinned: isCurrentlyPinned, is_custom: true },
       { onConflict: 'category_name' }
     );
 
@@ -434,7 +474,24 @@ function VendorsTracker() {
   };
 
   const handleStatusChange = async (optionId: string, status: BookingStatus) => {
+    const targetVendor = dbVendors?.find((v: any) => v.id === optionId);
+    
     await supabase.from("vendors").update({ status }).eq("id", optionId);
+
+    if (targetVendor && targetVendor.status === 'Confirmed' && status !== 'Confirmed') {
+      const catName = targetVendor.category;
+      
+      const otherConfirmed = dbVendors?.filter(
+        (v: any) => v.category === catName && v.id !== optionId && v.status === 'Confirmed'
+      );
+
+      if (!otherConfirmed || otherConfirmed.length === 0) {
+        setPinnedCategoriesList(prev => prev.filter(c => c !== catName));
+        await supabase.from("vendor_categories").update({ is_pinned: false }).eq("category_name", catName);
+        fetchCategories(); 
+      }
+    }
+
     await fetchVendors();
   };
 
@@ -444,9 +501,30 @@ function VendorsTracker() {
       return;
     }
 
+    const targetVendor = dbVendors?.find((v: any) => v.id === optionId);
+
     const { error } = await supabase.from("vendors").delete().eq("id", optionId);
-    if (error) alert("Failed to delete. Check console.");
-    else await fetchVendors(); 
+    
+    if (error) {
+      alert("Failed to delete. Check console.");
+      return;
+    }
+
+    if (targetVendor && targetVendor.status === 'Confirmed') {
+      const catName = targetVendor.category;
+      
+      const otherConfirmed = dbVendors?.filter(
+        (v: any) => v.category === catName && v.id !== optionId && v.status === 'Confirmed'
+      );
+
+      if (!otherConfirmed || otherConfirmed.length === 0) {
+        setPinnedCategoriesList(prev => prev.filter(c => c !== catName));
+        await supabase.from("vendor_categories").update({ is_pinned: false }).eq("category_name", catName);
+        fetchCategories();
+      }
+    }
+
+    await fetchVendors(); 
   };
 
   if (vendorsLoading || categoriesLoading) {
@@ -479,13 +557,13 @@ function VendorsTracker() {
       <Card className="col-span-full border-slate-200 shadow-sm">
         <CardContent className="pt-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {displayCategories.map((item, index) => {
-              const hasConfirmed = item.confirmedOptions.length > 0;
+            {displayCategories.map((item) => {
+              const hasConfirmed = item.hasConfirmed;
 
               return (
                 <div
                   key={item.name}
-                  className={`group/category p-4 rounded-xl border transition-colors shadow-sm flex flex-col justify-between min-h-[130px] ${
+                  className={`group/category p-4 rounded-xl border transition-colors shadow-sm flex flex-col min-h-[140px] ${
                     hasConfirmed ? "border-emerald-200 bg-emerald-50/30" : "border-slate-100 bg-white hover:border-slate-300"
                   }`}
                 >
@@ -512,94 +590,147 @@ function VendorsTracker() {
                       </button>
                     </div>
                   ) : (
-                    <div className="flex justify-between items-start mb-2 w-full gap-2">
-                      <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                        <h3 className="font-medium text-slate-800 truncate">{item.name}</h3>
-                        {hasConfirmed && (
-                          <span title="Pinned to top">
-                            <Pin className="w-3.5 h-3.5 text-emerald-500 fill-emerald-500/20 flex-shrink-0" />
-                          </span>
-                        )}
-                        
-                        {/* 50% opacity on mobile, hidden on desktop until hovered */}
-                        <div className="flex items-center opacity-50 lg:opacity-0 group-hover/category:opacity-100 transition-opacity flex-shrink-0 bg-white rounded-md border border-slate-100 overflow-hidden shadow-sm">
+                    <div className="flex flex-col gap-2 mb-3 w-full border-b border-slate-100 pb-2">
+                      <div className="flex justify-between items-center w-full">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {/* PIN/UNPIN TOGGLE */}
                           <button
-                            onClick={() => handleMoveCategory(index, 'up')}
-                            disabled={index === 0}
-                            className="text-slate-400 hover:text-emerald-600 p-1 hover:bg-emerald-50 transition-colors border-r border-slate-100 disabled:opacity-30 disabled:hover:bg-transparent"
-                            title="Move Up"
+                            onClick={() => !item.hasConfirmed && handleTogglePin(item.name, item.isManuallyPinned)}
+                            disabled={item.hasConfirmed}
+                            className={`transition-colors p-1 rounded ${
+                              item.hasConfirmed
+                                ? "text-emerald-500 cursor-not-allowed opacity-80"
+                                : item.isManuallyPinned 
+                                  ? "text-emerald-600 hover:bg-slate-100" 
+                                  : "text-slate-300 hover:text-slate-500 hover:bg-slate-100"
+                            }`}
+                            title={
+                              item.hasConfirmed 
+                                ? "Pinned automatically (Confirmed selection)" 
+                                : item.isManuallyPinned 
+                                  ? "Unpin category" 
+                                  : "Pin category to top"
+                            }
                           >
-                            <ChevronUp className="w-3.5 h-3.5" />
+                            <Pin className={`w-3.5 h-3.5 ${item.isPinned ? "fill-emerald-600/20" : ""}`} />
                           </button>
-                          <button
-                            onClick={() => handleMoveCategory(index, 'down')}
-                            disabled={index === displayCategories.length - 1}
-                            className="text-slate-400 hover:text-emerald-600 p-1 hover:bg-emerald-50 transition-colors border-r border-slate-100 disabled:opacity-30 disabled:hover:bg-transparent"
-                            title="Move Down"
-                          >
-                            <ChevronDown className="w-3.5 h-3.5" />
-                          </button>
+                          
+                          <h3 className="font-semibold text-slate-800 text-base truncate">{item.name}</h3>
+                        </div>
+
+                        <Badge
+                          className={`${
+                            hasConfirmed
+                              ? "bg-emerald-100 text-emerald-700"
+                              : item.options.length > 0
+                              ? "bg-orange-100 text-orange-700"
+                              : "bg-slate-100 text-slate-600"
+                          } border-none shadow-none font-medium whitespace-nowrap ml-2`}
+                        >
+                          {hasConfirmed
+                            ? `${item.confirmedOptions.length} Confirmed`
+                            : item.options.length > 0
+                            ? `${item.options.length} Options`
+                            : "Not Started"}
+                        </Badge>
+                      </div>
+
+                      {/* FORMATTED ACTION BAR */}
+                      <div className="flex items-center justify-between text-xs pt-1">
+                        <button
+                          onClick={() => openDialog(item.name)}
+                          className="text-emerald-700 font-medium hover:underline flex items-center gap-1"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> 
+                          {hasConfirmed ? "Manage" : item.options.length > 0 ? "Edit / Add Option" : "Add Options"}
+                        </button>
+
+                        <div className="flex items-center gap-2 text-slate-500">
                           <button
                             onClick={() => {
                               setEditingCategoryTitle(item.name);
                               setEditCategoryInput(item.name);
                             }}
-                            className="text-slate-400 hover:text-emerald-600 p-1 hover:bg-emerald-50 transition-colors border-r border-slate-100"
+                            className="hover:text-emerald-600 transition-colors"
                             title="Edit Category Name"
                           >
-                            <Pencil className="w-3.5 h-3.5" />
+                            <Pencil className="w-3.5 h-3.5 inline" />
                           </button>
+                          <span>•</span>
                           <button
                             onClick={() => handleDeleteCategory(item.name, item.options.length)}
-                            className="text-slate-400 hover:text-red-500 p-1 hover:bg-red-50 transition-colors"
+                            className="hover:text-red-500 transition-colors"
                             title="Delete Category"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-3.5 h-3.5 inline" />
                           </button>
+                          <span>•</span>
+                          
+                          {/* MOVE CONTROLS (Group Constrained) */}
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleMoveCategory(item.name, 'up', item.isPinned)}
+                              disabled={
+                                item.isPinned 
+                                  ? pinnedGroup.findIndex(c => c.name === item.name) === 0 
+                                  : unpinnedGroup.findIndex(c => c.name === item.name) === 0
+                              }
+                              className="hover:text-emerald-600 disabled:opacity-30"
+                              title="Move Up"
+                            >
+                              <ChevronUp className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleMoveCategory(item.name, 'down', item.isPinned)}
+                              disabled={
+                                item.isPinned 
+                                  ? pinnedGroup.findIndex(c => c.name === item.name) === pinnedGroup.length - 1 
+                                  : unpinnedGroup.findIndex(c => c.name === item.name) === unpinnedGroup.length - 1
+                              }
+                              className="hover:text-emerald-600 disabled:opacity-30"
+                              title="Move Down"
+                            >
+                              <ChevronDown className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
-                      </div>                  
-                      <Badge
-                        className={`${
-                          hasConfirmed
-                            ? "bg-emerald-100 text-emerald-700"
-                            : item.options.length > 0
-                            ? "bg-orange-100 text-orange-700"
-                            : "bg-slate-100 text-slate-600"
-                        } border-none shadow-none font-medium whitespace-nowrap`}
-                      >
-                        {hasConfirmed
-                          ? `${item.confirmedOptions.length} Confirmed`
-                          : item.options.length > 0
-                          ? `${item.options.length} Options`
-                          : "Not Started"}
-                      </Badge>
+                      </div>
                     </div>
                   )}
 
-                  <div className="mt-2 space-y-2">
+                  <div className="mt-1 space-y-2">
                     {/* CONFIRMED STATE */}
                     {hasConfirmed ? (
                       <div className="space-y-2">
                         {item.confirmedOptions.map((vendor) => (
                           <div
                             key={vendor.id}
-                            className="bg-emerald-100/60 p-2.5 rounded-lg border border-emerald-200 space-y-1"
+                            className="bg-emerald-100/60 p-2.5 rounded-lg border border-emerald-200 space-y-1 relative group/vendor"
                           >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2 text-emerald-900 font-semibold text-sm">
-                                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                                <span>{vendor.name}</span>
+                            <div className="flex items-start justify-between">
+                              <div className="flex flex-col min-w-0 flex-1 pr-2">
+                                <div className="flex items-center gap-2 text-emerald-900 font-semibold text-sm">
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                                  <span className="truncate">{vendor.name}</span>
+                                </div>
+                                {vendor.estimatedCost ? (
+                                  <span className="text-xs text-emerald-800 font-medium ml-6 flex items-center mt-0.5">
+                                    ₹{vendor.estimatedCost.toLocaleString("en-IN")}
+                                  </span>
+                                ) : null}
+                              </div>
+
+                              <div className="flex items-center gap-1.5 flex-shrink-0 pt-0.5">
+                                <button onClick={() => { openDialog(item.name); startEditing(vendor); }} className="p-1 text-emerald-700 hover:text-emerald-900 transition-colors" title="Edit Vendor">
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                                <button onClick={() => handleDeleteOption(vendor.id)} className="p-1 text-red-500 hover:text-red-700 transition-colors" title="Delete Vendor">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
                               </div>
                             </div>
 
-                            <div className="flex flex-wrap gap-3 text-xs text-emerald-800">
-                              {vendor.estimatedCost ? (
-                                <span className="flex items-center gap-1">
-                                  <IndianRupee className="w-3 h-3" />
-                                  {vendor.estimatedCost.toLocaleString("en-IN")}
-                                </span>
-                              ) : null}
-
+                            <div className="flex flex-wrap gap-3 text-xs text-emerald-800 ml-6 pt-1">
                               {vendor.contactNumber?.map((phone, i) => (
                                 <a
                                   key={i}
@@ -612,7 +743,6 @@ function VendorsTracker() {
                               ))}
                             </div>
                             
-                            {/* Confirmed Vendor Notes Preview */}
                             {vendor.notes && (
                                <div className="mt-2 text-[11px] text-emerald-800/80 bg-white/60 p-2 rounded border border-emerald-100/50">
                                  {renderTextWithLinks(vendor.notes)}
@@ -620,15 +750,6 @@ function VendorsTracker() {
                             )}
                           </div>
                         ))}
-
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openDialog(item.name)}
-                          className="text-xs text-emerald-700"
-                        >
-                          Manage
-                        </Button>
                       </div>
                     ) : (
                       
@@ -637,22 +758,32 @@ function VendorsTracker() {
                         {item.options.length > 0 ? (
                           <div className="space-y-2">
                             {item.options.map((opt) => (
-                              <div key={opt.id} className="flex flex-col gap-1.5 text-xs text-slate-600 bg-slate-50 p-2.5 rounded border border-slate-100">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2 truncate">
-                                    <span className="font-medium text-slate-700 truncate max-w-[120px]">{opt.name}</span>
+                              <div key={opt.id} className="flex flex-col gap-1.5 text-xs text-slate-600 bg-slate-50 p-2.5 rounded border border-slate-100 relative group/vendor">
+                                <div className="flex items-start justify-between">
+                                  <div className="flex flex-col min-w-0 flex-1 pr-2">
+                                    <span className="font-medium text-slate-700 truncate">{opt.name}</span>
                                     {opt.estimatedCost ? (
-                                      <span className="text-[11px] text-slate-500 flex items-center">
+                                      <span className="text-[11px] text-slate-500 flex items-center font-medium mt-0.5">
                                         ₹{opt.estimatedCost.toLocaleString("en-IN")}
                                       </span>
                                     ) : null}
                                   </div>
-                                  <span className="text-[10px] text-slate-500 bg-slate-200/60 px-1.5 py-0.5 rounded">{opt.status}</span>
+
+                                  <div className="flex items-center gap-2 flex-shrink-0">
+                                    <span className="text-[10px] text-slate-500 bg-slate-200/60 px-1.5 py-0.5 rounded">{opt.status}</span>
+                                    <div className="flex items-center gap-1">
+                                      <button onClick={() => { openDialog(item.name); startEditing(opt); }} className="p-1 text-slate-500 hover:text-emerald-700" title="Edit Vendor">
+                                        <Pencil className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button onClick={() => handleDeleteOption(opt.id)} className="p-1 text-slate-400 hover:text-red-600" title="Delete Vendor">
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  </div>
                                 </div>
                                 
-                                {/* Always Show Contact Numbers */}
                                 {opt.contactNumber && opt.contactNumber.length > 0 && (
-                                  <div className="flex flex-wrap gap-3">
+                                  <div className="flex flex-wrap gap-3 pt-1">
                                     {opt.contactNumber.map((phone, i) => (
                                       <a
                                         key={i}
@@ -666,7 +797,6 @@ function VendorsTracker() {
                                   </div>
                                 )}
 
-                                {/* Always Show Notes & Links */}
                                 {opt.notes && (
                                   <div className="mt-1 pt-1.5 border-t border-slate-200/60 text-[11px] text-slate-500">
                                     {renderTextWithLinks(opt.notes)}
@@ -674,20 +804,9 @@ function VendorsTracker() {
                                 )}
                               </div>
                             ))}
-                            <button
-                              onClick={() => openDialog(item.name)}
-                              className="text-xs text-emerald-700 font-medium hover:underline mt-1 block"
-                            >
-                              + Edit / Add Options
-                            </button>
                           </div>
                         ) : (
-                          <button
-                            onClick={() => openDialog(item.name)}
-                            className="text-sm text-slate-500 hover:text-emerald-700 font-medium flex items-center gap-1 transition-colors mt-1"
-                          >
-                            <Plus className="w-4 h-4" /> Add Options
-                          </button>
+                          <p className="text-xs text-slate-400 italic">No options added yet.</p>
                         )}
                       </div>
                     )}
@@ -732,241 +851,218 @@ function VendorsTracker() {
             <DialogTitle>Manage {editingCategory} Options</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-3 mt-2">
-            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Current Options</h4>
-            {currentCategoryData?.options.length === 0 ? (
-              <p className="text-sm text-slate-400 italic">No options added yet.</p>
-            ) : (
+          {editingOptionId ? (
+            /* EDIT SINGLE VENDOR MODE WHEN PENCIL CLICKED */
+            <div className="space-y-3 mt-2">
+              <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Edit Vendor</h4>
               <div className="space-y-2">
-                {currentCategoryData?.options.map((opt) => (
-                  <div key={opt.id} className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 space-y-1.5">
-                    
-                    {/* EDIT OPTION MODE */}
-                    {editingOptionId === opt.id ? (
-                      <div className="space-y-2">
-                        <input
-                          type="text"
-                          className="w-full border border-emerald-500 p-1.5 rounded text-sm focus:outline-none"
-                          value={editOptionName}
-                          onChange={(e) => setEditOptionName(e.target.value)}
-                        />
-                        <div className="flex gap-2">
-                          <input
-                            type="number"
-                            placeholder="Est. Cost"
-                            className="w-1/2 border border-emerald-500 p-1.5 rounded text-sm focus:outline-none"
-                            value={editEstimatedCost}
-                            onChange={(e) => setEditEstimatedCost(e.target.value)}
-                          />
-                          <div className="space-y-2 w-1/2">
-                            {editContactNumbers.map((phone, index) => (
-                              <div key={index} className="flex gap-2">
-                                <input
-                                  type="text"
-                                  placeholder={`Phone ${index + 1}`}
-                                  className="flex-1 border border-slate-300 p-2 rounded-lg text-sm"
-                                  value={phone}
-                                  onChange={(e) => {
-                                    const updated = [...editContactNumbers];
-                                    updated[index] = e.target.value;
-                                    setEditContactNumbers(updated);
-                                  }}
-                                />
-
-                                {editContactNumbers.length > 1 && (
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="icon"
-                                    onClick={() =>
-                                      setEditContactNumbers(
-                                        editContactNumbers.filter((_, i) => i !== index)
-                                      )
-                                    }
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </Button>
-                                )}
-                              </div>
-                            ))}
-
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() =>
-                                setEditContactNumbers([...editContactNumbers, ""])
-                              }
-                            >
-                              + Add Phone
-                            </Button>
-                          </div>
-                        </div>
-                        <textarea
-                          placeholder="Notes"
-                          className="w-full border border-emerald-500 p-1.5 rounded text-sm focus:outline-none resize-none"
-                          rows={2}
-                          value={editNotes}
-                          onChange={(e) => setEditNotes(e.target.value)}
-                        />
-                        <div className="flex justify-end gap-2 mt-1">
-                          <button onClick={cancelEditing} className="px-3 py-1.5 text-xs bg-slate-200 text-slate-700 font-medium rounded-md hover:bg-slate-300 transition-colors">Cancel</button>
-                          <button onClick={() => saveEditedOption(opt.id)} className="px-3 py-1.5 text-xs bg-emerald-600 text-white font-medium rounded-md hover:bg-emerald-700 transition-colors">Save</button>
-                        </div>
-                      </div>
-                    ) : (
-                      
-                      /* DISPLAY OPTION MODE */
-                      <>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-slate-800">{opt.name}</span>
-                          <div className="flex items-center gap-1.5">
-                            <select
-                              value={opt.status}
-                              onChange={(e) => handleStatusChange(opt.id, e.target.value as BookingStatus)}
-                              className={`text-xs p-1 rounded border font-medium outline-none cursor-pointer ${
-                                opt.status === "Confirmed" ? "bg-emerald-100 text-emerald-800 border-emerald-300" : "bg-white border-slate-300"
-                              }`}
-                            >
-                              <option value="Not Started">Not Started</option>
-                              <option value="Enquired">Enquired</option>
-                              <option value="Negotiating">Negotiating</option>
-                              <option value="Recommendation">Recommendation</option>
-                              <option value="Confirmed">Confirmed</option>
-                            </select>
-                            <button onClick={() => startEditing(opt)} className="p-1 text-slate-400 hover:text-emerald-600 rounded bg-white border border-slate-200 transition-colors">
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                            <button onClick={() => handleDeleteOption(opt.id)} className="p-1 text-slate-400 hover:text-red-600 rounded bg-white border border-slate-200 transition-colors">
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
-                          {opt.estimatedCost ? (
-                            <span className="flex items-center gap-0.5 text-slate-700 font-medium">
-                              <IndianRupee className="w-3 h-3 text-slate-400" />
-                              {opt.estimatedCost.toLocaleString("en-IN")}
-                            </span>
-                          ) : null}
-                          {opt.contactNumber && (
-                            <div className="flex flex-col gap-1">
-                              {opt.contactNumber?.map((phone, index) => (
-                                <a
-                                  key={index}
-                                  href={`tel:${phone}`}
-                                  className="flex items-center gap-1 hover:text-emerald-600"
-                                >
-                                  <Phone className="w-3 h-3" />
-                                  {phone}
-                                </a>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        {opt.notes && (
-                          <div className="text-[11px] text-slate-600 bg-white p-2.5 rounded-md border border-slate-100 mt-1">
-                            {renderTextWithLinks(opt.notes)}
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <hr className="my-3 border-slate-100" />
-
-          {/* ADD NEW OPTION FORM */}
-          <div className="space-y-3">
-            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Add New Option</h4>
-            
-            <div className="space-y-2">
-              <div className="flex gap-2">
                 <input
                   type="text"
-                  placeholder="Vendor Name"
-                  className="flex-1 border border-slate-300 p-2 rounded-lg text-sm focus:outline-none focus:border-emerald-500"
-                  value={newOptionName}
-                  onChange={(e) => setNewOptionName(e.target.value)}
+                  className="w-full border border-emerald-500 p-2 rounded-lg text-sm focus:outline-none"
+                  value={editOptionName}
+                  onChange={(e) => setEditOptionName(e.target.value)}
                 />
-                <select
-                  className="border border-slate-300 p-2 rounded-lg text-sm bg-white focus:outline-none focus:border-emerald-500"
-                  value={newOptionStatus}
-                  onChange={(e) => setNewOptionStatus(e.target.value as BookingStatus)}
-                >
-                  <option value="Enquired">Enquired</option>
-                  <option value="Negotiating">Negotiating</option>
-                  <option value="Recommendation">Recommendation</option>
-                  <option value="Not Started">Not Started</option>
-                  <option value="Confirmed">Confirmed</option>
-                </select>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    placeholder="Est. Cost"
+                    className="w-1/2 border border-emerald-500 p-2 rounded-lg text-sm focus:outline-none"
+                    value={editEstimatedCost}
+                    onChange={(e) => setEditEstimatedCost(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  {editContactNumbers.map((phone, index) => (
+                    <div key={index} className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder={`Phone ${index + 1}`}
+                        className="flex-1 border border-slate-300 p-2 rounded-lg text-sm"
+                        value={phone}
+                        onChange={(e) => {
+                          const updated = [...editContactNumbers];
+                          updated[index] = e.target.value;
+                          setEditContactNumbers(updated);
+                        }}
+                      />
+                      {editContactNumbers.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() =>
+                            setEditContactNumbers(
+                              editContactNumbers.filter((_, i) => i !== index)
+                            )
+                          }
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      setEditContactNumbers([...editContactNumbers, ""])
+                    }
+                  >
+                    + Add Phone
+                  </Button>
+                </div>
+
+                <textarea
+                  placeholder="Notes"
+                  className="w-full border border-emerald-500 p-2 rounded-lg text-sm focus:outline-none resize-none"
+                  rows={2}
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                />
+
+                <div className="flex justify-end gap-2 mt-2">
+                  <button onClick={cancelEditing} className="px-3 py-1.5 text-xs bg-slate-200 text-slate-700 font-medium rounded-md hover:bg-slate-300 transition-colors">Cancel</button>
+                  <button onClick={() => { saveEditedOption(editingOptionId); }} className="px-3 py-1.5 text-xs bg-emerald-600 text-white font-medium rounded-md hover:bg-emerald-700 transition-colors">Save Changes</button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* DEFAULT MODAL VIEW: CURRENT OPTIONS & ADD NEW */
+            <>
+              <div className="space-y-3 mt-2">
+                <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Current Options</h4>
+                {currentCategoryData?.options.length === 0 ? (
+                  <p className="text-sm text-slate-400 italic">No options added yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {currentCategoryData?.options.map((opt) => (
+                      <div key={opt.id} className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 flex items-center justify-between">
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium text-slate-800">{opt.name}</span>
+                          {opt.estimatedCost ? (
+                            <span className="text-xs text-slate-500">₹{opt.estimatedCost.toLocaleString("en-IN")}</span>
+                          ) : null}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <select
+                            value={opt.status}
+                            onChange={(e) => handleStatusChange(opt.id, e.target.value as BookingStatus)}
+                            className={`text-xs p-1 rounded border font-medium outline-none cursor-pointer ${
+                              opt.status === "Confirmed" ? "bg-emerald-100 text-emerald-800 border-emerald-300" : "bg-white border-slate-300"
+                            }`}
+                          >
+                            <option value="Not Started">Not Started</option>
+                            <option value="Enquired">Enquired</option>
+                            <option value="Negotiating">Negotiating</option>
+                            <option value="Recommendation">Recommendation</option>
+                            <option value="Confirmed">Confirmed</option>
+                          </select>
+                          <button onClick={() => startEditing(opt)} className="p-1 text-slate-400 hover:text-emerald-600 rounded bg-white border border-slate-200 transition-colors" title="Edit">
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => handleDeleteOption(opt.id)} className="p-1 text-slate-400 hover:text-red-600 rounded bg-white border border-slate-200 transition-colors" title="Delete">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              <input
-                type="number"
-                placeholder="Est. Cost (₹)"
-                className="w-full border border-slate-300 p-2 rounded-lg text-sm focus:outline-none focus:border-emerald-500"
-                value={newEstimatedCost}
-                onChange={(e) => setNewEstimatedCost(e.target.value)}
-              />
+              <hr className="my-3 border-slate-100" />
 
-              <div className="space-y-2">
-                {newContactNumbers.map((phone, index) => (
-                  <div key={index} className="flex gap-2">
+              {/* ADD NEW OPTION FORM */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Add New Option</h4>
+                
+                <div className="space-y-2">
+                  <div className="flex gap-2">
                     <input
                       type="text"
-                      placeholder={`Phone ${index + 1}`}
+                      placeholder="Vendor Name"
                       className="flex-1 border border-slate-300 p-2 rounded-lg text-sm focus:outline-none focus:border-emerald-500"
-                      value={phone}
-                      onChange={(e) => {
-                        const updated = [...newContactNumbers];
-                        updated[index] = e.target.value;
-                        setNewContactNumbers(updated);
-                      }}
+                      value={newOptionName}
+                      onChange={(e) => setNewOptionName(e.target.value)}
                     />
-
-                    {newContactNumbers.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        onClick={() =>
-                          setNewContactNumbers(
-                            newContactNumbers.filter((_, i) => i !== index)
-                          )
-                        }
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    )}
+                    <select
+                      className="border border-slate-300 p-2 rounded-lg text-sm bg-white focus:outline-none focus:border-emerald-500"
+                      value={newOptionStatus}
+                      onChange={(e) => setNewOptionStatus(e.target.value as BookingStatus)}
+                    >
+                      <option value="Enquired">Enquired</option>
+                      <option value="Negotiating">Negotiating</option>
+                      <option value="Recommendation">Recommendation</option>
+                      <option value="Not Started">Not Started</option>
+                      <option value="Confirmed">Confirmed</option>
+                    </select>
                   </div>
-                ))}
 
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setNewContactNumbers([...newContactNumbers, ""])}
-                >
-                  + Add Phone
+                  <input
+                    type="number"
+                    placeholder="Est. Cost (₹)"
+                    className="w-full border border-slate-300 p-2 rounded-lg text-sm focus:outline-none focus:border-emerald-500"
+                    value={newEstimatedCost}
+                    onChange={(e) => setNewEstimatedCost(e.target.value)}
+                  />
+
+                  <div className="space-y-2">
+                    {newContactNumbers.map((phone, index) => (
+                      <div key={index} className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder={`Phone ${index + 1}`}
+                          className="flex-1 border border-slate-300 p-2 rounded-lg text-sm focus:outline-none focus:border-emerald-500"
+                          value={phone}
+                          onChange={(e) => {
+                            const updated = [...newContactNumbers];
+                            updated[index] = e.target.value;
+                            setNewContactNumbers(updated);
+                          }}
+                        />
+
+                        {newContactNumbers.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={() =>
+                              setNewContactNumbers(
+                                newContactNumbers.filter((_, i) => i !== index)
+                              )
+                            }
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setNewContactNumbers([...newContactNumbers, ""])}
+                    >
+                      + Add Phone
+                    </Button>
+                  </div>
+
+                  <textarea
+                    placeholder="Notes / Links (Package details, inclusions, Instagram link, etc.)"
+                    className="w-full border border-slate-300 p-2 rounded-lg text-sm focus:outline-none focus:border-emerald-500 resize-none"
+                    rows={2}
+                    value={newNotes}
+                    onChange={(e) => setNewNotes(e.target.value)}
+                  />
+                </div>
+
+                <Button onClick={handleAddOption} className="w-full bg-emerald-600 hover:bg-emerald-700 text-sm font-semibold transition-colors">
+                  <Plus className="w-4 h-4 mr-1" /> Save Vendor Option
                 </Button>
               </div>
-
-              <textarea
-                placeholder="Notes / Links (Package details, inclusions, Instagram link, etc.)"
-                className="w-full border border-slate-300 p-2 rounded-lg text-sm focus:outline-none focus:border-emerald-500 resize-none"
-                rows={2}
-                value={newNotes}
-                onChange={(e) => setNewNotes(e.target.value)}
-              />
-            </div>
-
-            <Button onClick={handleAddOption} className="w-full bg-emerald-600 hover:bg-emerald-700 text-sm font-semibold transition-colors">
-              <Plus className="w-4 h-4 mr-1" /> Add Vendor Option
-            </Button>
-          </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </>
