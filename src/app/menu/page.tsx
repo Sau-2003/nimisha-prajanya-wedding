@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { 
-  Plus, X, FileText, Edit2, Check, Trash2, ChevronRight, FileSpreadsheet, ExternalLink, SquareMenu, Eye
+  Plus, X, FileText, Edit2, Check, Trash2, ChevronRight, FileSpreadsheet, FileDown, ExternalLink, SquareMenu, Eye
 } from 'lucide-react';
 import { useMenus, Tab } from '@/hooks/useMenus';
 
@@ -311,41 +311,59 @@ export default function MenuPage() {
             Build event menus.
           </p>
         </div>
-        
+
         {/* Action Buttons */}
-        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-          <a 
-            href="/VEG DETAIL MENU 2026-27.pdf" 
-            target="_blank" 
+        <div className="grid grid-cols-2 md:flex md:flex-wrap items-center gap-3 w-full md:w-auto">
+          {/* Green */}
+          <a
+            href="/VEG DETAIL MENU 2026-27.pdf"
+            target="_blank"
             rel="noopener noreferrer"
-            className="w-full sm:w-auto"
+            className="w-full md:w-auto"
           >
-            <Button variant="outline" className="border-emerald-600 text-emerald-700 hover:bg-emerald-50 w-full flex gap-2">
-              <Eye className="w-4 h-4" /> View PDF Menu
+            <Button className="bg-emerald-700 hover:bg-emerald-800 text-white w-full md:w-auto flex gap-2">
+              <Eye className="w-4 h-4" />
+              View PDF Menu
             </Button>
           </a>
-          <a 
-            href="https://docs.google.com/spreadsheets/d/1e108RDQAQ8-F1ScoI7z4bqSXKmgI1k7B/edit?gid=784207240#gid=784207240" 
-            target="_blank" 
+
+          {/* White */}
+          <a
+            href="https://docs.google.com/spreadsheets/d/1e108RDQAQ8-F1ScoI7z4bqSXKmgI1k7B/edit?gid=784207240#gid=784207240"
+            target="_blank"
             rel="noopener noreferrer"
-            className="w-full sm:w-auto"
+            className="w-full md:w-auto"
           >
-            <Button variant="outline" className="border-emerald-600 text-emerald-700 hover:bg-emerald-50 w-full flex gap-2">
-              <ExternalLink className="w-4 h-4" /> Masterlist
+            <Button
+              variant="outline"
+              className="border-emerald-600 text-emerald-700 hover:bg-emerald-50 w-full md:w-auto flex gap-2"
+            >
+              <ExternalLink className="w-4 h-4" />
+              Masterlist
             </Button>
           </a>
-          <a 
-            href="https://docs.google.com/spreadsheets/d/14CeBV-yiLB2vkl6QvBkyIksxhe8IU4ygU1YlEWPZULE/edit?gid=0#gid=0" 
-            target="_blank" 
+
+          {/* Green */}
+          <a
+            href="https://docs.google.com/spreadsheets/d/14CeBV-yiLB2vkl6QvBkyIksxhe8IU4ygU1YlEWPZULE/edit?gid=0#gid=0"
+            target="_blank"
             rel="noopener noreferrer"
-            className="w-full sm:w-auto"
+            className="w-full md:w-auto"
           >
-            <Button variant="outline" className="border-emerald-600 text-emerald-700 hover:bg-emerald-50 w-full flex gap-2">
-              <FileSpreadsheet className="w-4 h-4" /> Open Detailed Menu
+            <Button className="bg-emerald-700 hover:bg-emerald-800 text-white w-full md:w-auto flex gap-2">
+              <FileSpreadsheet className="w-4 h-4" />
+              Open Detailed Menu
             </Button>
           </a>
-          <Button onClick={exportToGoogleSheets} className="bg-emerald-700 hover:bg-emerald-800 text-white w-full sm:w-auto flex gap-2">
-            <FileSpreadsheet className="w-4 h-4" /> Export to Sheets
+
+          {/* White */}
+          <Button
+            onClick={exportToGoogleSheets}
+            variant="outline"
+            className="border-emerald-600 text-emerald-700 hover:bg-emerald-50 w-full md:w-auto flex gap-2"
+          >
+            <FileDown className="w-4 h-4" />
+            Export to Sheets
           </Button>
         </div>
       </div>
