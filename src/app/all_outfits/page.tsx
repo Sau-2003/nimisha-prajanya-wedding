@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { 
   Image as ImageIcon, Calendar, Maximize2, X, Link as LinkIcon, 
-  ExternalLink, ShoppingBag, Pencil, Trash2, Loader2, Plus, FolderPlus, ChevronDown
+  ExternalLink, ShoppingBag, Pencil, Trash2, Loader2, Plus, FolderPlus, ChevronDown, CheckCircle2
 } from "lucide-react";
 import { DressIcon } from '@phosphor-icons/react';
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog";
@@ -252,12 +252,24 @@ export default function AllOutfitsPage() {
   const [outfits, setOutfits] = useState<ParsedOutfit[]>([]);
   const [optionTabs, setOptionTabs] = useState<OptionTab[]>([]);
   
+  // State to hold empty tabs created by the user before they add items
+  const [customTabs, setCustomTabs] = useState<string[]>([]);
+  
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState<ParsedOutfit | null>(null);
   const [activeTab, setActiveTab] = useState<string>("Ideas");
 
+  // Tab Rename States
+  const [editingTabName, setEditingTabName] = useState<string | null>(null);
+  const [editTabInput, setEditTabInput] = useState("");
+
   // Local state tracking selected events per category tab
   const [selectedTabEvents, setSelectedTabEvents] = useState<Record<string, string[]>>({});
+
+  // Delete Confirmation States
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
+  const [sectionToDelete, setSectionToDelete] = useState<{name: string, tabId?: string} | null>(null);
+  const [tabToDelete, setTabToDelete] = useState<string | null>(null);
 
   // Edit Modal States
   const [editingItem, setEditingItem] = useState<ParsedOutfit | null>(null);
@@ -335,8 +347,53 @@ export default function AllOutfitsPage() {
     const name = prompt("Enter new Outfit Category (e.g., Bride, Decor):");
     if (name && name.trim()) {
       const formatted = name.trim();
+      // Ensure it renders immediately even if it has no items yet
+      setCustomTabs(prev => [...prev, formatted]);
       setActiveTab(formatted);
     }
+  };
+
+  const handleRenameTab = async (oldName: string) => {
+    const newName = editTabInput.trim();
+    if (!newName || newName === oldName) {
+      setEditingTabName(null);
+      return;
+    }
+
+    const allCurrentTabs = Array.from(new Set([...outfits.map(o => o.category), ...customTabs]));
+    if (allCurrentTabs.includes(newName)) {
+      alert("A tab with this name already exists.");
+      return;
+    }
+
+    // Update outfits items
+    await supabase.from('event_items').update({ category: `outfit_${newName}` }).eq('category', `outfit_${oldName}`);
+    // Update link items for this tab
+    await supabase.from('event_items').update({ category: `outfit_link_${newName}` }).eq('category', `outfit_link_${oldName}`);
+
+    setCustomTabs(prev => prev.map(t => t === oldName ? newName : t));
+    if (activeTab === oldName) setActiveTab(newName);
+    
+    setEditingTabName(null);
+    fetchAllData();
+  };
+
+  const handleDeleteTabRequest = (tabName: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setTabToDelete(tabName);
+  };
+
+  const confirmTabDelete = async () => {
+    if (!tabToDelete) return;
+    const tabName = tabToDelete;
+
+    await supabase.from('event_items').delete().in('category', [`outfit_${tabName}`, `outfit_link_${tabName}`]);
+
+    setCustomTabs(prev => prev.filter(t => t !== tabName));
+    if (activeTab === tabName) setActiveTab('Ideas');
+    
+    setTabToDelete(null);
+    fetchAllData();
   };
 
   const handleAddShoppingCategory = async () => {
@@ -396,16 +453,27 @@ export default function AllOutfitsPage() {
     }
   };
 
-  const deleteItem = async (e: React.MouseEvent, id: string) => {
+  // Triggers Delete Confirmation Modal for Items
+  const handleItemDeleteRequest = (e: React.MouseEvent, id: string) => {
     e.stopPropagation(); 
-    if (confirm("Are you sure you want to delete this item?")) {
-      await supabase.from('event_items').delete().eq('id', id);
-      fetchAllData(); 
-    }
+    setItemToDelete(id);
   };
 
-const deleteSection = async (sectionName: string, tabId?: string) => {
-    if (!confirm(`Delete "${sectionName}" and all its contents? This cannot be undone.`)) return;
+  const confirmItemDelete = async () => {
+    if (!itemToDelete) return;
+    await supabase.from('event_items').delete().eq('id', itemToDelete);
+    setItemToDelete(null);
+    fetchAllData();
+  };
+
+  // Triggers Delete Confirmation Modal for Sections
+  const handleSectionDeleteRequest = (sectionName: string, tabId?: string) => {
+    setSectionToDelete({ name: sectionName, tabId });
+  };
+
+  const confirmSectionDelete = async () => {
+    if (!sectionToDelete) return;
+    const { name: sectionName, tabId } = sectionToDelete;
 
     if (activeTab === 'Shopping' && tabId) {
       await supabase.from('option_tabs').delete().eq('id', tabId);
@@ -432,6 +500,8 @@ const deleteSection = async (sectionName: string, tabId?: string) => {
         [activeTab]: prev[activeTab]?.filter(e => e !== sectionName)
       }));
     }
+    
+    setSectionToDelete(null);
     fetchAllData();
   };
 
@@ -482,8 +552,9 @@ const deleteSection = async (sectionName: string, tabId?: string) => {
   };
 
   // --- TABS AND RENDERING LOGIC ---
+  // We merge dbTabs with customTabs so empty tabs stick around until page refresh
   let dbTabs = Array.from(new Set(outfits.map(o => o.category)));
-  let allTabs = Array.from(new Set([...dbTabs]));
+  let allTabs = Array.from(new Set([...dbTabs, ...customTabs]));
   if (!allTabs.includes("Ideas")) allTabs.unshift("Ideas");
   if (optionTabs.length > 0 && !allTabs.includes("Shopping")) allTabs.push("Shopping");
 
@@ -511,32 +582,74 @@ const deleteSection = async (sectionName: string, tabId?: string) => {
 
       {/* Dynamic Tabs Section */}
       {!loading && (
-        <div className="flex items-center overflow-x-auto hide-scrollbar border-b border-slate-200 pb-px gap-6">
+        <div className="flex items-center overflow-x-auto hide-scrollbar border-b border-slate-200 gap-3 px-1 pt-2">
           {allTabs.map((tab) => {
             const count = outfits.filter(o => o.category.toLowerCase() === tab.toLowerCase()).length;
+            const isActive = activeTab === tab;
+            const isCoreTab = tab === 'Ideas' || tab === 'Shopping';
+
             return (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`whitespace-nowrap pb-3 font-medium text-sm transition-colors relative flex items-center gap-2 ${
-                  activeTab === tab ? 'text-emerald-700' : 'text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                {tab === 'Shopping' ? <ShoppingBag className="w-4 h-4 mb-0.5" /> : null}
-                {tab}
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                  activeTab === tab ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'
-                }`}>
-                  {count}
-                </span>
-                {activeTab === tab && (
-                  <span className="absolute bottom-0 left-0 w-full h-0.5 bg-emerald-600 rounded-t-full" />
+              <div key={tab} className="relative flex items-center group">
+                {editingTabName === tab ? (
+                  <div className="flex items-center gap-1 bg-white border border-emerald-400 rounded-lg px-2 py-1 mb-2 z-10 shadow-sm">
+                    <input
+                      type="text"
+                      value={editTabInput}
+                      onChange={(e) => setEditTabInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleRenameTab(tab)}
+                      className="text-sm outline-none w-24 bg-transparent text-slate-800"
+                      autoFocus
+                    />
+                    <button onClick={() => handleRenameTab(tab)} className="text-emerald-600 hover:text-emerald-700 p-1 bg-emerald-50 rounded-md">
+                      <CheckCircle2 className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => setEditingTabName(null)} className="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-100 rounded-md">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className={`flex items-center pb-3 border-b-2 transition-colors ${isActive ? 'border-emerald-600' : 'border-transparent'}`} style={{ marginBottom: '-2px' }}>
+                    <button
+                      onClick={() => setActiveTab(tab)}
+                      className={`whitespace-nowrap font-medium text-sm transition-colors flex items-center gap-2 outline-none ${
+                        isActive ? 'text-emerald-700' : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      {tab === 'Shopping' ? <ShoppingBag className="w-4 h-4 mb-0.5" /> : null}
+                      {tab}
+                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                        isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'
+                      }`}>
+                        {count}
+                      </span>
+                    </button>
+
+                    {/* Edit & Delete Icons for Custom Tabs */}
+                    {!isCoreTab && (
+                      <div className={`flex items-center gap-0.5 ml-2 transition-opacity ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setEditingTabName(tab); setEditTabInput(tab); }}
+                          className="p-1 rounded text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                          title="Rename Tab"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={(e) => handleDeleteTabRequest(tab, e)}
+                          className="p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                          title="Delete Tab"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 )}
-              </button>
+              </div>
             );
           })}
           
-          <Button variant="ghost" size="sm" onClick={handleAddOutfitTab} className="mb-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 ml-2">
+          <Button variant="ghost" size="sm" onClick={handleAddOutfitTab} className="mb-3 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 ml-2 shadow-sm border border-emerald-100">
             <Plus className="w-4 h-4 mr-1"/> Add Category Tab
           </Button>
         </div>
@@ -562,10 +675,10 @@ const deleteSection = async (sectionName: string, tabId?: string) => {
                 activeGlobalTab={activeTab}
                 onImageClick={setSelectedImage}
                 onEdit={openEditModal}
-                onDelete={deleteItem}
+                onDelete={handleItemDeleteRequest}
                 onAddImage={handleAddImage}
                 onAddLink={handleAddLink}
-                onDeleteSection={deleteSection}
+                onDeleteSection={handleSectionDeleteRequest}
               />
             ))
           )}
@@ -614,10 +727,10 @@ const deleteSection = async (sectionName: string, tabId?: string) => {
                       activeGlobalTab={activeTab}
                       onImageClick={setSelectedImage}
                       onEdit={openEditModal}
-                      onDelete={deleteItem}
+                      onDelete={handleItemDeleteRequest}
                       onAddImage={handleAddImage}
                       onAddLink={handleAddLink}
-                      onDeleteSection={deleteSection}
+                      onDeleteSection={handleSectionDeleteRequest}
                     />
                   ))
                 )}
@@ -697,6 +810,64 @@ const deleteSection = async (sectionName: string, tabId?: string) => {
             <Button variant="ghost" onClick={() => setEditingItem(null)}>Cancel</Button>
             <Button onClick={handleSaveEdit} disabled={savingEdit} className="bg-emerald-600 hover:bg-emerald-700">
               {savingEdit ? <Loader2 className="animate-spin w-4 h-4 mr-1" /> : null} Save Changes
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- CONFIRM ITEM DELETE MODAL --- */}
+      <Dialog open={!!itemToDelete} onOpenChange={(open) => !open && setItemToDelete(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm Deletion</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <p className="text-sm text-slate-600">Are you sure you want to delete this item? This action cannot be undone.</p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setItemToDelete(null)}>Cancel</Button>
+            <Button className="bg-red-500 hover:bg-red-600 text-white" onClick={confirmItemDelete}>
+              Delete Item
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- CONFIRM SECTION DELETE MODAL --- */}
+      <Dialog open={!!sectionToDelete} onOpenChange={(open) => !open && setSectionToDelete(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm Section Deletion</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <p className="text-sm text-slate-600">
+              Are you sure you want to delete the <strong>"{sectionToDelete?.name}"</strong> section and all its contents? This action cannot be undone.
+            </p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setSectionToDelete(null)}>Cancel</Button>
+            <Button className="bg-red-500 hover:bg-red-600 text-white" onClick={confirmSectionDelete}>
+              Delete Section
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- CONFIRM TAB DELETE MODAL --- */}
+      <Dialog open={!!tabToDelete} onOpenChange={(open) => !open && setTabToDelete(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm Tab Deletion</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <p className="text-sm text-slate-600">
+              Are you sure you want to delete the <strong>"{tabToDelete}"</strong> tab? All items inside this tab will be permanently deleted.
+            </p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setTabToDelete(null)}>Cancel</Button>
+            <Button className="bg-red-500 hover:bg-red-600 text-white" onClick={confirmTabDelete}>
+              Delete Tab
             </Button>
           </div>
         </DialogContent>

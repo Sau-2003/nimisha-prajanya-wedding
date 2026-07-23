@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Calendar, Check, Loader2, CalendarClock, Image as ImageIcon, User, Users, Pencil, X } from 'lucide-react';
+import { Calendar, Check, Loader2, CalendarClock, Image as ImageIcon, User, Users, Pencil, X, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
@@ -46,6 +46,9 @@ export default function DateSchedulePage() {
   const [editingTaskDate, setEditingTaskDate] = useState("");
   const [editingAssignedTo, setEditingAssignedTo] = useState("");
   const [editingTaskImage, setEditingTaskImage] = useState<string | null>(null);
+
+  // Delete Confirmation State
+  const [itemToDelete, setItemToDelete] = useState<any | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -105,6 +108,18 @@ export default function DateSchedulePage() {
       await supabase.from('event_items').update({ category: 'taskDone' }).eq('id', item.id);
     }
     fetchData(); 
+  };
+
+  // Delete logic
+  const confirmItemDelete = async () => {
+    if (!itemToDelete) return;
+    if (itemToDelete.isGlobal) {
+      await supabase.from('tasks').delete().eq('id', itemToDelete.id);
+    } else {
+      await supabase.from('event_items').delete().eq('id', itemToDelete.id);
+    }
+    setItemToDelete(null);
+    fetchData();
   };
 
   // Start Editing
@@ -386,6 +401,13 @@ export default function DateSchedulePage() {
                             >
                               <Check className="w-4 h-4" />
                             </button>
+                            <button
+                              onClick={() => setItemToDelete(item)}
+                              className="p-2 border border-red-100 text-red-400 bg-white rounded-full hover:bg-red-50 hover:text-red-600 transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
                         )}
                       </div>
@@ -561,6 +583,13 @@ export default function DateSchedulePage() {
                                     >
                                       <Check className="w-4 h-4" />
                                     </button>
+                                    <button
+                                      onClick={() => setItemToDelete(item)}
+                                      className="p-2 border border-red-100 text-red-400 bg-white rounded-full hover:bg-red-50 hover:text-red-600 transition-colors"
+                                      title="Delete"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
                                   </div>
                                 )}
                               </div>
@@ -596,6 +625,24 @@ export default function DateSchedulePage() {
               }}
             />
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* --- CONFIRM ITEM DELETE MODAL --- */}
+      <Dialog open={!!itemToDelete} onOpenChange={(open) => !open && setItemToDelete(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm Deletion</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <p className="text-sm text-slate-600">Are you sure you want to delete this item? This action cannot be undone.</p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setItemToDelete(null)}>Cancel</Button>
+            <Button className="bg-red-500 hover:bg-red-600 text-white" onClick={confirmItemDelete}>
+              Delete Item
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

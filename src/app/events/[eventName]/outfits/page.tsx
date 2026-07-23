@@ -38,6 +38,9 @@ export default function OutfitPage() {
   const [editingTabName, setEditingTabName] = useState<string | null>(null);
   const [editTabInput, setEditTabInput] = useState("");
   
+  // States for unified Deletion Confirmation
+  const [deleteTarget, setDeleteTarget] = useState<{ type: 'item', id: string } | { type: 'tab', name: string } | null>(null);
+  
   // Derived tabs strictly from image categories (ignoring links so links don't create tabs)
   const imageItems = outfitItems.filter(item => item.category.startsWith('outfit_') && !item.category.startsWith('outfit_link_'));
   const dbTabs = Array.from(new Set(imageItems.map(item => item.category.replace('outfit_', ''))));
@@ -163,10 +166,40 @@ export default function OutfitPage() {
     setAddingLink(false);
   };
 
-  const deleteItem = async (e: React.MouseEvent, id: string) => {
+  const handleDeleteItemClick = (e: React.MouseEvent, id: string) => {
     e.stopPropagation(); 
-    await supabase.from('event_items').delete().eq('id', id);
+    setDeleteTarget({ type: 'item', id });
+  };
+
+  const handleDeleteTabClick = (e: React.MouseEvent, tab: string) => {
+    e.stopPropagation(); 
+    setDeleteTarget({ type: 'tab', name: tab });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+
+    if (deleteTarget.type === 'item') {
+      await supabase.from('event_items').delete().eq('id', deleteTarget.id);
+    } else if (deleteTarget.type === 'tab') {
+      const tabToDelete = deleteTarget.name;
+      await supabase
+        .from('event_items')
+        .delete()
+        .eq('event_name', rawName)
+        .or(`category.eq.outfit_${tabToDelete},category.eq.outfit_link_${tabToDelete}`);
+
+      const updatedCustomTabs = customTabs.filter(tab => tab !== tabToDelete);
+      setCustomTabs(updatedCustomTabs);
+
+      if (activeTab === tabToDelete) {
+        const remainingTabs = allTabs.filter(tab => tab !== tabToDelete);
+        setActiveTab(remainingTabs.length > 0 ? remainingTabs[0] : "");
+      }
+    }
+
     fetchOutfits(); 
+    setDeleteTarget(null);
   };
 
   const openEditModal = (e: React.MouseEvent, item: OutfitItem) => {
@@ -275,28 +308,6 @@ export default function OutfitPage() {
     fetchOutfits();
   };
 
-  const deleteTab = async (e: React.MouseEvent, tabToDelete: string) => {
-    e.stopPropagation(); 
-    
-    if (confirm(`Are you sure you want to delete the "${tabToDelete}" category and all its images/links?`)) {
-      await supabase
-        .from('event_items')
-        .delete()
-        .eq('event_name', rawName)
-        .or(`category.eq.outfit_${tabToDelete},category.eq.outfit_link_${tabToDelete}`);
-
-      const updatedCustomTabs = customTabs.filter(tab => tab !== tabToDelete);
-      setCustomTabs(updatedCustomTabs);
-
-      if (activeTab === tabToDelete) {
-        const remainingTabs = allTabs.filter(tab => tab !== tabToDelete);
-        setActiveTab(remainingTabs.length > 0 ? remainingTabs[0] : "");
-      }
-
-      fetchOutfits();
-    }
-  };
-
   if (loading) return <div className="p-12 text-center text-emerald-600">Loading Outfits & Links...</div>;
 
   return (
@@ -350,7 +361,7 @@ export default function OutfitPage() {
                         <Pencil color='black' className="w-3 h-3" />
                       </button>
                       <button
-                        onClick={(e) => deleteTab(e, tab)}
+                        onClick={(e) => handleDeleteTabClick(e, tab)}
                         className="p-1 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-200/60 transition-colors"
                         title={`Delete ${tab} category`}
                       >
@@ -466,7 +477,7 @@ export default function OutfitPage() {
                               <Pencil className="w-3.5 h-3.5" />
                             </button>
                             <button 
-                              onClick={(e) => deleteItem(e, item.id)}
+                              onClick={(e) => handleDeleteItemClick(e, item.id)}
                               className="bg-red-500 hover:bg-red-600 text-white p-1.5 rounded-full shadow-sm transition-colors"
                               title="Delete Link"
                             >
@@ -508,7 +519,7 @@ export default function OutfitPage() {
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
                           <button 
-                            onClick={(e) => deleteItem(e, item.id)}
+                            onClick={(e) => handleDeleteItemClick(e, item.id)}
                             className="bg-red-500 hover:bg-red-600 text-white p-1.5 rounded-full shadow-md transition-colors"
                             title="Delete Photo"
                           >
@@ -529,6 +540,32 @@ export default function OutfitPage() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* --- UNIFIED DELETE CONFIRMATION MODAL --- */}
+      <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold text-slate-900">Confirm Deletion</DialogTitle>
+          </DialogHeader>
+          <div className="py-2 text-slate-600">
+            {deleteTarget?.type === 'item' 
+              ? "Are you sure you want to delete this item? This action cannot be undone."
+              : `Are you sure you want to delete the "${deleteTarget?.name}" category and all its images/links? This action cannot be undone.`
+            }
+          </div>
+          <div className="flex justify-end gap-3 mt-4">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button 
+              className="bg-red-600 hover:bg-red-700 text-white" 
+              onClick={handleConfirmDelete}
+            >
+              Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* --- EDIT CAPTION & IMAGE MODAL --- */}
       <Dialog open={!!editingItem} onOpenChange={(open) => !open && setEditingItem(null)}>

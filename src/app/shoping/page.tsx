@@ -5,7 +5,7 @@ import {
   Plus, Trash2, Pencil, X, Image as ImageIcon, FolderPlus, Check, Maximize2, ShoppingBag 
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useOptions, OptionItem } from "@/hooks/useOptions";
 
 export default function OptionsPage() {
@@ -35,7 +35,7 @@ export default function OptionsPage() {
   // Toggle for Add Option Section Modal/Drawer/Dropdown
   const [isAddingOptionOpen, setIsAddingOptionOpen] = useState(false);
 
-  // New Item Input State (Requires Image)
+  // New Item Input State
   const [caption, setCaption] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
@@ -50,6 +50,13 @@ export default function OptionsPage() {
   const [editingCaption, setEditingCaption] = useState("");
   const [editingFile, setEditingFile] = useState<File | null>(null);
   const [editingPreview, setEditingPreview] = useState<string | null>(null);
+
+  // Unified Delete Confirmation State
+  const [deleteTarget, setDeleteTarget] = useState<
+    | { type: 'item'; id: string }
+    | { type: 'tab'; id: string; label: string }
+    | null
+  >(null);
 
   // Handlers
   const handleAddTabSubmit = () => {
@@ -81,7 +88,7 @@ export default function OptionsPage() {
   };
 
   const handleCreateOption = async () => {
-    if (!selectedFile) return; 
+    if (!selectedFile && !caption.trim()) return; 
     await addOptionItem(caption, selectedFile);
     setCaption("");
     setSelectedFile(null);
@@ -90,7 +97,7 @@ export default function OptionsPage() {
   };
 
   const handleAddLink = async () => {
-    if (!newLinkUrl.trim() || !selectedFile) return; 
+    if (!newLinkUrl.trim()) return; 
     setAddingLink(true);
     try {
       const formattedCaption = newLinkTitle.trim() 
@@ -120,6 +127,18 @@ export default function OptionsPage() {
     setEditingItemId(null);
   };
 
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+
+    if (deleteTarget.type === 'item') {
+      await deleteOptionItem(deleteTarget.id);
+    } else if (deleteTarget.type === 'tab') {
+      await deleteTab(deleteTarget.id);
+    }
+
+    setDeleteTarget(null);
+  };
+
   return (
     <div className="min-h-screen p-4 md:p-10 max-w-7xl mx-auto space-y-8 md:ml-64">
       {/* Header */}
@@ -132,9 +151,52 @@ export default function OptionsPage() {
         </p>
       </div>
 
-      {/* --- TOP TABS BAR WITH EDIT & DELETE TAB OPTIONS --- */}
-      <div className="border-b border-slate-200 pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1">
+      {/* --- TAB CONTROLS & TABS LIST --- */}
+      <div className="space-y-4">
+        {/* Top Action Bar (Add Tab / Insert Option) */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          {/* Add New Tab */}
+          {isAddingTab ? (
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-xl border border-slate-300 w-max">
+              <input
+                type="text"
+                placeholder="Tab Name..."
+                value={newTabLabel}
+                onChange={(e) => setNewTabLabel(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAddTabSubmit()}
+                className="text-xs px-2.5 py-1.5 border rounded-lg outline-none bg-white w-32"
+                autoFocus
+              />
+              <Button size="sm" onClick={handleAddTabSubmit} className="bg-emerald-700 h-7 text-xs px-2.5">
+                Add
+              </Button>
+              <button onClick={() => setIsAddingTab(false)} className="p-1 text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setIsAddingTab(true)}
+              className="flex items-center w-max gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 border-dashed"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add Tab
+            </button>
+          )}
+
+          {/* Action Button to Open Insert Form */}
+          {activeTab && (
+            <Button 
+              onClick={() => setIsAddingOptionOpen(!isAddingOptionOpen)}
+              className="bg-emerald-800 hover:bg-emerald-900 text-white shrink-0 shadow-sm w-max"
+            >
+              <Plus className="w-4 h-4 mr-2" /> 
+              {isAddingOptionOpen ? "Close Form" : "Insert Image / Link"}
+            </Button>
+          )}
+        </div>
+
+        {/* Tabs List */}
+        <div className="border-b border-slate-200 pb-3 flex items-center gap-2 overflow-x-auto scrollbar-none">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id;
             const isEditingThisTab = editingTabId === tab.id;
@@ -202,7 +264,7 @@ export default function OptionsPage() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        deleteTab(tab.id);
+                        setDeleteTarget({ type: 'tab', id: tab.id, label: tab.label });
                       }}
                       className={`p-0.5 rounded-full hover:bg-black/10 transition-colors ${
                         isActive ? "text-emerald-200 hover:text-white" : "text-slate-400 hover:text-red-500"
@@ -216,54 +278,15 @@ export default function OptionsPage() {
               </div>
             );
           })}
-
-          {/* Add New Tab */}
-          {isAddingTab ? (
-            <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-xl border border-slate-300 shrink-0">
-              <input
-                type="text"
-                placeholder="Tab Name..."
-                value={newTabLabel}
-                onChange={(e) => setNewTabLabel(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleAddTabSubmit()}
-                className="text-xs px-2.5 py-1.5 border rounded-lg outline-none bg-white w-32"
-                autoFocus
-              />
-              <Button size="sm" onClick={handleAddTabSubmit} className="bg-emerald-700 h-7 text-xs px-2.5">
-                Add
-              </Button>
-              <button onClick={() => setIsAddingTab(false)} className="p-1 text-slate-400 hover:text-slate-600">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setIsAddingTab(true)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 shrink-0 border border-emerald-300 border-dashed"
-            >
-              <Plus className="w-3.5 h-3.5" /> Add Tab
-            </button>
-          )}
         </div>
-
-        {/* Action Button to Open Add Option Form */}
-        {activeTab && (
-          <Button 
-            onClick={() => setIsAddingOptionOpen(!isAddingOptionOpen)}
-            className="bg-emerald-800 hover:bg-emerald-900 text-white shrink-0 shadow-sm"
-          >
-            <Plus className="w-4 h-4 mr-2" /> 
-            {isAddingOptionOpen ? "Close Form" : "Add New Option"}
-          </Button>
-        )}
       </div>
 
-      {/* --- ADD NEW OPTION FORM (Toggled via Button & Requires Image First) --- */}
+      {/* --- ADD NEW OPTION FORM (Image OR Link) --- */}
       {isAddingOptionOpen && activeTab && (
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider">
-              {`Add New Option to "${tabs.find((t) => t.id === activeTab)?.label || activeTab}"`}
+              {`Insert Image / Link into "${tabs.find((t) => t.id === activeTab)?.label || activeTab}"`}
             </h2>
             <button 
               onClick={() => setIsAddingOptionOpen(false)}
@@ -273,8 +296,8 @@ export default function OptionsPage() {
             </button>
           </div>
 
-          <div className="space-y-3">
-            {/* Step 1: Image Upload Selector (Required first) */}
+          <div className="space-y-4">
+            {/* Step 1: Image Upload Selector (Now Optional) */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
               <div className="flex-1 relative h-11">
                 <input
@@ -293,7 +316,7 @@ export default function OptionsPage() {
                   }`}
                 >
                   <ImageIcon className="w-4 h-4 mr-2" />
-                  {filePreview ? "Photo Selected ✓ (Required)" : "Upload Image (Required First)"}
+                  {filePreview ? "Photo Selected ✓" : "Upload Image (Optional)"}
                 </label>
 
                 {filePreview && (
@@ -311,58 +334,61 @@ export default function OptionsPage() {
             </div>
 
             {filePreview && (
-              <div className="relative w-28 h-28 rounded-xl overflow-hidden border border-emerald-300 mt-2 shadow-sm">
+              <div className="relative w-28 h-28 rounded-xl overflow-hidden border border-emerald-300 shadow-sm">
                 <img src={filePreview} alt="Upload preview" className="w-full h-full object-cover" />
               </div>
             )}
 
-            {/* Step 2: Captions & Details (Enabled ONLY when an image is uploaded) */}
-            <div className={`space-y-3 transition-opacity ${!filePreview ? "opacity-50 pointer-events-none" : "opacity-100"}`}>
+            {/* Captions & Details - Always available */}
+            <div className="space-y-3">
               <textarea
                 className="w-full border p-3 rounded-xl outline-none focus:border-emerald-500 text-sm resize-none bg-white"
-                placeholder={filePreview ? "Write a caption or details..." : "Upload an image above to unlock captions & details..."}
+                placeholder="Write a caption or details (Optional if adding a link)..."
                 rows={2}
                 value={caption}
-                disabled={!filePreview}
                 onChange={(e) => setCaption(e.target.value)}
               />
 
               <div className="flex justify-end">
                 <Button 
                   onClick={handleCreateOption} 
-                  disabled={!filePreview} 
+                  disabled={!filePreview && !caption.trim()} 
                   className="bg-emerald-800 hover:bg-emerald-900 h-11 px-6"
                 >
-                  <Plus className="w-4 h-4 mr-1" /> Save Option
+                  <Plus className="w-4 h-4 mr-1" /> Save Image/Text Option
                 </Button>
               </div>
             </div>
 
-            {/* Link Input Row (Also gated behind image upload) */}
-            <div className={`bg-slate-50 border p-4 rounded-xl flex flex-col md:flex-row gap-3 items-stretch md:items-center transition-opacity ${!filePreview ? "opacity-50 pointer-events-none" : "opacity-100"}`}>
+            <div className="relative flex py-2 items-center">
+              <div className="flex-grow border-t border-slate-200"></div>
+              <span className="flex-shrink-0 mx-4 text-slate-400 text-xs uppercase font-semibold">OR Add Link</span>
+              <div className="flex-grow border-t border-slate-200"></div>
+            </div>
+
+            {/* Link Input Row - Always available */}
+            <div className="bg-slate-50 border p-4 rounded-xl flex flex-col md:flex-row gap-3 items-stretch md:items-center">
               <input 
                 type="text" 
                 placeholder="Link title/label (optional)..."
                 value={newLinkTitle}
                 onChange={(e) => setNewLinkTitle(e.target.value)}
-                disabled={!filePreview}
                 className="w-full md:w-1/3 border p-2 rounded-lg bg-white outline-none text-sm focus:border-emerald-500"
               />
               <input 
                 type="url" 
-                placeholder="Paste link here (e.g., myntra.com/...)"
+                placeholder="Paste link here (e.g., amazon.in/...)"
                 value={newLinkUrl}
                 onChange={(e) => setNewLinkUrl(e.target.value)}
-                disabled={!filePreview}
                 className="flex-1 border p-2 rounded-lg bg-white outline-none text-sm focus:border-emerald-500"
               />
               <Button 
                 onClick={handleAddLink} 
-                disabled={addingLink || !newLinkUrl.trim() || !filePreview}
+                disabled={addingLink || !newLinkUrl.trim()}
                 variant="outline"
                 className="border-emerald-600 text-emerald-700 hover:bg-emerald-50 whitespace-nowrap"
               >
-                Save Link Option
+                Save Link
               </Button>
             </div>
           </div>
@@ -454,7 +480,7 @@ export default function OptionsPage() {
                               href={part}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-emerald-600 underline hover:text-emerald-700"
+                              className="text-emerald-600 underline hover:text-emerald-700 break-all"
                             >
                               {part}
                             </a>
@@ -474,7 +500,7 @@ export default function OptionsPage() {
                         <Pencil className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => deleteOptionItem(item.id)}
+                        onClick={() => setDeleteTarget({ type: 'item', id: item.id })}
                         className="p-1.5 border border-red-100 text-red-400 rounded-lg hover:bg-red-50 hover:text-red-600"
                         title="Delete Option"
                       >
@@ -488,6 +514,32 @@ export default function OptionsPage() {
           </div>
         )}
       </div>
+
+      {/* --- UNIFIED DELETE CONFIRMATION MODAL --- */}
+      <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold text-slate-900">Confirm Deletion</DialogTitle>
+          </DialogHeader>
+          <div className="py-2 text-slate-600">
+            {deleteTarget?.type === 'item' 
+              ? "Are you sure you want to delete this item? This action cannot be undone."
+              : `Are you sure you want to delete the "${deleteTarget?.label}" tab and all its items? This action cannot be undone.`
+            }
+          </div>
+          <div className="flex justify-end gap-3 mt-4">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button 
+              className="bg-red-600 hover:bg-red-700 text-white" 
+              onClick={handleConfirmDelete}
+            >
+              Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* --- FULL SCREEN LIGHTBOX --- */}
       <Dialog open={!!selectedPhoto} onOpenChange={(open) => !open && setSelectedPhoto(null)}>

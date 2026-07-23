@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Users, Trash2, Pencil, Check, X, FileSpreadsheet, ExternalLink } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
 import { useGuests } from "@/hooks/useGuests";
 
@@ -48,6 +49,9 @@ export default function GuestsPage() {
   
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<any>({});
+  
+  // Delete Confirmation State
+  const [guestToDelete, setGuestToDelete] = useState<string | null>(null);
 
   const filteredGuests = useMemo(() => 
     dbGuests.filter((g) => g.tab_category === activeTab), 
@@ -158,6 +162,21 @@ export default function GuestsPage() {
     } else {
       console.error("Toggle Jain Error:", error);
     }
+  };
+
+  const confirmDelete = async () => {
+    if (!guestToDelete) return;
+    
+    const { error } = await supabase.from("guests").delete().eq("id", guestToDelete);
+    
+    if (error) {
+      console.error("Delete error:", error);
+      alert("Failed to delete guest.");
+    } else {
+      fetchData();
+    }
+    
+    setGuestToDelete(null);
   };
 
   const exportToGoogleSheets = async () => {
@@ -502,8 +521,7 @@ export default function GuestsPage() {
                       )}
                       <td className="p-3 flex gap-1 justify-center">
                         <Button variant="ghost" size="sm" onClick={() => { setEditingId(g.id); setEditForm(g); }}><Pencil className="w-4 h-4"/></Button>
-                        {/* We leave the delete bound by ID so you can safely delete a guest from Sangeet without accidentally deleting them from the Hotel list */}
-                        <Button variant="ghost" size="sm" onClick={() => supabase.from("guests").delete().eq("id", g.id).then(fetchData)}>
+                        <Button variant="ghost" size="sm" onClick={() => setGuestToDelete(g.id)}>
                           <Trash2 className="w-4 h-4 text-red-500" />
                         </Button>
                       </td>
@@ -515,6 +533,24 @@ export default function GuestsPage() {
           </table>
         </div>
       </div>
+
+      {/* --- CONFIRM DELETE MODAL --- */}
+      <Dialog open={!!guestToDelete} onOpenChange={(open) => !open && setGuestToDelete(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm Deletion</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <p className="text-sm text-slate-600">Are you sure you want to delete this item? This action cannot be undone.</p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setGuestToDelete(null)}>Cancel</Button>
+            <Button className="bg-red-500 hover:bg-red-600 text-white" onClick={confirmDelete}>
+              Delete Item
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

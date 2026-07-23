@@ -26,6 +26,14 @@ const initialCategories = [
   "Invitations", "Wedding Favors", "Bhajan Jamming"
 ];
 
+const statusOrder: Record<BookingStatus, number> = {
+  'Confirmed': 1,
+  'Negotiating': 2,
+  'Enquired': 3,
+  'Recommendation': 4,
+  'Not Started': 5,
+};
+
 // --- Component: Link Preview ---
 const LinkPreview = ({ url }: { url: string }) => {
   const [data, setData] = useState<any>(null);
@@ -151,6 +159,11 @@ function VendorsTracker() {
   const [editEstimatedCost, setEditEstimatedCost] = useState<string>("");
   const [editContactNumbers, setEditContactNumbers] = useState<string[]>([""]);
   const [editNotes, setEditNotes] = useState("");
+  const [editOptionStatus, setEditOptionStatus] = useState<BookingStatus>("Not Started"); 
+
+  // Delete Confirmation States
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
+  const [categoryToDelete, setCategoryToDelete] = useState<{ name: string; count: number } | null>(null);
 
   const fetchCategories = async () => {
     setCategoriesLoading(true);
@@ -215,11 +228,9 @@ function VendorsTracker() {
           notes: v.notes || "",
         })) || [];
         
-      // SORT: Bring "Confirmed" vendors to the top of the modal list
+      // SORT: Bring "Confirmed" vendors to the top, then sort by Negotiating -> Enquired -> Recommendation -> Not Started
       matches = matches.sort((a, b) => {
-        if (a.status === 'Confirmed' && b.status !== 'Confirmed') return -1;
-        if (b.status === 'Confirmed' && a.status !== 'Confirmed') return 1;
-        return 0;
+        return statusOrder[a.status] - statusOrder[b.status];
       });
       
       const confirmedOptions = matches.filter((opt) => opt.status === "Confirmed");
@@ -365,20 +376,16 @@ function VendorsTracker() {
     await fetchVendors();
   };
 
-  const handleDeleteCategory = async (categoryName: string, vendorCount: number) => {
-    const confirmDelete = window.confirm(
-      `Are you sure you want to delete the "${categoryName}" category${
-        vendorCount > 0 ? ` and its ${vendorCount} vendor(s)` : ""
-      }?`
-    );
-
-    if (!confirmDelete) return;
+  const confirmCategoryDelete = async () => {
+    if (!categoryToDelete) return;
+    const { name: categoryName, count: vendorCount } = categoryToDelete;
 
     if (vendorCount > 0) {
       const { error: vendorError } = await supabase.from("vendors").delete().eq("category", categoryName);
       if (vendorError) {
         console.error("Error deleting vendors:", vendorError);
         alert("Failed to delete category vendors.");
+        setCategoryToDelete(null);
         return;
       }
     }
@@ -397,6 +404,7 @@ function VendorsTracker() {
       await fetchCategories();
       await fetchVendors();
     }
+    setCategoryToDelete(null);
   };
 
   const openDialog = (categoryName: string) => {
@@ -446,6 +454,7 @@ function VendorsTracker() {
     setEditEstimatedCost(opt.estimatedCost ? opt.estimatedCost.toString() : "");
     setEditContactNumbers(opt.contactNumber && opt.contactNumber.length > 0 ? opt.contactNumber : [""]);
     setEditNotes(opt.notes || "");
+    setEditOptionStatus(opt.status);
   };
 
   const cancelEditing = () => setEditingOptionId(null);
@@ -454,12 +463,14 @@ function VendorsTracker() {
     if (!editOptionName.trim()) return;
 
     const filteredPhones = editContactNumbers.filter(phone => phone.trim() !== "");
+    const targetVendor = dbVendors?.find((v: any) => v.id === optionId);
 
     const { error } = await supabase.from("vendors").update({
       assigned_vendor: editOptionName.trim(),
       estimated_cost: editEstimatedCost ? parseFloat(editEstimatedCost) : 0,
       contact_numbers: filteredPhones.length > 0 ? filteredPhones : null,
       notes: editNotes.trim() || null,
+      status: editOptionStatus,
       updated_at: new Date().toISOString(),
     }).eq("id", optionId);
 
@@ -469,6 +480,23 @@ function VendorsTracker() {
       return;
     }
 
+    // Handle pin status if changing away from "Confirmed"
+    if (targetVendor && targetVendor.status === 'Confirmed' && editOptionStatus !== 'Confirmed') {
+      const catName = targetVendor.category;
+      
+      const otherConfirmed = dbVendors?.filter(
+        (v: any) => v.category === catName && v.id !== optionId && v.status === 'Confirmed'
+      );
+
+      if (!otherConfirmed || otherConfirmed.length === 0) {
+        setPinnedCategoriesList(prev => prev.filter(c => c !== catName));
+        await supabase.from("vendor_categories").update({ is_pinned: false }).eq("category_name", catName);
+        fetchCategories(); 
+      }
+    }
+
+    // Close the popup after successful edit
+    setIsDialogOpen(false);
     setEditingOptionId(null);
     await fetchVendors();
   };
@@ -495,11 +523,9 @@ function VendorsTracker() {
     await fetchVendors();
   };
 
-  const handleDeleteOption = async (optionId: string) => {
-    if (!optionId) {
-      alert("Error: Vendor ID is missing. Check the console.");
-      return;
-    }
+  const confirmItemDelete = async () => {
+    if (!itemToDelete) return;
+    const optionId = itemToDelete;
 
     const targetVendor = dbVendors?.find((v: any) => v.id === optionId);
 
@@ -507,6 +533,7 @@ function VendorsTracker() {
     
     if (error) {
       alert("Failed to delete. Check console.");
+      setItemToDelete(null);
       return;
     }
 
@@ -524,6 +551,7 @@ function VendorsTracker() {
       }
     }
 
+    setItemToDelete(null);
     await fetchVendors(); 
   };
 
@@ -658,7 +686,7 @@ function VendorsTracker() {
                           </button>
                           <span>•</span>
                           <button
-                            onClick={() => handleDeleteCategory(item.name, item.options.length)}
+                            onClick={() => setCategoryToDelete({ name: item.name, count: item.options.length })}
                             className="hover:text-red-500 transition-colors"
                             title="Delete Category"
                           >
@@ -724,7 +752,7 @@ function VendorsTracker() {
                                 <button onClick={() => { openDialog(item.name); startEditing(vendor); }} className="p-1 text-emerald-700 hover:text-emerald-900 transition-colors" title="Edit Vendor">
                                   <Pencil className="w-3.5 h-3.5" />
                                 </button>
-                                <button onClick={() => handleDeleteOption(vendor.id)} className="p-1 text-red-500 hover:text-red-700 transition-colors" title="Delete Vendor">
+                                <button onClick={() => setItemToDelete(vendor.id)} className="p-1 text-red-500 hover:text-red-700 transition-colors" title="Delete Vendor">
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                               </div>
@@ -775,7 +803,7 @@ function VendorsTracker() {
                                       <button onClick={() => { openDialog(item.name); startEditing(opt); }} className="p-1 text-slate-500 hover:text-emerald-700" title="Edit Vendor">
                                         <Pencil className="w-3.5 h-3.5" />
                                       </button>
-                                      <button onClick={() => handleDeleteOption(opt.id)} className="p-1 text-slate-400 hover:text-red-600" title="Delete Vendor">
+                                      <button onClick={() => setItemToDelete(opt.id)} className="p-1 text-slate-400 hover:text-red-600" title="Delete Vendor">
                                         <Trash2 className="w-3.5 h-3.5" />
                                       </button>
                                     </div>
@@ -862,7 +890,20 @@ function VendorsTracker() {
                   value={editOptionName}
                   onChange={(e) => setEditOptionName(e.target.value)}
                 />
+                
                 <div className="flex gap-2">
+                  <select
+                    className="w-1/2 border border-emerald-500 p-2 rounded-lg text-sm bg-white focus:outline-none"
+                    value={editOptionStatus}
+                    onChange={(e) => setEditOptionStatus(e.target.value as BookingStatus)}
+                  >
+                    <option value="Enquired">Enquired</option>
+                    <option value="Negotiating">Negotiating</option>
+                    <option value="Recommendation">Recommendation</option>
+                    <option value="Not Started">Not Started</option>
+                    <option value="Confirmed">Confirmed</option>
+                  </select>
+
                   <input
                     type="number"
                     placeholder="Est. Cost"
@@ -961,7 +1002,7 @@ function VendorsTracker() {
                           <button onClick={() => startEditing(opt)} className="p-1 text-slate-400 hover:text-emerald-600 rounded bg-white border border-slate-200 transition-colors" title="Edit">
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
-                          <button onClick={() => handleDeleteOption(opt.id)} className="p-1 text-slate-400 hover:text-red-600 rounded bg-white border border-slate-200 transition-colors" title="Delete">
+                          <button onClick={() => setItemToDelete(opt.id)} className="p-1 text-slate-400 hover:text-red-600 rounded bg-white border border-slate-200 transition-colors" title="Delete">
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
@@ -1063,6 +1104,44 @@ function VendorsTracker() {
               </div>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* --- CONFIRM ITEM DELETE MODAL --- */}
+      <Dialog open={!!itemToDelete} onOpenChange={(open) => !open && setItemToDelete(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm Deletion</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <p className="text-sm text-slate-600">Are you sure you want to delete this item? This action cannot be undone.</p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setItemToDelete(null)}>Cancel</Button>
+            <Button className="bg-red-500 hover:bg-red-600 text-white" onClick={confirmItemDelete}>
+              Delete Item
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- CONFIRM CATEGORY DELETE MODAL --- */}
+      <Dialog open={!!categoryToDelete} onOpenChange={(open) => !open && setCategoryToDelete(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm Deletion</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <p className="text-sm text-slate-600">
+              Are you sure you want to delete the <strong>"{categoryToDelete?.name}"</strong> category{categoryToDelete && categoryToDelete.count > 0 ? ` and its ${categoryToDelete.count} vendor(s)` : ""}? This action cannot be undone.
+            </p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setCategoryToDelete(null)}>Cancel</Button>
+            <Button className="bg-red-500 hover:bg-red-600 text-white" onClick={confirmCategoryDelete}>
+              Delete Category
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </>

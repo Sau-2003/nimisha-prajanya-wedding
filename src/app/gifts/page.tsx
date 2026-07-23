@@ -21,6 +21,9 @@ function GiftCard({
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
 
+  // Unified Delete Confirmation State
+  const [deleteTarget, setDeleteTarget] = useState<{ type: 'item' } | { type: 'image', index: number } | null>(null);
+
   // Safely treat null/undefined as false for older entries
   const isPinned = Boolean(gift.is_pinned);
 
@@ -116,16 +119,24 @@ function GiftCard({
     });
   };
 
-  const removeImage = (indexToRemove: number) => {
-    const currentImages = gift.images || gift.image_urls || [];
-    const updatedImages = currentImages.filter(
-      (_: any, i: number) => i !== indexToRemove
-    );
+  const handleConfirmDelete = () => {
+    if (!deleteTarget) return;
 
-    onUpdate(gift.id, {
-      images: updatedImages,
-      image_urls: updatedImages
-    });
+    if (deleteTarget.type === 'item') {
+      onDelete(gift.id);
+    } else if (deleteTarget.type === 'image') {
+      const currentImages = gift.images || gift.image_urls || [];
+      const updatedImages = currentImages.filter(
+        (_: any, i: number) => i !== deleteTarget.index
+      );
+
+      onUpdate(gift.id, {
+        images: updatedImages,
+        image_urls: updatedImages
+      });
+    }
+
+    setDeleteTarget(null);
   };
 
   useEffect(() => {
@@ -174,7 +185,7 @@ function GiftCard({
           onMouseLeave={handleTooltipLeave}
           onClick={(e) => {
             e.stopPropagation();
-            onDelete(gift.id);
+            setDeleteTarget({ type: 'item' });
             setActiveTooltip(null);
           }}
           className="p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg opacity-50 md:opacity-50 md:group-hover:opacity-100 transition-opacity shadow-sm"
@@ -260,7 +271,7 @@ function GiftCard({
                   />
 
                   <button 
-                    onClick={() => removeImage(idx)} 
+                    onClick={() => setDeleteTarget({ type: 'image', index: idx })} 
                     className="absolute -top-2 -right-2 bg-red-100 text-red-600 rounded-full p-1.5 opacity-50 md:opacity-0 group-hover/image:opacity-100 transition-opacity shadow-md hover:bg-red-200"
                     title="Remove Image"
                   >
@@ -301,6 +312,29 @@ function GiftCard({
           {activeTooltip}
         </div>
       )}
+
+      {/* UNIFIED DELETE CONFIRMATION MODAL */}
+      <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold text-slate-900">Confirm Deletion</DialogTitle>
+          </DialogHeader>
+          <div className="py-2 text-slate-600">
+            Are you sure you want to delete this item? This action cannot be undone.
+          </div>
+          <div className="flex justify-end gap-3 mt-4">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button 
+              className="bg-red-600 hover:bg-red-700 text-white" 
+              onClick={handleConfirmDelete}
+            >
+              Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

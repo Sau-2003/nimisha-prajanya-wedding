@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { 
   Plus, X, FileText, Edit2, Check, Trash2, ChevronRight, FileSpreadsheet, FileDown, ExternalLink, SquareMenu, Eye, Pin
 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useMenus, Tab } from '@/hooks/useMenus';
 
 const PREDEFINED_MENU: Record<string, string[]> = {
@@ -83,7 +84,7 @@ const PREDEFINED_MENU: Record<string, string[]> = {
   "Paneer Dish": [
     "Paneer Awadhi Korma", "Paneer Makhani", "Paneer Butter Masala", "Paneer Lababdar", "Paneer Khurchan", 
     "Palak Paneer", "Kadhai Paneer", "Paneer Pasanda", "Paneer Tikka Lababdar", "Lazeez Paneer Kaju Curry", 
-    "Paneer-Do-Pyaza", "Shahi Paneer", "Dum Ka Paneer", "Paneer Corn Capsicum", "Paneer Chatpate", 
+    "Paneer-Do-Pyaza", "Shahi Paneer", "Dum Ka Paneer", "Paneer Chatpate", 
     "Amritsari Paneer Masala", "Matar Paneer", "Paneer Tawa Masala", "Paneer Afghani", "Paneer Zafrani", 
     "Lachha Paneer", "Paneer Saagwala"
   ],
@@ -162,6 +163,11 @@ export default function MenuPage() {
   const [editItemName, setEditItemName] = useState("");
   const [editItemCaption, setEditItemCaption] = useState("");
 
+  // Delete Confirmation States
+  const [itemToDelete, setItemToDelete] = useState<{ categoryId: string; itemId: string } | null>(null);
+  const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null);
+  const [tabToDelete, setTabToDelete] = useState<string | null>(null);
+
   const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
 
   // Sorted tabs: pinned tabs first, but keep active tab stable or sort normally without shifting current view
@@ -196,10 +202,16 @@ export default function MenuPage() {
     }
   };
 
-  const handleDeleteTab = async (tabId: string, e: React.MouseEvent) => {
+  const handleDeleteTabRequest = (tabId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    await deleteTab(tabId);
-    if (activeTabId === tabId) setActiveTabId(null);
+    setTabToDelete(tabId);
+  };
+
+  const confirmTabDelete = async () => {
+    if (!tabToDelete) return;
+    await deleteTab(tabToDelete);
+    if (activeTabId === tabToDelete) setActiveTabId(null);
+    setTabToDelete(null);
   };
 
   const handleTogglePinTab = async (tabId: string, currentPinned?: boolean, e?: React.MouseEvent) => {
@@ -253,10 +265,15 @@ export default function MenuPage() {
     setEditingCategoryId(null);
   };
 
-  const handleDeleteCategory = async (categoryId: string) => {
-    if (!activeTab) return;
-    const newCategories = activeTab.categories.filter(c => c.id !== categoryId);
+  const handleDeleteCategoryRequest = (categoryId: string) => {
+    setCategoryToDelete(categoryId);
+  };
+
+  const confirmCategoryDelete = async () => {
+    if (!activeTab || !categoryToDelete) return;
+    const newCategories = activeTab.categories.filter(c => c.id !== categoryToDelete);
     await updateTab(activeTab.id, { categories: newCategories });
+    setCategoryToDelete(null);
   };
 
   const handleAddItem = async (categoryId: string) => {
@@ -303,15 +320,23 @@ export default function MenuPage() {
     setEditingItemId(null);
   };
 
-  const handleDeleteItem = async (categoryId: string, itemId: string) => {
-    if (!activeTab) return;
+  const handleDeleteItemRequest = (categoryId: string, itemId: string) => {
+    setItemToDelete({ categoryId, itemId });
+  };
+
+  const confirmItemDelete = async () => {
+    if (!activeTab || !itemToDelete) return;
+    
+    const { categoryId, itemId } = itemToDelete;
     const newCategories = activeTab.categories.map(cat => {
       if (cat.id === categoryId) {
         return { ...cat, items: cat.items.filter(i => i.id !== itemId) };
       }
       return cat;
     });
+    
     await updateTab(activeTab.id, { categories: newCategories });
+    setItemToDelete(null);
   };
 
   const exportToGoogleSheets = async () => {
@@ -491,7 +516,7 @@ export default function MenuPage() {
                       
                       <button 
                         type="button"
-                        onClick={(e) => handleDeleteTab(tab.id, e)} 
+                        onClick={(e) => handleDeleteTabRequest(tab.id, e)} 
                         className="p-1 text-slate-400 hover:text-red-500"
                       >
                         <X className="w-4 h-4" />
@@ -648,7 +673,7 @@ export default function MenuPage() {
                             <Button 
                               variant="outline" 
                               size="sm" 
-                              onClick={() => handleDeleteCategory(category.id)} 
+                              onClick={() => handleDeleteCategoryRequest(category.id)} 
                               className="text-slate-600 hover:text-red-600 hover:bg-red-50 h-8 flex gap-1 shrink-0"
                               title="Delete Category"
                             >
@@ -712,7 +737,7 @@ export default function MenuPage() {
                                       >
                                         <Edit2 className="w-3.5 h-3.5" />
                                       </button>
-                                      <button onClick={() => handleDeleteItem(category.id, item.id)} className="text-red-500 hover:text-red-800 opacity-50 group-hover:opacity-100 transition-opacity p-1 shrink-0">
+                                      <button onClick={() => handleDeleteItemRequest(category.id, item.id)} className="text-red-500 hover:text-red-800 opacity-50 group-hover:opacity-100 transition-opacity p-1 shrink-0">
                                         <X className="w-4 h-4" />
                                       </button>
                                     </>
@@ -770,6 +795,60 @@ export default function MenuPage() {
           </div>
         )}
       </div>
+
+      {/* --- CONFIRM ITEM DELETE MODAL --- */}
+      <Dialog open={!!itemToDelete} onOpenChange={(open) => !open && setItemToDelete(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm Deletion</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <p className="text-sm text-slate-600">Are you sure you want to delete this item? This action cannot be undone.</p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setItemToDelete(null)}>Cancel</Button>
+            <Button className="bg-red-500 hover:bg-red-600 text-white" onClick={confirmItemDelete}>
+              Delete Item
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- CONFIRM CATEGORY DELETE MODAL --- */}
+      <Dialog open={!!categoryToDelete} onOpenChange={(open) => !open && setCategoryToDelete(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm Deletion</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <p className="text-sm text-slate-600">Are you sure you want to delete this category? All dishes inside this category will be permanently deleted.</p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setCategoryToDelete(null)}>Cancel</Button>
+            <Button className="bg-red-500 hover:bg-red-600 text-white" onClick={confirmCategoryDelete}>
+              Delete Category
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- CONFIRM TAB DELETE MODAL --- */}
+      <Dialog open={!!tabToDelete} onOpenChange={(open) => !open && setTabToDelete(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm Deletion</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <p className="text-sm text-slate-600">Are you sure you want to delete this menu tab? All categories and dishes inside this tab will be permanently deleted.</p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setTabToDelete(null)}>Cancel</Button>
+            <Button className="bg-red-500 hover:bg-red-600 text-white" onClick={confirmTabDelete}>
+              Delete Tab
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
