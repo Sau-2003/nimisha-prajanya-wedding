@@ -6,10 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { differenceInDays, differenceInWeeks } from 'date-fns';
 
 const events = [
-{ name: 'Puja',       date: 'Jan 27, 2027', link: '/events/puja',      color: 'bg-orange-500' },  
+  { name: 'Puja',       date: 'Jan 27, 2027', link: '/events/puja',      color: 'bg-orange-500' },  
   { name: 'Mehendi',    date: 'Jan 29, 2027', link: '/events/mehendi',   color: 'bg-emerald-500' }, 
   { name: 'Check In',   date: 'Jan 30, 2027', link: '/events/check-in',  color: 'bg-stone-600' },    
-  { name: 'Tilak',      date: 'Jan 30, 2027', link: '/events/tilak',     color: 'bg-rose-600' },    
+  { name: 'Tilak',      date: 'Jan 30, 2027', link: '/events/tilak',     color: 'bg-yellow-900' },    
   { name: 'Sangeet',    date: 'Jan 30, 2027', link: '/events/sangeet',   color: 'bg-indigo-500' },  
   { name: 'Haldi',      date: 'Jan 31, 2027', link: '/events/haldi',     color: 'bg-amber-400' },   
   { name: 'Phere',      date: 'Jan 31, 2027', link: '/events/phere',     color: 'bg-red-500' },     

@@ -13,7 +13,7 @@ import { DressIcon } from '@phosphor-icons/react';
 
 const mainNav = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { name: 'Global Task Board', href: '/master-task', icon: ClipboardList },
+  { name: 'Global Task Board', href: '/global_task_board', icon: ClipboardList },
   { name: 'Menu', href: '/menu', icon: SquareMenu },
   { name: 'Vendor Tracker', href: '/vendors', icon: Handshake },
   { name: 'Budget', href: '/budget', icon: IndianRupee },
@@ -30,7 +30,7 @@ const eventNav = [
   { name: 'Puja',      href: '/events/puja',      color: 'bg-orange-500' },
   { name: 'Mehendi',   href: '/events/mehendi',   color: 'bg-emerald-500' },
   { name: 'Check In',  href: '/events/check-in',  color: 'bg-stone-600' },
-  { name: 'Tilak',     href: '/events/tilak',     color: 'bg-rose-600' },
+  { name: 'Tilak',     href: '/events/tilak',     color: 'bg-yellow-900' },
   { name: 'Sangeet',   href: '/events/sangeet',   color: 'bg-indigo-500' },
   { name: 'Haldi',     href: '/events/haldi',     color: 'bg-amber-400' },
   { name: 'Reception', href: '/events/reception', color: 'bg-fuchsia-600' },
