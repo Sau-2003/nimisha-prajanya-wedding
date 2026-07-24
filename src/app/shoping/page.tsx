@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { 
-  Plus, Trash2, Pencil, X, Image as ImageIcon, FolderPlus, Check, Maximize2, ShoppingBag 
+  Plus, Trash2, Pencil, X, Image as ImageIcon, FolderPlus, Check, Maximize2, ShoppingBag,
+  Link as LinkIcon, ExternalLink
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -100,9 +101,14 @@ export default function OptionsPage() {
     if (!newLinkUrl.trim()) return; 
     setAddingLink(true);
     try {
+      let formattedUrl = newLinkUrl.trim();
+      if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
+        formattedUrl = `https://${formattedUrl}`;
+      }
+
       const formattedCaption = newLinkTitle.trim() 
-        ? `${newLinkTitle.trim()}: ${newLinkUrl.trim()}` 
-        : newLinkUrl.trim();
+        ? `${newLinkTitle.trim()}: ${formattedUrl}` 
+        : formattedUrl;
       
       await addOptionItem(formattedCaption, selectedFile);
       setNewLinkTitle("");
@@ -144,7 +150,7 @@ export default function OptionsPage() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-serif font-bold text-emerald-900 flex items-center gap-3">
-          <ShoppingBag className="w-8 h-8 text-emerald-700" /> Shoping
+          <ShoppingBag className="w-8 h-8 text-emerald-700" /> Shopping
         </h1>
         <p className="text-sm text-slate-500 mt-1">
           Organize themes, outfits, and decorations under custom tabs.
@@ -410,107 +416,137 @@ export default function OptionsPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-            {items.map((item) => (
-              <div
-                key={item.id}
-                className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col justify-between transition-all hover:shadow-md"
-              >
-                {editingItemId === item.id ? (
-                  <div className="space-y-3">
-                    <textarea
-                      value={editingCaption}
-                      onChange={(e) => setEditingCaption(e.target.value)}
-                      className="w-full border p-2 text-xs rounded-lg outline-none focus:border-emerald-500 resize-none"
-                      rows={3}
-                    />
+            {items.map((item) => {
+              // Parse out purely formatted link cards
+              const isPureLinkItem = !item.imageUrl && /(https?:\/\/[^\s]+)/.test(item.caption);
+              let linkUrl = "";
+              let linkTitle = "";
+              
+              if (isPureLinkItem) {
+                const match = item.caption.match(/(https?:\/\/[^\s]+)/);
+                if (match) {
+                  linkUrl = match[0];
+                  linkTitle = item.caption.replace(linkUrl, "").replace(/:\s*$/, "").trim();
+                  if (!linkTitle) linkTitle = linkUrl; // Fallback to URL if no title exists
+                }
+              }
 
-                    {editingPreview && (
-                      <div className="relative w-full h-36 rounded-lg overflow-hidden border">
-                        <img src={editingPreview} alt="Edit preview" className="w-full h-full object-cover" />
-                        <button
-                          onClick={() => {
-                            setEditingFile(null);
-                            setEditingPreview(null);
-                          }}
-                          className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    )}
-
-                    <div className="flex justify-end gap-2 pt-2">
-                      <button
-                        onClick={() => setEditingItemId(null)}
-                        className="px-3 py-1.5 text-xs bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={() => saveEdit(item.id)}
-                        className="px-3 py-1.5 text-xs bg-emerald-700 text-white rounded-lg hover:bg-emerald-800 flex items-center gap-1"
-                      >
-                        <Check className="w-3 h-3" /> Save
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
+              return (
+                <div
+                  key={item.id}
+                  className={`group/card border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col justify-between transition-all hover:shadow-md ${
+                    isPureLinkItem && editingItemId !== item.id ? "bg-emerald-50/30 relative" : "bg-white"
+                  }`}
+                >
+                  {editingItemId === item.id ? (
                     <div className="space-y-3">
-                      {item.imageUrl && (
-                        <div 
-                          onClick={() => setSelectedPhoto(item.imageUrl || null)}
-                          className="relative group cursor-pointer w-full h-48 rounded-xl overflow-hidden border border-slate-100"
-                        >
-                          <img 
-                            src={item.imageUrl} 
-                            alt="Option Choice" 
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
-                          />
-                          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                            <Maximize2 className="w-6 h-6" />
-                          </div>
+                      <textarea
+                        value={editingCaption}
+                        onChange={(e) => setEditingCaption(e.target.value)}
+                        className="w-full border p-2 text-xs rounded-lg outline-none focus:border-emerald-500 resize-none bg-white"
+                        rows={3}
+                      />
+
+                      {editingPreview && (
+                        <div className="relative w-full h-36 rounded-lg overflow-hidden border">
+                          <img src={editingPreview} alt="Edit preview" className="w-full h-full object-cover" />
+                          <button
+                            onClick={() => {
+                              setEditingFile(null);
+                              setEditingPreview(null);
+                            }}
+                            className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
                         </div>
                       )}
-                      <p className="text-sm text-slate-700 whitespace-pre-wrap break-words">
-                        {item.caption.split(/(https?:\/\/[^\s]+)/g).map((part, index) =>
-                          /^https?:\/\/[^\s]+$/.test(part) ? (
-                            <a
-                              key={index}
-                              href={part}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-emerald-600 underline hover:text-emerald-700 break-all"
-                            >
-                              {part}
-                            </a>
-                          ) : (
-                            part
-                          )
-                        )}
-                      </p>
-                    </div>
 
-                    <div className="flex justify-end gap-1.5 mt-4 pt-3 border-t border-slate-100">
-                      <button
-                        onClick={() => startEditing(item)}
-                        className="p-1.5 border border-slate-200 text-slate-500 rounded-lg hover:bg-slate-50 hover:text-slate-700"
-                        title="Edit Option"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setDeleteTarget({ type: 'item', id: item.id })}
-                        className="p-1.5 border border-red-100 text-red-400 rounded-lg hover:bg-red-50 hover:text-red-600"
-                        title="Delete Option"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex justify-end gap-2 pt-2">
+                        <button
+                          onClick={() => setEditingItemId(null)}
+                          className="px-3 py-1.5 text-xs bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => saveEdit(item.id)}
+                          className="px-3 py-1.5 text-xs bg-emerald-700 text-white rounded-lg hover:bg-emerald-800 flex items-center gap-1"
+                        >
+                          <Check className="w-3 h-3" /> Save
+                        </button>
+                      </div>
                     </div>
-                  </>
-                )}
-              </div>
-            ))}
+                  ) : (
+                    <>
+                      {isPureLinkItem ? (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 text-emerald-700 font-semibold text-xs uppercase tracking-wide">
+                            <LinkIcon className="w-3.5 h-3.5" /> Link Item
+                          </div>
+                          <a href={linkUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-slate-800 hover:text-emerald-700 line-clamp-3 flex items-start gap-1 break-all">
+                            {linkTitle}
+                            <ExternalLink className="w-3 h-3 shrink-0 mt-0.5 text-slate-400" />
+                          </a>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {item.imageUrl && (
+                            <div 
+                              onClick={() => setSelectedPhoto(item.imageUrl || null)}
+                              className="relative group cursor-pointer w-full h-48 rounded-xl overflow-hidden border border-slate-100"
+                            >
+                              <img 
+                                src={item.imageUrl} 
+                                alt="Option Choice" 
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                              />
+                              <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                <Maximize2 className="w-6 h-6" />
+                              </div>
+                            </div>
+                          )}
+                          <p className="text-sm text-slate-700 whitespace-pre-wrap break-words">
+                            {item.caption.split(/(https?:\/\/[^\s]+)/g).map((part, index) =>
+                              /^https?:\/\/[^\s]+$/.test(part) ? (
+                                <a
+                                  key={index}
+                                  href={part}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-emerald-600 underline hover:text-emerald-700 break-all"
+                                >
+                                  {part}
+                                </a>
+                              ) : (
+                                part
+                              )
+                            )}
+                          </p>
+                        </div>
+                      )}
+
+                      <div className={`flex justify-end gap-1.5 mt-4 pt-3 border-t ${isPureLinkItem ? "border-slate-200/50 opacity-50 group-hover/card:opacity-100 transition-all" : "border-slate-100"}`}>
+                        <button
+                          onClick={() => startEditing(item)}
+                          className={isPureLinkItem ? "bg-white hover:bg-slate-50 text-slate-700 p-1.5 rounded-full shadow-sm transition-colors border" : "p-1.5 border border-slate-200 text-slate-500 rounded-lg hover:bg-slate-50 hover:text-slate-700"}
+                          title="Edit Option"
+                        >
+                          <Pencil className={isPureLinkItem ? "w-3.5 h-3.5" : "w-4 h-4"} />
+                        </button>
+                        <button
+                          onClick={() => setDeleteTarget({ type: 'item', id: item.id })}
+                          className={isPureLinkItem ? "bg-red-50 hover:bg-red-500 text-red-500 hover:text-white p-1.5 rounded-full shadow-sm transition-colors border border-red-100" : "p-1.5 border border-red-100 text-red-400 rounded-lg hover:bg-red-50 hover:text-red-600"}
+                          title="Delete Option"
+                        >
+                          <Trash2 className={isPureLinkItem ? "w-3.5 h-3.5" : "w-4 h-4"} />
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
