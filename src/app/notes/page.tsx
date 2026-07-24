@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { 
   Plus, 
@@ -11,11 +11,141 @@ import {
   BookIcon, 
   PlusCircle, 
   MinusCircle, 
-  Grid 
+  Grid,
+  Bold,
+  Italic,
+  Strikethrough
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
 import { useNotes } from "@/hooks/useNotes";
+
+// --- FLOATING TEXT FORMATTING TOOLBAR ---
+function FloatingToolbar() {
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+
+  useEffect(() => {
+    const handleSelection = () => {
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed) {
+        setPosition(null);
+        return;
+      }
+
+      const range = selection.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
+      
+      // Ensure selection is inside an editable cell to avoid showing it everywhere
+      let node = selection.anchorNode as Node | null;
+      let isEditable = false;
+      while (node && node !== document.body) {
+        if (node.nodeType === 1 && (node as HTMLElement).getAttribute('contenteditable') === 'true') {
+          isEditable = true;
+          break;
+        }
+        node = node.parentNode;
+      }
+
+      if (isEditable && rect.width > 0) {
+        setPosition({
+          top: rect.top - 44, // Position above the selection
+          left: rect.left + rect.width / 2,
+        });
+      } else {
+        setPosition(null);
+      }
+    };
+
+    document.addEventListener('selectionchange', handleSelection);
+    document.addEventListener('mouseup', handleSelection);
+    document.addEventListener('keyup', handleSelection);
+
+    return () => {
+      document.removeEventListener('selectionchange', handleSelection);
+      document.removeEventListener('mouseup', handleSelection);
+      document.removeEventListener('keyup', handleSelection);
+    };
+  }, []);
+
+  if (!position) return null;
+
+  const applyFormat = (command: string) => {
+    document.execCommand(command, false, undefined);
+  };
+
+  return (
+    <div 
+      className="fixed z-[9999] flex items-center bg-slate-900 text-white rounded-md shadow-lg p-1 gap-1 -translate-x-1/2 transition-all animate-in fade-in zoom-in-95"
+      style={{ top: position.top, left: position.left }}
+      onMouseDown={(e) => e.preventDefault()} // Important: prevents losing text selection when clicking a button
+    >
+      <button onClick={() => applyFormat('bold')} className="p-1.5 hover:bg-slate-700 rounded text-white transition-colors" title="Bold">
+        <Bold className="w-4 h-4" />
+      </button>
+      <button onClick={() => applyFormat('italic')} className="p-1.5 hover:bg-slate-700 rounded text-white transition-colors" title="Italic">
+        <Italic className="w-4 h-4" />
+      </button>
+      <button onClick={() => applyFormat('strikeThrough')} className="p-1.5 hover:bg-slate-700 rounded text-white transition-colors" title="Strikethrough">
+        <Strikethrough className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
+
+// --- EDITABLE CELL COMPONENT FOR RICH TEXT ---
+function EditableCell({ 
+  value, 
+  onChange, 
+  onBlur,
+  placeholder, 
+  className = "",
+  autoFocus = false
+}: { 
+  value: string, 
+  onChange: (val: string) => void, 
+  onBlur?: () => void,
+  placeholder: string,
+  className?: string,
+  autoFocus?: boolean
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Only update innerHTML if it changed externally (and isn't the active element to prevent cursor jumping)
+    if (ref.current && value !== ref.current.innerHTML && document.activeElement !== ref.current) {
+      ref.current.innerHTML = value || "";
+    }
+  }, [value]);
+
+  useEffect(() => {
+    if (autoFocus && ref.current) {
+      ref.current.focus();
+    }
+  }, [autoFocus]);
+
+  const handleInput = () => {
+    if (ref.current) {
+      onChange(ref.current.innerHTML);
+    }
+  };
+
+  const handleBlur = () => {
+    handleInput();
+    if (onBlur) onBlur();
+  };
+
+  return (
+    <div
+      ref={ref}
+      contentEditable
+      onInput={handleInput}
+      onBlur={handleBlur}
+      className={`outline-none cursor-text empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400/60 [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_strike]:line-through [&_s]:line-through ${className}`}
+      data-placeholder={placeholder}
+      suppressContentEditableWarning
+    />
+  );
+}
 
 // --- EXCEL TABLE EDITOR COMPONENT ---
 function ExcelTableEditor({ 
@@ -95,12 +225,11 @@ function ExcelTableEditor({
               <th className="w-8 border border-emerald-900 px-2 py-1.5 text-center bg-emerald-900 font-mono text-[10px]">#</th>
               {grid[0].map((headerVal, cIdx) => (
                 <th key={cIdx} className={`border border-emerald-700 py-1.5 pl-2 ${colCount > 1 ? 'pr-7' : 'pr-2'} min-w-[120px] relative group`}>
-                  <input
-                    type="text"
+                  <EditableCell
                     value={headerVal || ""}
-                    onChange={(e) => handleCellChange(0, cIdx, e.target.value)}
-                    className="w-full bg-transparent font-semibold text-white outline-none focus:bg-emerald-700/50 rounded px-1"
+                    onChange={(newVal) => handleCellChange(0, cIdx, newVal)}
                     placeholder={`Column ${cIdx + 1}`}
+                    className="w-full bg-transparent font-semibold text-white focus:bg-emerald-700/50 rounded px-1 min-h-[20px] break-words"
                   />
                   {colCount > 1 && (
                     <button
@@ -127,13 +256,12 @@ function ExcelTableEditor({
                     {actualRowIndex}
                   </td>
                   {row.map((cellVal: any, cIdx: number) => (
-                    <td key={cIdx} className="border border-slate-200 px-1 py-1">
-                      <input
-                        type="text"
+                    <td key={cIdx} className="border border-slate-200 px-1 py-1 align-top">
+                      <EditableCell
                         value={cellVal || ""}
-                        onChange={(e) => handleCellChange(actualRowIndex, cIdx, e.target.value)}
-                        className="w-full px-1 py-0.5 bg-transparent outline-none focus:bg-emerald-100/60 rounded text-slate-800"
+                        onChange={(newVal) => handleCellChange(actualRowIndex, cIdx, newVal)}
                         placeholder="Empty"
+                        className="w-full px-1 py-0.5 bg-transparent focus:bg-emerald-100/60 rounded text-slate-800 min-h-[24px] break-words"
                       />
                     </td>
                   ))}
@@ -186,26 +314,20 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick }: any) {
     setActiveTooltip(null);
   };
 
-  const renderTextWithLinks = (text: string) => {
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    const parts = text.split(urlRegex);
-    return parts.map((part, index) => {
-      if (urlRegex.test(part)) {
-        return (
-          <a
-            key={index}
-            href={part}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-600 underline break-all relative z-10 hover:text-blue-800"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {part}
-          </a>
-        );
-      }
-      return <span key={index}>{part}</span>;
-    });
+  // Safely auto-links URLs inside HTML strings without breaking existing HTML tags
+  const linkifyHtml = (htmlText: string) => {
+    if (!htmlText) return "";
+    const urlRegex = /(?<!href="|src=")(https?:\/\/[^\s<]+)/g;
+    return htmlText.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline hover:text-blue-800">$1</a>');
+  };
+
+  // Prevent entering edit mode if the user is just clicking an embedded link
+  const handleBodyClick = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).tagName.toLowerCase() === 'a') {
+      e.stopPropagation();
+      return; 
+    }
+    setIsEditing(true);
   };
 
   // Image Upload Handler
@@ -333,13 +455,12 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick }: any) {
         <div className="text-[10px] text-slate-400 font-bold tracking-widest uppercase mb-1.5 ml-1">
           {formattedDate}
         </div>
-        <input
-          type="text"
-          className="text-xl font-sans font-semibold text-emerald-900 tracking-wide uppercase w-full bg-transparent border-b-2 border-transparent hover:border-slate-200 focus:border-emerald-600 outline-none transition-all"
+        <EditableCell
           value={title}
-          placeholder="NOTE TITLE..."
-          onChange={(e) => setTitle(e.target.value.toUpperCase())}
+          onChange={(val) => setTitle(val)}
           onBlur={() => onUpdate(gift.id, { title })}
+          placeholder="NOTE TITLE..."
+          className="text-xl font-sans font-semibold text-emerald-900 tracking-wide uppercase w-full bg-transparent border-b-2 border-transparent hover:border-slate-200 focus:border-emerald-600 outline-none transition-all block"
         />
       </div>
 
@@ -347,24 +468,23 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick }: any) {
       <div className="w-full px-6 md:px-10 pb-6 space-y-4">
         {/* Content Textarea / Display */}
         {isEditing ? (
-          <textarea
+          <EditableCell
             value={content}
-            onChange={(e) => setContent(e.target.value)}
+            onChange={(val) => setContent(val)}
             onBlur={() => {
               onUpdate(gift.id, { title, content });
               setIsEditing(false);
             }}
-            rows={2}
-            className="w-full resize-none border rounded-lg p-3 text-slate-700 outline-none focus:ring-2 focus:ring-emerald-600 transition-shadow"
             autoFocus
+            placeholder="Add description or links..."
+            className="w-full border border-emerald-300 p-3 rounded-lg outline-none focus:ring-2 focus:ring-emerald-600 transition-shadow min-h-[60px] bg-emerald-50/30 text-sm text-slate-700"
           />
         ) : content ? (
           <div
-            onClick={() => setIsEditing(true)}
-            className="border border-transparent hover:border-slate-200 rounded-lg p-2 whitespace-pre-wrap break-words cursor-text min-h-[50px] transition-colors text-slate-600 text-sm"
-          >
-            {renderTextWithLinks(content)}
-          </div>
+            onClick={handleBodyClick}
+            className="border border-transparent hover:border-slate-200 rounded-lg p-2 whitespace-pre-wrap break-words cursor-text min-h-[50px] transition-colors text-slate-600 text-sm [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_strike]:line-through [&_s]:line-through [&_a]:text-blue-600 [&_a]:underline hover:[&_a]:text-blue-800"
+            dangerouslySetInnerHTML={{ __html: linkifyHtml(content) }}
+          />
         ) : !showTable ? (
           <div
             onClick={() => setIsEditing(true)}
@@ -410,20 +530,19 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick }: any) {
                     className="h-28 rounded-lg object-cover border border-slate-200 cursor-pointer hover:opacity-90 transition"
                     onClick={() => onImageClick(imgUrl)}
                   />
-                  <input
-                    type="text"
+                  <EditableCell
                     value={imgCaption}
-                    placeholder="Caption..."
-                    className="mt-1 w-full text-xs text-center border-b border-slate-200 focus:border-emerald-600 outline-none bg-transparent"
-                    onChange={(e) => {
+                    onChange={(newVal) => {
                       const updatedImages = [...imagesList];
                       if (typeof updatedImages[idx] === "string") {
-                        updatedImages[idx] = { url: updatedImages[idx], caption: e.target.value };
+                        updatedImages[idx] = { url: updatedImages[idx], caption: newVal };
                       } else {
-                        updatedImages[idx] = { ...updatedImages[idx], caption: e.target.value };
+                        updatedImages[idx] = { ...updatedImages[idx], caption: newVal };
                       }
                       onUpdate(gift.id, { images: updatedImages, image_urls: updatedImages });
                     }}
+                    placeholder="Caption..."
+                    className="mt-1 w-full text-xs text-center border-b border-slate-200 focus:border-emerald-600 outline-none bg-transparent"
                   />
                   <button
                     type="button"
@@ -559,7 +678,14 @@ export default function NotePage() {
   // --- HANDLER FOR CREATING A NOTE WITH A PRE-FILLED SPREADSHEET ---
   const handleAddSpreadsheetNote = async () => {
     const defaultTable = [
-      ["Person", "Event", "Date"],
+      ["Outfit", "Event", "Date"],
+      ["", "Mehendi", "Morning (30)"],
+      ["", "Sangeet", "Morning (31)"],
+      ["", "Haldi", ""],
+      ["", "Reception", ""],
+      ["", "Phere", ""],
+      ["", "Vidai", ""],
+      ["", "Their Reception", ""]
     ];
 
     const newNote = {
@@ -624,6 +750,9 @@ export default function NotePage() {
 
   return (
     <div className="p-6 md:p-12 max-w-4xl mx-auto min-h-screen space-y-8">
+      {/* Global Floating Toolbar for Rich Text Formatting */}
+      <FloatingToolbar />
+      
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>

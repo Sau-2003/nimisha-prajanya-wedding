@@ -1,35 +1,144 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Calendar, Check, Loader2, CalendarClock, Image as ImageIcon, User, Users, Pencil, X, Trash2 } from 'lucide-react';
+import { Calendar, Check, Loader2, CalendarClock, Image as ImageIcon, User, Users, Pencil, X, Trash2, Bold, Italic, Strikethrough, ChevronDown } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { useTeamMembers } from "@/hooks/useTeamMembers"; // Import team members hook
 
-const renderTextWithLinks = (text: string) => {
-  if (!text) return null;
+// --- FLOATING TEXT FORMATTING TOOLBAR ---
+function FloatingToolbar() {
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
 
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
-  const parts = text.split(urlRegex);
+  useEffect(() => {
+    const handleSelection = () => {
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed) {
+        setPosition(null);
+        return;
+      }
 
-  return parts.map((part, index) => {
-    if (part.match(urlRegex)) {
-      return (
-        <a
-          key={index}
-          href={part}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-emerald-600 hover:text-emerald-700 underline break-all"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {part}
-        </a>
-      );
+      const range = selection.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
+      
+      // Ensure selection is inside an editable cell to avoid showing it everywhere
+      let node = selection.anchorNode as Node | null;
+      let isEditable = false;
+      while (node && node !== document.body) {
+        if (node.nodeType === 1 && (node as HTMLElement).getAttribute('contenteditable') === 'true') {
+          isEditable = true;
+          break;
+        }
+        node = node.parentNode;
+      }
+
+      if (isEditable && rect.width > 0) {
+        setPosition({
+          top: rect.top - 44, // Position above the selection
+          left: rect.left + rect.width / 2,
+        });
+      } else {
+        setPosition(null);
+      }
+    };
+
+    document.addEventListener('selectionchange', handleSelection);
+    document.addEventListener('mouseup', handleSelection);
+    document.addEventListener('keyup', handleSelection);
+
+    return () => {
+      document.removeEventListener('selectionchange', handleSelection);
+      document.removeEventListener('mouseup', handleSelection);
+      document.removeEventListener('keyup', handleSelection);
+    };
+  }, []);
+
+  if (!position) return null;
+
+  const applyFormat = (command: string) => {
+    document.execCommand(command, false, undefined);
+  };
+
+  return (
+    <div 
+      className="fixed z-[9999] flex items-center bg-slate-900 text-white rounded-md shadow-lg p-1 gap-1 -translate-x-1/2 transition-all animate-in fade-in zoom-in-95"
+      style={{ top: position.top, left: position.left }}
+      onMouseDown={(e) => e.preventDefault()} // Important: prevents losing text selection when clicking a button
+    >
+      <button onClick={() => applyFormat('bold')} className="p-1.5 hover:bg-slate-700 rounded text-white transition-colors" title="Bold">
+        <Bold className="w-4 h-4" />
+      </button>
+      <button onClick={() => applyFormat('italic')} className="p-1.5 hover:bg-slate-700 rounded text-white transition-colors" title="Italic">
+        <Italic className="w-4 h-4" />
+      </button>
+      <button onClick={() => applyFormat('strikeThrough')} className="p-1.5 hover:bg-slate-700 rounded text-white transition-colors" title="Strikethrough">
+        <Strikethrough className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
+
+// --- EDITABLE CELL COMPONENT FOR RICH TEXT ---
+function EditableCell({ 
+  value, 
+  onChange, 
+  onBlur,
+  placeholder, 
+  className = "",
+  autoFocus = false
+}: { 
+  value: string, 
+  onChange: (val: string) => void, 
+  onBlur?: () => void,
+  placeholder: string,
+  className?: string,
+  autoFocus?: boolean
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Only update innerHTML if it changed externally (and isn't the active element to prevent cursor jumping)
+    if (ref.current && value !== ref.current.innerHTML && document.activeElement !== ref.current) {
+      ref.current.innerHTML = value || "";
     }
+  }, [value]);
 
-    return <span key={index}>{part}</span>;
-  });
+  useEffect(() => {
+    if (autoFocus && ref.current) {
+      ref.current.focus();
+    }
+  }, [autoFocus]);
+
+  const handleInput = () => {
+    if (ref.current) {
+      onChange(ref.current.innerHTML);
+    }
+  };
+
+  const handleBlur = () => {
+    handleInput();
+    if (onBlur) onBlur();
+  };
+
+  return (
+    <div
+      ref={ref}
+      contentEditable
+      onInput={handleInput}
+      onBlur={handleBlur}
+      className={`outline-none cursor-text empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400/60 [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_strike]:line-through [&_s]:line-through ${className}`}
+      data-placeholder={placeholder}
+      suppressContentEditableWarning
+    />
+  );
+}
+
+// Safely auto-links URLs inside HTML strings without breaking HTML formatting tags
+const linkifyHtml = (htmlText: string) => {
+  if (!htmlText) return "";
+  const urlRegex = /(?<!href="|src=")(https?:\/\/[^\s<]+)/g;
+  return htmlText.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-emerald-600 hover:text-emerald-700 underline break-all">$1</a>');
 };
 
 export default function DateSchedulePage() {
@@ -37,6 +146,8 @@ export default function DateSchedulePage() {
   const [loading, setLoading] = useState(true);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   
+  const { teamMembers, addTeamMember } = useTeamMembers(); // Pull in team members
+
   // Tab State: "date" (default) or "assigned"
   const [activeTab, setActiveTab] = useState<'date' | 'assigned'>('date');
 
@@ -46,6 +157,9 @@ export default function DateSchedulePage() {
   const [editingTaskDate, setEditingTaskDate] = useState("");
   const [editingAssignedTo, setEditingAssignedTo] = useState("");
   const [editingTaskImage, setEditingTaskImage] = useState<string | null>(null);
+  
+  // Dropdown state
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
   // Delete Confirmation State
   const [itemToDelete, setItemToDelete] = useState<any | null>(null);
@@ -129,6 +243,7 @@ export default function DateSchedulePage() {
     setEditingTaskDate(item.due_date || "");
     setEditingAssignedTo(item.assigned_to || "");
     setEditingTaskImage(item.image_url || null);
+    setOpenDropdownId(null);
   };
 
   const cancelEditing = () => {
@@ -137,11 +252,20 @@ export default function DateSchedulePage() {
     setEditingTaskDate("");
     setEditingAssignedTo("");
     setEditingTaskImage(null);
+    setOpenDropdownId(null);
   };
 
   // Save Edited Item
   const saveEditedItem = async (item: any) => {
-    if (!editingTaskText.trim()) return;
+    const plainTextContent = editingTaskText.replace(/<[^>]*>?/gm, '').trim();
+    if (!plainTextContent) {
+      cancelEditing();
+      return;
+    }
+
+    if (editingAssignedTo.trim()) {
+      await addTeamMember(editingAssignedTo.trim());
+    }
 
     if (item.isGlobal) {
       await supabase.from('tasks').update({
@@ -220,6 +344,9 @@ export default function DateSchedulePage() {
   
   return (
     <div className="p-6 md:p-12 max-w-4xl mx-auto">
+      {/* Global floating formatting toolbar */}
+      <FloatingToolbar />
+
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="font-serif text-3xl font-bold text-emerald-900 flex items-center gap-3">
@@ -299,14 +426,15 @@ export default function DateSchedulePage() {
                         {/* EDIT MODE */}
                         {editingItemId === item.id ? (
                           <div className="flex-1 flex flex-col gap-3 w-full">
-                            <textarea 
+                            <EditableCell 
                               value={editingTaskText}
-                              onChange={(e) => setEditingTaskText(e.target.value)}
-                              className="border border-emerald-500 rounded-lg outline-none p-2.5 text-slate-700 text-sm w-full resize-none"
-                              rows={2}
+                              onChange={(val) => setEditingTaskText(val)}
+                              placeholder="Task description..."
+                              className="border border-emerald-500 rounded-lg outline-none p-2.5 text-slate-700 text-sm w-full min-h-[60px] bg-white"
+                              autoFocus
                             />
 
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-center">
                               <input 
                                 type={editingTaskDate ? "date" : "text"}
                                 onFocus={(e) => (e.target.type = "date")}
@@ -317,13 +445,30 @@ export default function DateSchedulePage() {
                                 className="border rounded px-2 h-9 outline-none text-sm text-slate-600 bg-white w-full"
                               />
 
-                              <input 
-                                type="text"
-                                placeholder="Assigned To"
-                                value={editingAssignedTo}
-                                onChange={(e) => setEditingAssignedTo(e.target.value)}
-                                className="border rounded px-2 h-9 outline-none text-sm text-slate-600 bg-white w-full"
-                              />
+                              <div className="relative w-full">
+                                <div onClick={() => setOpenDropdownId(openDropdownId === item.id ? null : item.id)} className="text-sm border rounded px-2 h-9 text-slate-600 bg-white flex items-center justify-between cursor-pointer select-none">
+                                  <span className="truncate">{editingAssignedTo || "Assign to..."}</span>
+                                  <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1" />
+                                </div>
+                                {openDropdownId === item.id && (
+                                  <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg z-20 max-h-48 overflow-y-auto">
+                                    <div className="p-1 border-b bg-slate-50 sticky top-0">
+                                      <input
+                                        type="text"
+                                        autoFocus
+                                        value={editingAssignedTo}
+                                        onChange={(e) => setEditingAssignedTo(e.target.value)}
+                                        placeholder="Type custom name..."
+                                        className="w-full text-xs px-2 py-1 border rounded bg-white outline-none focus:border-emerald-500 text-slate-700"
+                                      />
+                                    </div>
+                                    <div onClick={() => { setEditingAssignedTo(""); setOpenDropdownId(null); }} className="px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-100 cursor-pointer italic">Unassigned</div>
+                                    {teamMembers.map((member) => (
+                                      <div key={member} onClick={() => { setEditingAssignedTo(member); setOpenDropdownId(null); }} className="px-3 py-1.5 text-xs text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 cursor-pointer truncate">{member}</div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
 
                               {editingTaskImage ? (
                                 <div className="h-9 rounded border border-emerald-200 relative overflow-hidden group flex items-center justify-center shrink-0">
@@ -362,9 +507,15 @@ export default function DateSchedulePage() {
                               )}
                             </div>
 
-                            <p className={`font-semibold whitespace-pre-wrap break-words ${overdue ? 'text-red-900' : 'text-slate-800'}`}>
-                              {renderTextWithLinks(item.content)}
-                            </p>
+                            <div 
+                              className={`font-semibold whitespace-pre-wrap break-words [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_strike]:line-through [&_s]:line-through ${overdue ? 'text-red-900' : 'text-slate-800'}`}
+                              dangerouslySetInnerHTML={{ __html: linkifyHtml(item.content) }}
+                              onClick={(e) => {
+                                if ((e.target as HTMLElement).tagName.toLowerCase() === 'a') {
+                                  e.stopPropagation();
+                                }
+                              }}
+                            />
 
                             <p className="text-[10px] text-slate-400 font-bold tracking-widest uppercase mt-1.5 opacity-70">
                               Entered on: {item.created_at ? formatDate(item.created_at) : "Just now"}
@@ -486,14 +637,15 @@ export default function DateSchedulePage() {
                                 {/* EDIT MODE */}
                                 {editingItemId === item.id ? (
                                   <div className="flex-1 flex flex-col gap-3 w-full">
-                                    <textarea 
+                                    <EditableCell 
                                       value={editingTaskText}
-                                      onChange={(e) => setEditingTaskText(e.target.value)}
-                                      className="border border-emerald-500 rounded-lg outline-none p-2.5 text-slate-700 text-sm w-full resize-none"
-                                      rows={2}
+                                      onChange={(val) => setEditingTaskText(val)}
+                                      placeholder="Task description..."
+                                      className="border border-emerald-500 rounded-lg outline-none p-2.5 text-slate-700 text-sm w-full min-h-[60px] bg-white"
+                                      autoFocus
                                     />
 
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-center">
                                       <input 
                                         type={editingTaskDate ? "date" : "text"}
                                         onFocus={(e) => (e.target.type = "date")}
@@ -504,13 +656,30 @@ export default function DateSchedulePage() {
                                         className="border rounded px-2 h-9 outline-none text-sm text-slate-600 bg-white w-full"
                                       />
 
-                                      <input 
-                                        type="text"
-                                        placeholder="Assigned To"
-                                        value={editingAssignedTo}
-                                        onChange={(e) => setEditingAssignedTo(e.target.value)}
-                                        className="border rounded px-2 h-9 outline-none text-sm text-slate-600 bg-white w-full"
-                                      />
+                                      <div className="relative w-full">
+                                        <div onClick={() => setOpenDropdownId(openDropdownId === item.id ? null : item.id)} className="text-sm border rounded px-2 h-9 text-slate-600 bg-white flex items-center justify-between cursor-pointer select-none">
+                                          <span className="truncate">{editingAssignedTo || "Assign to..."}</span>
+                                          <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1" />
+                                        </div>
+                                        {openDropdownId === item.id && (
+                                          <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg z-20 max-h-48 overflow-y-auto">
+                                            <div className="p-1 border-b bg-slate-50 sticky top-0">
+                                              <input
+                                                type="text"
+                                                autoFocus
+                                                value={editingAssignedTo}
+                                                onChange={(e) => setEditingAssignedTo(e.target.value)}
+                                                placeholder="Type custom name..."
+                                                className="w-full text-xs px-2 py-1 border rounded bg-white outline-none focus:border-emerald-500 text-slate-700"
+                                              />
+                                            </div>
+                                            <div onClick={() => { setEditingAssignedTo(""); setOpenDropdownId(null); }} className="px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-100 cursor-pointer italic">Unassigned</div>
+                                            {teamMembers.map((member) => (
+                                              <div key={member} onClick={() => { setEditingAssignedTo(member); setOpenDropdownId(null); }} className="px-3 py-1.5 text-xs text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 cursor-pointer truncate">{member}</div>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
 
                                       {editingTaskImage ? (
                                         <div className="h-9 rounded border border-emerald-200 relative overflow-hidden group flex items-center justify-center shrink-0">
@@ -544,9 +713,15 @@ export default function DateSchedulePage() {
                                       </p>
                                     </div>
 
-                                    <p className={`font-semibold whitespace-pre-wrap break-words ${overdue ? 'text-red-900' : 'text-slate-800'}`}>
-                                      {renderTextWithLinks(item.content)}
-                                    </p>
+                                    <div 
+                                      className={`font-semibold whitespace-pre-wrap break-words [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_strike]:line-through [&_s]:line-through ${overdue ? 'text-red-900' : 'text-slate-800'}`}
+                                      dangerouslySetInnerHTML={{ __html: linkifyHtml(item.content) }}
+                                      onClick={(e) => {
+                                        if ((e.target as HTMLElement).tagName.toLowerCase() === 'a') {
+                                          e.stopPropagation();
+                                        }
+                                      }}
+                                    />
 
                                     <p className="text-[10px] text-slate-400 font-bold tracking-widest uppercase mt-1.5 opacity-70">
                                       Entered on: {item.created_at ? formatDate(item.created_at) : "Just now"}
