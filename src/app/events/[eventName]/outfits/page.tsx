@@ -1,0 +1,666 @@
+"use client";
+
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Trash2, Plus, ArrowLeft, Loader2, Maximize2, X, Pencil, ImageIcon, Link as LinkIcon, ExternalLink, Check } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog";
+
+type OutfitItem = {
+  id: string;
+  category: string;
+  content: string; // Image URL or Link URL
+  text?: string;   // Image Caption or Link Title
+};
+
+export default function OutfitPage() {
+  const { eventName } = useParams();
+  const router = useRouter();
+  
+  const rawName = eventName ? decodeURIComponent(String(eventName)) : 'event';
+
+  const [outfitItems, setOutfitItems] = useState<OutfitItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [newCaption, setNewCaption] = useState("");
+  
+  // States for Link input
+  const [newLinkUrl, setNewLinkUrl] = useState("");
+  const [newLinkTitle, setNewLinkTitle] = useState("");
+  const [addingLink, setAddingLink] = useState(false);
+  
+  const [customTabs, setCustomTabs] = useState<string[]>([]);
+  
+  // States for Tab Editing
+  const [editingTabName, setEditingTabName] = useState<string | null>(null);
+  const [editTabInput, setEditTabInput] = useState("");
+  
+  // States for unified Deletion Confirmation
+  const [deleteTarget, setDeleteTarget] = useState<{ type: 'item', id: string } | { type: 'tab', name: string } | null>(null);
+  
+  // Derived tabs strictly from image categories (ignoring links so links don't create tabs)
+  const imageItems = outfitItems.filter(item => item.category.startsWith('outfit_') && !item.category.startsWith('outfit_link_'));
+  const dbTabs = Array.from(new Set(imageItems.map(item => item.category.replace('outfit_', ''))));
+  
+  // REMOVED the default "Ideas" tab. Now it only relies on DB or User added tabs.
+  const allTabs = Array.from(new Set([...dbTabs, ...customTabs]));
+
+  const [activeTab, setActiveTab] = useState(allTabs[0] || "");
+  
+  // State for Full Screen Lightbox & Editing
+  const [selectedImage, setSelectedImage] = useState<OutfitItem | null>(null);
+  const [editingItem, setEditingItem] = useState<OutfitItem | null>(null);
+  const [editCaption, setEditCaption] = useState("");
+  const [editFile, setEditFile] = useState<File | null>(null);
+  const [editPreviewUrl, setEditPreviewUrl] = useState<string | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const editFileInputRef = useRef<HTMLInputElement>(null);
+
+  const fetchOutfits = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('event_items')
+      .select('*')
+      .eq('event_name', rawName)
+      .or(`category.like.outfit_%,category.like.outfit_link_%`);
+
+    if (!error && data) {
+      setOutfitItems(data as OutfitItem[]);
+    }
+    setLoading(false);
+  }, [rawName]);
+
+  useEffect(() => {
+    fetchOutfits();
+  }, [fetchOutfits]);
+
+  // Ensure activeTab stays valid if tabs change, or resets to empty if all deleted
+  useEffect(() => {
+    if (allTabs.length > 0 && !allTabs.includes(activeTab)) {
+      setActiveTab(allTabs[0]);
+    } else if (allTabs.length === 0) {
+      setActiveTab("");
+    }
+  }, [allTabs, activeTab]);
+
+  const activeItems = activeTab 
+    ? outfitItems.filter(item => item.category === `outfit_${activeTab}` || item.category === `outfit_link_${activeTab}`)
+    : [];
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeTab) return;
+
+    setUploading(true);
+    
+    try {
+      const { data, error: uploadError } = await supabase.storage
+        .from('task-images')
+        .upload(`outfits/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '')}`, file);
+      
+      if (uploadError) {
+        alert(`Storage Error: ${uploadError.message}`);
+        setUploading(false);
+        return;
+      }
+
+      if (data?.path) {
+        const { data: urlData } = supabase.storage.from('task-images').getPublicUrl(data.path);
+        
+        const { error: dbError } = await supabase.from('event_items').insert({
+          event_name: rawName,
+          category: `outfit_${activeTab}`,
+          text: newCaption.trim() || 'Outfit Image', 
+          content: urlData.publicUrl
+        });
+
+        if (dbError) {
+          alert(`Database Error: ${dbError.message}`);
+        } else {
+          setNewCaption("");
+          fetchOutfits(); 
+        }
+      }
+    } catch (err) {
+      alert("An unexpected error occurred during upload.");
+      console.error(err);
+    }
+    
+    setUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleAddLink = async () => {
+    if (!newLinkUrl.trim() || !activeTab) return;
+
+    setAddingLink(true);
+    try {
+      let formattedUrl = newLinkUrl.trim();
+      if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
+        formattedUrl = `https://${formattedUrl}`;
+      }
+
+      const { error: dbError } = await supabase.from('event_items').insert({
+        event_name: rawName,
+        category: `outfit_link_${activeTab}`,
+        text: newLinkTitle.trim() || formattedUrl,
+        content: formattedUrl
+      });
+
+      if (dbError) {
+        alert(`Database Error: ${dbError.message}`);
+      } else {
+        setNewLinkUrl("");
+        setNewLinkTitle("");
+        fetchOutfits();
+      }
+    } catch (err) {
+      console.error(err);
+      alert("An unexpected error occurred while saving the link.");
+    }
+    setAddingLink(false);
+  };
+
+  const handleDeleteItemClick = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation(); 
+    setDeleteTarget({ type: 'item', id });
+  };
+
+  const handleDeleteTabClick = (e: React.MouseEvent, tab: string) => {
+    e.stopPropagation(); 
+    setDeleteTarget({ type: 'tab', name: tab });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+
+    if (deleteTarget.type === 'item') {
+      await supabase.from('event_items').delete().eq('id', deleteTarget.id);
+    } else if (deleteTarget.type === 'tab') {
+      const tabToDelete = deleteTarget.name;
+      await supabase
+        .from('event_items')
+        .delete()
+        .eq('event_name', rawName)
+        .or(`category.eq.outfit_${tabToDelete},category.eq.outfit_link_${tabToDelete}`);
+
+      const updatedCustomTabs = customTabs.filter(tab => tab !== tabToDelete);
+      setCustomTabs(updatedCustomTabs);
+
+      if (activeTab === tabToDelete) {
+        const remainingTabs = allTabs.filter(tab => tab !== tabToDelete);
+        setActiveTab(remainingTabs.length > 0 ? remainingTabs[0] : "");
+      }
+    }
+
+    fetchOutfits(); 
+    setDeleteTarget(null);
+  };
+
+  const openEditModal = (e: React.MouseEvent, item: OutfitItem) => {
+    e.stopPropagation();
+    if (item.category.startsWith('outfit_link_')) {
+      const updatedTitle = prompt("Edit Link Title:", item.text);
+      const updatedUrl = prompt("Edit URL:", item.content);
+      if (updatedUrl !== null) {
+        supabase.from('event_items').update({
+          text: updatedTitle?.trim() || updatedUrl,
+          content: updatedUrl.trim()
+        }).eq('id', item.id).then(() => fetchOutfits());
+      }
+      return;
+    }
+    setEditingItem(item);
+    setEditCaption(item.text === 'Outfit Image' ? '' : item.text || '');
+    setEditFile(null);
+    setEditPreviewUrl(null);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingItem) return;
+    setSavingEdit(true);
+
+    try {
+      let finalImageUrl = editingItem.content;
+
+      if (editFile) {
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('task-images')
+          .upload(`outfits/${Date.now()}_${editFile.name.replace(/[^a-zA-Z0-9.]/g, '')}`, editFile);
+
+        if (uploadError) {
+          alert(`Image Upload Failed: ${uploadError.message}`);
+          setSavingEdit(false);
+          return;
+        }
+
+        if (uploadData?.path) {
+          const { data: urlData } = supabase.storage.from('task-images').getPublicUrl(uploadData.path);
+          finalImageUrl = urlData.publicUrl;
+        }
+      }
+
+      const { error: updateError } = await supabase
+        .from('event_items')
+        .update({
+          text: editCaption.trim() || 'Outfit Image',
+          content: finalImageUrl
+        })
+        .eq('id', editingItem.id);
+
+      if (updateError) {
+        alert(`Update Error: ${updateError.message}`);
+      } else {
+        setEditingItem(null);
+        fetchOutfits();
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to save changes.");
+    }
+
+    setSavingEdit(false);
+  };
+
+  // --- TAB MANAGEMENT FUNCTIONS ---
+  const addNewTab = () => {
+    const name = prompt("Enter new outfit category (e.g., Sangeet, Reception):");
+    if (name && name.trim()) {
+      const formattedName = name.trim();
+      setCustomTabs(prev => [...prev, formattedName]);
+      setActiveTab(formattedName);
+    }
+  };
+
+  const startEditingTab = (e: React.MouseEvent, tab: string) => {
+    e.stopPropagation();
+    setEditingTabName(tab);
+    setEditTabInput(tab);
+  };
+
+  const saveRenamedTab = async (oldName: string) => {
+    const newName = editTabInput.trim();
+    if (!newName || newName === oldName) {
+      setEditingTabName(null);
+      return;
+    }
+
+    // Update Image categories
+    await supabase.from('event_items').update({ category: `outfit_${newName}` })
+      .eq('event_name', rawName).eq('category', `outfit_${oldName}`);
+      
+    // Update Link categories
+    await supabase.from('event_items').update({ category: `outfit_link_${newName}` })
+      .eq('event_name', rawName).eq('category', `outfit_link_${oldName}`);
+
+    // Update local state
+    setCustomTabs(prev => prev.map(tab => tab === oldName ? newName : tab));
+    if (activeTab === oldName) {
+      setActiveTab(newName);
+    }
+
+    setEditingTabName(null);
+    fetchOutfits();
+  };
+
+  if (loading) return <div className="p-12 text-center text-emerald-600">Loading Outfits & Links...</div>;
+
+  return (
+    <div className="p-6 md:p-12 max-w-5xl mx-auto">
+      <Button variant="ghost" onClick={() => router.back()} className="mb-4 -ml-4 text-slate-500 hover:text-emerald-700">
+        <ArrowLeft className="w-4 h-4 mr-2" /> Back to {rawName.charAt(0).toUpperCase() + rawName.slice(1)} Workspace
+      </Button>
+      
+      <h1 className="text-3xl font-bold mb-6 text-emerald-900 capitalize">{rawName} Outfits</h1>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="mb-6 flex flex-wrap h-auto bg-slate-100 p-1 rounded-lg gap-1">
+          {allTabs.map(tab => {
+            const isEditing = editingTabName === tab;
+
+            return (
+              <div key={tab} className="relative group flex items-center">
+                {isEditing ? (
+                  <div className="flex items-center gap-1 bg-white px-2 py-1 rounded-md shadow-sm border border-slate-200 z-10">
+                    <input
+                      type="text"
+                      value={editTabInput}
+                      onChange={(e) => setEditTabInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && saveRenamedTab(tab)}
+                      className="w-24 text-sm font-medium outline-none bg-transparent text-slate-700"
+                      autoFocus
+                    />
+                    <button onClick={() => saveRenamedTab(tab)} className="p-1 text-emerald-600 hover:text-emerald-700 rounded-md">
+                      <Check className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => setEditingTabName(null)} className="p-1 text-slate-400 hover:text-slate-600 rounded-md">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <TabsTrigger 
+                      value={tab} 
+                      className="rounded-md data-[state=active]:bg-white data-[state=active]:shadow-sm pr-12"
+                    >
+                      {tab}
+                    </TabsTrigger>
+                    
+                    {/* CHANGED: opacity-50 added for mobile default visibility */}
+                    <div className="absolute right-1 flex items-center opacity-50 md:opacity-0 group-hover:opacity-100 transition-opacity gap-0.5">
+                      <button
+                        onClick={(e) => startEditingTab(e, tab)}
+                        className="p-1 rounded-full text-slate-400 hover:text-emerald-600 hover:bg-slate-200/60 transition-colors"
+                        title={`Rename ${tab} category`}
+                      >
+                        <Pencil color='black' className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={(e) => handleDeleteTabClick(e, tab)}
+                        className="p-1 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-200/60 transition-colors"
+                        title={`Delete ${tab} category`}
+                      >
+                        <Trash2 color='red' className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })}
+
+          <Button variant="ghost" size="sm" onClick={addNewTab} className="ml-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50">
+            <Plus className="w-4 h-4 mr-1"/> Add Category
+          </Button>
+        </TabsList>
+
+        <TabsContent value={activeTab} className="mt-0 space-y-4">
+          {activeTab ? (
+            <>
+              {/* Image Upload Row */}
+              <div className="bg-slate-50 border p-4 rounded-xl flex flex-col md:flex-row gap-3 items-stretch md:items-center">
+                <input 
+                  type="text" 
+                  placeholder="Add optional image caption..."
+                  value={newCaption}
+                  onChange={(e) => setNewCaption(e.target.value)}
+                  className="flex-1 border p-2 rounded-lg bg-white outline-none text-sm focus:border-emerald-500"
+                />
+                
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={handleUpload} 
+                  accept="image/*" 
+                  className="hidden" 
+                />
+                
+                <Button 
+                  onClick={() => fileInputRef.current?.click()} 
+                  disabled={uploading}
+                  className="bg-emerald-600 hover:bg-emerald-700 shadow-sm whitespace-nowrap"
+                >
+                  {uploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+                  {uploading ? "Uploading..." : `Add Image to ${activeTab}`}
+                </Button>
+              </div>
+
+              {/* Link Input Row */}
+              <div className="bg-slate-50 border p-4 rounded-xl flex flex-col md:flex-row gap-3 items-stretch md:items-center">
+                <input 
+                  type="text" 
+                  placeholder="Link title/label (optional)..."
+                  value={newLinkTitle}
+                  onChange={(e) => setNewLinkTitle(e.target.value)}
+                  className="w-full md:w-1/3 border p-2 rounded-lg bg-white outline-none text-sm focus:border-emerald-500"
+                />
+                <input 
+                  type="url" 
+                  placeholder="Paste link here (e.g., myntra.com/...)"
+                  value={newLinkUrl}
+                  onChange={(e) => setNewLinkUrl(e.target.value)}
+                  className="flex-1 border p-2 rounded-lg bg-white outline-none text-sm focus:border-emerald-500"
+                />
+                <Button 
+                  onClick={handleAddLink} 
+                  disabled={addingLink || !newLinkUrl.trim()}
+                  variant="outline"
+                  className="border-emerald-600 text-emerald-700 hover:bg-emerald-50 whitespace-nowrap"
+                >
+                  {addingLink ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <LinkIcon className="w-4 h-4 mr-2" />}
+                  Add Link
+                </Button>
+              </div>
+
+              {/* Items Grid (Images & Links) */}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pt-2">
+                {activeItems.length === 0 ? (
+                  <div className="col-span-full p-8 text-center text-slate-400 border-2 border-dashed rounded-xl bg-slate-50">
+                    No images or links added for {activeTab} yet.
+                  </div>
+                ) : (
+                  activeItems.map((item) => {
+                    const isLink = item.category.startsWith('outfit_link_');
+
+                    if (isLink) {
+                      return (
+                        <Card 
+                          key={item.id} 
+                          className="relative group p-4 border-slate-200 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between bg-emerald-50/30"
+                        >
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-emerald-700 font-semibold text-xs uppercase tracking-wide">
+                              <LinkIcon className="w-3.5 h-3.5" /> Link Item
+                            </div>
+                            <a 
+                              href={item.content} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="text-sm font-medium text-slate-800 hover:text-emerald-700 line-clamp-3 flex items-start gap-1 break-all"
+                            >
+                              {item.text || item.content}
+                              <ExternalLink className="w-3 h-3 shrink-0 mt-0.5 text-slate-400" />
+                            </a>
+                          </div>
+
+                          <div className="flex justify-end gap-1.5 mt-4 pt-2 border-t border-slate-100">
+                            <button 
+                              onClick={(e) => openEditModal(e, item)}
+                              className="bg-white/90 hover:bg-white text-slate-700 p-1.5 rounded-full shadow-sm transition-colors border"
+                              title="Edit Link"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button 
+                              onClick={(e) => handleDeleteItemClick(e, item.id)}
+                              className="bg-red-500 hover:bg-red-600 text-white p-1.5 rounded-full shadow-sm transition-colors"
+                              title="Delete Link"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </Card>
+                      );
+                    }
+
+                    return (
+                      <Card 
+                        key={item.id} 
+                        onClick={() => setSelectedImage(item)}
+                        className="relative group p-2 overflow-hidden border-slate-200 shadow-sm cursor-pointer hover:shadow-md transition-shadow flex flex-col justify-between"
+                      >
+                        <div>
+                          <div className="relative overflow-hidden rounded">
+                            <img src={item.content} alt={item.text || "Outfit"} className="w-full h-56 object-cover rounded group-hover:scale-105 transition-transform duration-300" />
+                            
+                            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white pointer-events-none">
+                              <Maximize2 className="w-6 h-6" />
+                            </div>
+                          </div>
+
+                          {item.text && item.text !== 'Outfit Image' && (
+                            <p className="mt-2 text-xs font-medium text-slate-700 truncate px-1" title={item.text}>
+                              {item.text}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="absolute top-3 right-3 flex gap-1.5 opacity-90 md:opacity-0 group-hover:opacity-100 transition-all z-10">
+                          <button 
+                            onClick={(e) => openEditModal(e, item)}
+                            className="bg-white/90 hover:bg-white text-slate-700 p-1.5 rounded-full shadow-md transition-colors"
+                            title="Edit Image or Caption"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button 
+                            onClick={(e) => handleDeleteItemClick(e, item.id)}
+                            className="bg-red-500 hover:bg-red-600 text-white p-1.5 rounded-full shadow-md transition-colors"
+                            title="Delete Photo"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </Card>
+                    );
+                  })
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="p-12 mt-6 text-center text-slate-500 bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl">
+              <Plus className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+              <p className="text-sm font-medium">Please add a category tab to start uploading outfits.</p>
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      {/* --- UNIFIED DELETE CONFIRMATION MODAL --- */}
+      <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold text-slate-900">Confirm Deletion</DialogTitle>
+          </DialogHeader>
+          <div className="py-2 text-slate-600">
+            {deleteTarget?.type === 'item' 
+              ? "Are you sure you want to delete this item? This action cannot be undone."
+              : `Are you sure you want to delete the "${deleteTarget?.name}" category and all its images/links? This action cannot be undone.`
+            }
+          </div>
+          <div className="flex justify-end gap-3 mt-4">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button 
+              className="bg-red-600 hover:bg-red-700 text-white" 
+              onClick={handleConfirmDelete}
+            >
+              Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- EDIT CAPTION & IMAGE MODAL --- */}
+      <Dialog open={!!editingItem} onOpenChange={(open) => !open && setEditingItem(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Outfit Card</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 my-2">
+            <div>
+              <label className="text-xs font-semibold text-slate-500 mb-1 block">Image Preview</label>
+              <div className="relative rounded-lg overflow-hidden border border-slate-200 bg-slate-50 h-48 flex items-center justify-center">
+                <img 
+                  src={editPreviewUrl || editingItem?.content} 
+                  alt="Edit preview" 
+                  className="h-full w-full object-contain"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-500 mb-1 block">Replace Image File</label>
+              <input 
+                type="file" 
+                ref={editFileInputRef}
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    const file = e.target.files[0];
+                    setEditFile(file);
+                    setEditPreviewUrl(URL.createObjectURL(file));
+                  }
+                }}
+              />
+              <Button 
+                variant="outline" 
+                onClick={() => editFileInputRef.current?.click()}
+                className="w-full text-xs text-slate-600"
+              >
+                <ImageIcon className="w-3.5 h-3.5 mr-2" />
+                {editFile ? editFile.name : "Choose New Image"}
+              </Button>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-500 mb-1 block">Caption</label>
+              <input 
+                type="text"
+                placeholder="Enter caption..."
+                value={editCaption}
+                onChange={(e) => setEditCaption(e.target.value)}
+                className="w-full border p-2 rounded-lg outline-none text-sm focus:border-emerald-500"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="ghost" onClick={() => setEditingItem(null)}>Cancel</Button>
+            <Button onClick={handleSaveEdit} disabled={savingEdit} className="bg-emerald-600 hover:bg-emerald-700">
+              {savingEdit ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
+              Save Changes
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- FULL SCREEN PHOTO LIGHTBOX --- */}
+      <Dialog open={!!selectedImage} onOpenChange={(open) => !open && setSelectedImage(null)}>
+        <DialogContent className="max-w-4xl p-2 bg-black/95 border-none flex flex-col items-center justify-center sm:rounded-2xl">
+          <DialogTitle className="sr-only">Full Screen Outfit View</DialogTitle>
+          {selectedImage && (
+            <div className="relative w-full max-h-[85vh] flex flex-col items-center justify-center">
+              <img 
+                src={selectedImage.content} 
+                alt={selectedImage.text || "Full Outfit Preview"} 
+                className="max-w-full max-h-[75vh] object-contain rounded-lg" 
+              />
+              
+              {selectedImage.text && selectedImage.text !== 'Outfit Image' && (
+                <p className="mt-3 text-sm text-slate-200 text-center font-medium bg-white/10 px-4 py-1.5 rounded-full backdrop-blur-sm max-w-md truncate">
+                  {selectedImage.text}
+                </p>
+              )}
+
+              <button 
+                onClick={() => setSelectedImage(null)}
+                className="absolute -top-3 -right-3 bg-white/20 hover:bg-white/40 text-white rounded-full p-2 backdrop-blur-md transition-colors"
+                title="Close Preview"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
