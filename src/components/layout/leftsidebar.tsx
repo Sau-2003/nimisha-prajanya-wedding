@@ -49,20 +49,28 @@ const mainNav = [
   { name: "All Outfits", href: "/all_outfits", icon: DressIcon },
 ];
 
-const eventNav = [
-  { name: "Puja", href: "/events/puja", color: "bg-orange-500" },
-  { name: "Mehendi", href: "/events/mehendi", color: "bg-emerald-500" },
-  { name: "Check In", href: "/events/check-in", color: "bg-fuchsia-900" },
-  { name: "Tilak", href: "/events/tilak", color: "bg-yellow-900" },
-  { name: "Sangeet", href: "/events/sangeet", color: "bg-indigo-500" },
-  { name: "Haldi", href: "/events/haldi", color: "bg-amber-400" },
-  { name: "Reception", href: "/events/reception", color: "bg-fuchsia-600" },
-  { name: "Phere", href: "/events/phere", color: "bg-red-500" },
-  { name: "Pagphere", href: "/events/pagphere", color: "bg-cyan-500" },
-  { name: "Vidai", href: "/events/vidai", color: "bg-pink-400" },
+interface EventNavItem {
+  name: string;
+  href: string;
+  color: string;
+  date?: string; // Added date for sorting
+}
+
+// Ensure defaults match the dashboard exactly
+const defaultEvents = [
+  { name: "Puja", date: "2027-01-27", link: "/events/puja", color: "bg-orange-500" },
+  { name: "Mehendi", date: "2027-01-29", link: "/events/mehendi", color: "bg-emerald-500" },
+  { name: "Check In", date: "2027-01-30", link: "/events/check-in", color: "bg-fuchsia-900" },
+  { name: "Tilak", date: "2027-01-30", link: "/events/tilak", color: "bg-yellow-900" },
+  { name: "Sangeet", date: "2027-01-30", link: "/events/sangeet", color: "bg-indigo-500" },
+  { name: "Haldi", date: "2027-01-31", link: "/events/haldi", color: "bg-amber-400" },
+  { name: "Phere", date: "2027-01-31", link: "/events/phere", color: "bg-red-500" },
+  { name: "Reception", date: "2027-01-31", link: "/events/reception", color: "bg-fuchsia-600" },
+  { name: "Pagphere", date: "2027-02-01", link: "/events/pagphere", color: "bg-cyan-500" },
+  { name: "Vidai", date: "2027-02-01", link: "/events/vidai", color: "bg-pink-400" },
 ];
 
-export function Sidebar() {
+export default function Sidebar() {
   const pathname = usePathname();
 
   // --- State ---
@@ -72,9 +80,12 @@ export function Sidebar() {
   const [searchQuery, setSearchQuery] = useState("");
   
   const [mainSortOrder, setMainSortOrder] = useState("recommended");
-  const [eventSortOrder, setEventSortOrder] = useState("recommended");
+  const [eventSortOrder, setEventSortOrder] = useState("date"); // Changed default to 'date'
 
-  // --- Authentication / Admin Check ---
+  // Dynamic Event Navigation State
+  const [eventNav, setEventNav] = useState<EventNavItem[]>([]);
+
+  // --- Authentication / Admin Check & Event Fetching ---
   useEffect(() => {
     const getUserInfo = async () => {
       const {
@@ -99,7 +110,31 @@ export function Sidebar() {
       }
     };
 
+    const fetchEvents = async () => {
+      const { data, error } = await supabase.from("events").select("*");
+      
+      let combinedEvents = [...defaultEvents];
+
+      if (!error && data) {
+        // Find default events that have been saved to DB and remove them so they aren't duplicated
+        const dbEventLinks = data.map(evt => evt.link);
+        const untouchedDefaults = defaultEvents.filter(evt => !dbEventLinks.includes(evt.link));
+
+        combinedEvents = [...untouchedDefaults, ...data];
+      }
+
+      const mappedEvents: EventNavItem[] = combinedEvents.map((evt) => ({
+        name: evt.name,
+        href: evt.link || `/events/${evt.name.toLowerCase().replace(/\s+/g, '-')}`,
+        color: evt.color || "bg-emerald-500",
+        date: evt.date || "9999-12-31", // Fallback for dateless events so they go to the bottom
+      }));
+      
+      setEventNav(mappedEvents);
+    };
+
     getUserInfo();
+    fetchEvents();
   }, []);
 
   const isAdmin = ADMIN_EMAILS.includes(email);
@@ -147,10 +182,17 @@ export function Sidebar() {
       result.sort((a, b) => a.name.localeCompare(b.name));
     } else if (eventSortOrder === "desc") {
       result.sort((a, b) => b.name.localeCompare(a.name));
+    } else if (eventSortOrder === "date") {
+      // Explicitly sort by date chronologically
+      result.sort((a, b) => {
+        const dateA = a.date || "9999-12-31";
+        const dateB = b.date || "9999-12-31";
+        return dateA.localeCompare(dateB);
+      });
     }
 
     return result;
-  }, [searchQuery, eventSortOrder]);
+  }, [searchQuery, eventSortOrder, eventNav]);
 
   return (
     <>
@@ -291,7 +333,7 @@ export function Sidebar() {
                     onChange={(e) => setEventSortOrder(e.target.value)}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                   >
-                    <option value="recommended">Recommended</option>
+                    <option value="date">By Date</option> {/* Set Date as the default/primary option */}
                     <option value="asc">A to Z</option>
                     <option value="desc">Z to A</option>
                   </select>
@@ -333,7 +375,6 @@ export function Sidebar() {
         {/* Profile and Logout Section */}
         <div className="p-4 border-t border-slate-100 bg-slate-50/50">
           <div className="flex flex-col gap-2">
-            {/* Show Logged-in Email */}
             {email && (
               <div className="flex items-center gap-3 px-2 py-2 mb-1">
                 <div className="w-8 h-8 rounded-full bg-emerald-100 border border-emerald-200 flex items-center justify-center shrink-0">
@@ -348,7 +389,6 @@ export function Sidebar() {
               </div>
             )}
             
-            {/* Logout Button */}
             <button
               onClick={handleLogout}
               className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-slate-600 hover:text-red-600 hover:bg-red-50 transition-colors"
