@@ -45,11 +45,16 @@ export default function Dashboard() {
         return;
       }
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (user) {
+      // Also check if Supabase automatically handled the recovery session hash
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        // If they arrived via recovery link, session might exist but we need to ensure they update password
+        const queryParams = new URLSearchParams(window.location.search);
+        if (window.location.hash.includes("type=recovery")) {
+          setAuthMode("update-password");
+          setIsChecking(false);
+          return;
+        }
         setIsAuthorized(true);
       } else {
         const savedEmail = localStorage.getItem("wedding_app_email");
@@ -136,8 +141,62 @@ export default function Dashboard() {
     return null;
   }
 
+  // --- RENDER SCREEN WHEN CLICKING EMAIL LINK (UPDATE PASSWORD) ---
+  if (authMode === "update-password") {
+    return (
+      <div className="h-[100dvh] w-screen overflow-hidden flex items-center justify-center bg-slate-50 p-4">
+        <div className="max-w-sm w-full bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col justify-center">
+          <div className="text-center mb-5">
+            <h1 className="text-xl font-serif font-bold text-emerald-900">
+              Set New Password
+            </h1>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Please enter your new password below.
+            </p>
+          </div>
+
+          {authError && (
+            <div className="mb-3 p-2 bg-red-50 text-red-600 text-xs rounded-lg border border-red-100">
+              {authError}
+            </div>
+          )}
+
+          {authSuccess && (
+            <div className="mb-3 p-2 bg-emerald-50 text-emerald-700 text-xs rounded-lg border border-emerald-100">
+              {authSuccess}
+            </div>
+          )}
+
+          <form onSubmit={handleAuth} className="space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">
+                New Password
+              </label>
+              <input
+                type="password"
+                required
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
+                placeholder="••••••••"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={authLoading}
+              className="w-full bg-emerald-600 text-white font-medium py-2 rounded-lg text-sm hover:bg-emerald-700 transition-colors disabled:opacity-50 mt-1"
+            >
+              {authLoading ? "Updating..." : "Update Password"}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   // --- RENDER LOGIN / SIGNUP / RESET UI ---
-  if (!isAuthorized && authMode !== "update-password") {
+  if (!isAuthorized) {
     return (
       <div className="h-[100dvh] w-screen overflow-hidden flex items-center justify-center bg-slate-50 p-4">
         <div className="max-w-sm w-full bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col justify-center">
@@ -280,60 +339,6 @@ export default function Dashboard() {
               </>
             )}
           </div>
-        </div>
-      </div>
-    );
-  }
-
-  // --- RENDER SCREEN WHEN CLICKING EMAIL LINK (UPDATE PASSWORD) ---
-  if (authMode === "update-password") {
-    return (
-      <div className="h-[100dvh] w-screen overflow-hidden flex items-center justify-center bg-slate-50 p-4">
-        <div className="max-w-sm w-full bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col justify-center">
-          <div className="text-center mb-5">
-            <h1 className="text-xl font-serif font-bold text-emerald-900">
-              Set New Password
-            </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Please enter your new password below.
-            </p>
-          </div>
-
-          {authError && (
-            <div className="mb-3 p-2 bg-red-50 text-red-600 text-xs rounded-lg border border-red-100">
-              {authError}
-            </div>
-          )}
-
-          {authSuccess && (
-            <div className="mb-3 p-2 bg-emerald-50 text-emerald-700 text-xs rounded-lg border border-emerald-100">
-              {authSuccess}
-            </div>
-          )}
-
-          <form onSubmit={handleAuth} className="space-y-3">
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">
-                New Password
-              </label>
-              <input
-                type="password"
-                required
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
-                placeholder="••••••••"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={authLoading}
-              className="w-full bg-emerald-600 text-white font-medium py-2 rounded-lg text-sm hover:bg-emerald-700 transition-colors disabled:opacity-50 mt-1"
-            >
-              {authLoading ? "Updating..." : "Update Password"}
-            </button>
-          </form>
         </div>
       </div>
     );
