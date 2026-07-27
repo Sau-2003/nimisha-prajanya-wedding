@@ -351,7 +351,6 @@ export default function OutfitPage() {
                       {tab}
                     </TabsTrigger>
                     
-                    {/* CHANGED: opacity-50 added for mobile default visibility */}
                     <div className="absolute right-1 flex items-center opacity-50 md:opacity-0 group-hover:opacity-100 transition-opacity gap-0.5">
                       <button
                         onClick={(e) => startEditingTab(e, tab)}
@@ -461,7 +460,7 @@ export default function OutfitPage() {
                               href={item.content} 
                               target="_blank" 
                               rel="noopener noreferrer" 
-                              className="text-sm font-medium text-slate-800 hover:text-emerald-700 line-clamp-3 flex items-start gap-1 break-all"
+                              className="text-sm font-medium text-slate-800 hover:text-emerald-700 line-clamp-3 flex items-start gap-1 break-words hyphens-auto"
                             >
                               {item.text || item.content}
                               <ExternalLink className="w-3 h-3 shrink-0 mt-0.5 text-slate-400" />
@@ -504,7 +503,7 @@ export default function OutfitPage() {
                           </div>
 
                           {item.text && item.text !== 'Outfit Image' && (
-                            <p className="mt-2 text-xs font-medium text-slate-700 truncate px-1" title={item.text}>
+                            <p className="mt-2 text-xs font-medium text-slate-700 px-1 break-words hyphens-auto line-clamp-3" title={item.text}>
                               {item.text}
                             </p>
                           )}
@@ -645,7 +644,7 @@ export default function OutfitPage() {
               />
               
               {selectedImage.text && selectedImage.text !== 'Outfit Image' && (
-                <p className="mt-3 text-sm text-slate-200 text-center font-medium bg-white/10 px-4 py-1.5 rounded-full backdrop-blur-sm max-w-md truncate">
+                <p className="mt-3 text-sm text-slate-200 text-center font-medium bg-white/10 px-4 py-2 rounded-xl backdrop-blur-sm max-w-md break-words hyphens-auto">
                   {selectedImage.text}
                 </p>
               )}

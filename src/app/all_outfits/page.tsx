@@ -142,7 +142,7 @@ function EventOutfitsSection({
                     <div className="flex items-center gap-2 text-emerald-700 font-semibold text-xs uppercase tracking-wide">
                       <LinkIcon className="w-3.5 h-3.5" /> Link Item
                     </div>
-                    <a href={outfit.image_url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-slate-800 hover:text-emerald-700 line-clamp-3 flex items-start gap-1 break-all">
+                    <a href={outfit.image_url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-slate-800 hover:text-emerald-700 line-clamp-3 flex items-start gap-1 break-words hyphens-auto">
                       {outfit.caption !== 'Outfit Image' && outfit.caption !== 'Option Choice' && outfit.caption !== 'Link' ? outfit.caption : outfit.image_url}
                       <ExternalLink className="w-3 h-3 shrink-0 mt-0.5 text-slate-400" />
                     </a>
@@ -176,7 +176,7 @@ function EventOutfitsSection({
                     </div>
                   </div>
                   {(outfit.caption && outfit.caption !== 'Outfit Image' && outfit.caption !== 'Option Choice') && (
-                    <p className="mt-2 text-xs font-medium text-slate-700 truncate px-1" title={outfit.caption}>
+                    <p className="mt-2 text-xs font-medium text-slate-700 px-1 break-words hyphens-auto line-clamp-3" title={outfit.caption}>
                       {outfit.caption}
                     </p>
                   )}
@@ -311,7 +311,7 @@ export default function AllOutfitsPage() {
             return {
               id: item.id,
               event_name: actualTabLabel, 
-              category: 'Shopping',       
+              category: 'Shopping',      
               caption: item.text || (isLink ? "Link" : "Option Choice"),
               image_url: item.content,
               is_link: isLink,
@@ -347,7 +347,6 @@ export default function AllOutfitsPage() {
     const name = prompt("Enter new Outfit Category (e.g., Bride, Decor):");
     if (name && name.trim()) {
       const formatted = name.trim();
-      // Ensure it renders immediately even if it has no items yet
       setCustomTabs(prev => [...prev, formatted]);
       setActiveTab(formatted);
     }
@@ -366,9 +365,7 @@ export default function AllOutfitsPage() {
       return;
     }
 
-    // Update outfits items
     await supabase.from('event_items').update({ category: `outfit_${newName}` }).eq('category', `outfit_${oldName}`);
-    // Update link items for this tab
     await supabase.from('event_items').update({ category: `outfit_link_${newName}` }).eq('category', `outfit_link_${oldName}`);
 
     setCustomTabs(prev => prev.map(t => t === oldName ? newName : t));
@@ -419,7 +416,7 @@ export default function AllOutfitsPage() {
     const isShopping = activeTab === 'Shopping';
 
     const { error: dbError } = await supabase.from('event_items').insert({
-      event_name: isShopping ? 'Shopping' : sectionName.toLowerCase(), // Saved lowercase for individual pages
+      event_name: isShopping ? 'Shopping' : sectionName.toLowerCase(),
       category: isShopping ? `option_${tabId}` : `outfit_${activeTab}`,
       text: caption.trim() || (isShopping ? 'Option Choice' : 'Outfit Image'),
       content: url
@@ -440,7 +437,7 @@ export default function AllOutfitsPage() {
 
     const isShopping = activeTab === 'Shopping';
     const { error: dbError } = await supabase.from('event_items').insert({
-      event_name: isShopping ? 'Shopping' : sectionName.toLowerCase(), // Saved lowercase for individual pages
+      event_name: isShopping ? 'Shopping' : sectionName.toLowerCase(),
       category: isShopping ? `shopping_link_${tabId}` : `outfit_link_${activeTab}`,
       text: title.trim() || formattedUrl,
       content: formattedUrl
@@ -453,7 +450,6 @@ export default function AllOutfitsPage() {
     }
   };
 
-  // Triggers Delete Confirmation Modal for Items
   const handleItemDeleteRequest = (e: React.MouseEvent, id: string) => {
     e.stopPropagation(); 
     setItemToDelete(id);
@@ -466,7 +462,6 @@ export default function AllOutfitsPage() {
     fetchAllData();
   };
 
-  // Triggers Delete Confirmation Modal for Sections
   const handleSectionDeleteRequest = (sectionName: string, tabId?: string) => {
     setSectionToDelete({ name: sectionName, tabId });
   };
@@ -480,7 +475,6 @@ export default function AllOutfitsPage() {
       await supabase.from('event_items').delete().or(`category.eq.option_${tabId},category.eq.shopping_link_${tabId}`);
       setOptionTabs(prev => prev.filter(t => t.id !== tabId));
     } else {
-      // If deleting the "General" section, clear out items with null, empty, or 'general' event names
       if (sectionName.toLowerCase() === 'general') {
         await supabase
           .from('event_items')
@@ -505,7 +499,6 @@ export default function AllOutfitsPage() {
     fetchAllData();
   };
 
-  // --- EDIT MODAL HANDLERS ---
   const openEditModal = (e: React.MouseEvent, item: ParsedOutfit) => {
     e.stopPropagation();
     if (item.is_link) {
@@ -551,8 +544,6 @@ export default function AllOutfitsPage() {
     setSavingEdit(false);
   };
 
-  // --- TABS AND RENDERING LOGIC ---
-  // We merge dbTabs with customTabs so empty tabs stick around until page refresh
   let dbTabs = Array.from(new Set(outfits.map(o => o.category)));
   let allTabs = Array.from(new Set([...dbTabs, ...customTabs]));
   if (!allTabs.includes("Ideas")) allTabs.unshift("Ideas");
@@ -624,7 +615,6 @@ export default function AllOutfitsPage() {
                       </span>
                     </button>
 
-                    {/* Edit & Delete Icons for Custom Tabs */}
                     {!isCoreTab && (
                       <div className={`flex items-center gap-0.5 ml-2 transition-opacity ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                         <button
@@ -693,13 +683,11 @@ export default function AllOutfitsPage() {
           {(() => {
             const currentTabOutfits = outfits.filter(o => o.category.toLowerCase() === activeTab.toLowerCase());
             
-            // Combine items already in DB with locally triggered empty sections
             const eventsForThisTab = Array.from(new Set([
               ...currentTabOutfits.map(o => o.event_name),
               ...(selectedTabEvents[activeTab] || [])
             ]));
 
-            // Sort logic: PREDEFINED_EVENTS first chronologically, then alphabetical
             eventsForThisTab.sort((a, b) => {
               const indexA = PREDEFINED_EVENTS.indexOf(a);
               const indexB = PREDEFINED_EVENTS.indexOf(b);
@@ -735,7 +723,6 @@ export default function AllOutfitsPage() {
                   ))
                 )}
 
-                {/* Fixed Predefined Event Dropdown */}
                 <div className="flex justify-center mt-6">
                   {availableEvents.length > 0 ? (
                     <div className="relative group shadow-sm rounded-lg hover:shadow transition-all">
@@ -881,7 +868,7 @@ export default function AllOutfitsPage() {
             <div className="relative w-full max-h-[85vh] flex flex-col items-center justify-center">
               <img src={selectedImage.image_url} alt={selectedImage.caption} className="max-w-full max-h-[75vh] object-contain rounded-lg" />
               {selectedImage.caption && selectedImage.caption !== 'Outfit Image' && selectedImage.caption !== 'Option Choice' && (
-                <p className="mt-3 text-sm text-slate-200 text-center font-medium bg-white/10 px-4 py-1.5 rounded-full backdrop-blur-sm max-w-md truncate">
+                <p className="mt-3 text-sm text-slate-200 text-center font-medium bg-white/10 px-4 py-2 rounded-xl backdrop-blur-sm max-w-md break-words hyphens-auto">
                   {selectedImage.caption}
                 </p>
               )}

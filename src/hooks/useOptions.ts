@@ -250,7 +250,7 @@ export function useOptions() {
         item.id === id
           ? {
               ...item,
-              caption: caption || "Untitled Option",
+              caption: caption.trim(),
               imageUrl,
             }
           : item

@@ -90,11 +90,11 @@ export default function OptionsPage() {
 
   const handleCreateOption = async () => {
     if (!selectedFile && !caption.trim()) return; 
-    await addOptionItem(caption, selectedFile);
+    await addOptionItem(caption.trim(), selectedFile);
     setCaption("");
     setSelectedFile(null);
     setFilePreview(null);
-    setIsAddingOptionOpen(false); // Close form after submission
+    setIsAddingOptionOpen(false); 
   };
 
   const handleAddLink = async () => {
@@ -109,13 +109,13 @@ export default function OptionsPage() {
       const formattedCaption = newLinkTitle.trim() 
         ? `${newLinkTitle.trim()}: ${formattedUrl}` 
         : formattedUrl;
-      
+       
       await addOptionItem(formattedCaption, selectedFile);
       setNewLinkTitle("");
       setNewLinkUrl("");
       setSelectedFile(null);
       setFilePreview(null);
-      setIsAddingOptionOpen(false); // Close form after submission
+      setIsAddingOptionOpen(false); 
     } finally {
       setAddingLink(false);
     }
@@ -123,13 +123,13 @@ export default function OptionsPage() {
 
   const startEditing = (item: OptionItem) => {
     setEditingItemId(item.id);
-    setEditingCaption(item.caption);
+    setEditingCaption(item.caption || "");
     setEditingPreview(item.imageUrl || null);
     setEditingFile(null);
   };
 
   const saveEdit = async (id: string) => {
-    await updateOptionItem(id, editingCaption, editingFile, !editingPreview);
+    await updateOptionItem(id, editingCaption.trim(), editingFile, !editingPreview);
     setEditingItemId(null);
   };
 
@@ -349,7 +349,7 @@ export default function OptionsPage() {
             <div className="space-y-3">
               <textarea
                 className="w-full border p-3 rounded-xl outline-none focus:border-emerald-500 text-sm resize-none bg-white"
-                placeholder="Write a caption or details (Optional if adding a link)..."
+                placeholder="Write a caption or details (Optional)..."
                 rows={2}
                 value={caption}
                 onChange={(e) => setCaption(e.target.value)}
@@ -417,19 +417,26 @@ export default function OptionsPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
             {items.map((item) => {
-              // Parse out purely formatted link cards
-              const isPureLinkItem = !item.imageUrl && /(https?:\/\/[^\s]+)/.test(item.caption);
+              const rawCaption = item.caption || "";
+              const isPureLinkItem = !item.imageUrl && /(https?:\/\/[^\s]+)/.test(rawCaption);
               let linkUrl = "";
               let linkTitle = "";
-              
+               
               if (isPureLinkItem) {
-                const match = item.caption.match(/(https?:\/\/[^\s]+)/);
+                const match = rawCaption.match(/(https?:\/\/[^\s]+)/);
                 if (match) {
                   linkUrl = match[0];
-                  linkTitle = item.caption.replace(linkUrl, "").replace(/:\s*$/, "").trim();
-                  if (!linkTitle) linkTitle = linkUrl; // Fallback to URL if no title exists
+                  linkTitle = rawCaption.replace(linkUrl, "").replace(/[:\s-]+$/, "").trim();
+                  if (!linkTitle) linkTitle = linkUrl;
                 }
               }
+
+              const lower = rawCaption.toLowerCase().trim();
+              const isUntitled = 
+                !rawCaption.trim() || 
+                lower.includes("untitled caption") || 
+                lower.includes("option choice") || 
+                lower.includes("outfit image");
 
               return (
                 <div
@@ -444,6 +451,7 @@ export default function OptionsPage() {
                         value={editingCaption}
                         onChange={(e) => setEditingCaption(e.target.value)}
                         className="w-full border p-2 text-xs rounded-lg outline-none focus:border-emerald-500 resize-none bg-white"
+                        placeholder="Optional caption..."
                         rows={3}
                       />
 
@@ -484,7 +492,7 @@ export default function OptionsPage() {
                           <div className="flex items-center gap-2 text-emerald-700 font-semibold text-xs uppercase tracking-wide">
                             <LinkIcon className="w-3.5 h-3.5" /> Link Item
                           </div>
-                          <a href={linkUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-slate-800 hover:text-emerald-700 line-clamp-3 flex items-start gap-1 break-all">
+                          <a href={linkUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-slate-800 hover:text-emerald-700 line-clamp-3 flex items-start gap-1 break-words hyphens-auto">
                             {linkTitle}
                             <ExternalLink className="w-3 h-3 shrink-0 mt-0.5 text-slate-400" />
                           </a>
@@ -506,23 +514,26 @@ export default function OptionsPage() {
                               </div>
                             </div>
                           )}
-                          <p className="text-sm text-slate-700 whitespace-pre-wrap break-words">
-                            {item.caption.split(/(https?:\/\/[^\s]+)/g).map((part, index) =>
-                              /^https?:\/\/[^\s]+$/.test(part) ? (
-                                <a
-                                  key={index}
-                                  href={part}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-emerald-600 underline hover:text-emerald-700 break-all"
-                                >
-                                  {part}
-                                </a>
-                              ) : (
-                                part
-                              )
-                            )}
-                          </p>
+
+                          {!isUntitled && (
+                            <p className="text-sm text-slate-700 whitespace-pre-wrap break-words hyphens-auto">
+                              {rawCaption.split(/(https?:\/\/[^\s]+)/g).map((part, index) =>
+                                /^https?:\/\/[^\s]+$/.test(part) ? (
+                                  <a
+                                    key={index}
+                                    href={part}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-emerald-600 underline hover:text-emerald-700 break-words hyphens-auto"
+                                  >
+                                    {part}
+                                  </a>
+                                ) : (
+                                  part
+                                )
+                              )}
+                            </p>
+                          )}
                         </div>
                       )}
 
