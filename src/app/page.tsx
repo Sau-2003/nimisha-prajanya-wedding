@@ -334,7 +334,7 @@ export default function Dashboard() {
 
   return (
     // Replaced large paddings and fixed max-width for full mobile utilization
-    <div className="min-h-screen p-4 sm:p-6 md:p-12 w-full max-w-6xl mx-auto space-y-6 md:space-y-10 relative">
+    <div className="min-h-screen px-3 py-4 sm:p-6 md:p-12 w-full max-w-6xl mx-auto space-y-6 md:space-y-10 relative">
       
       {/* Changed to items-start on mobile for better text layout */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 md:gap-8">

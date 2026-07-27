@@ -196,12 +196,16 @@ export default function Sidebar() {
 
   return (
     <>
-      <button
-        onClick={() => setIsOpen(true)}
-        className="fixed top-4 left-4 z-40 p-2 bg-white border border-slate-200 rounded-lg shadow-sm md:hidden"
-      >
-        <Menu className="w-6 h-6 text-emerald-900" />
-      </button>
+      {/* Mobile Top Header Bar */}
+      <div className="fixed top-0 left-0 right-0 h-14 bg-white/80 backdrop-blur-md border-b border-slate-200 z-40 flex items-center px-4 md:hidden">
+        <button
+          onClick={() => setIsOpen(true)}
+          className="p-2 bg-slate-50 border border-slate-200 rounded-xl shadow-sm"
+        >
+          <Menu className="w-5 h-5 text-emerald-900" />
+        </button>
+        <span className="ml-3 font-serif font-bold text-slate-800 text-sm">Wedding Planner</span>
+      </div>
 
       {isOpen && (
         <div
