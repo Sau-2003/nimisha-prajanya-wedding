@@ -1,6 +1,6 @@
-import { Sidebar } from '@/components/layout/leftsidebar';
 import { Playfair_Display, Inter } from 'next/font/google';
 import './globals.css';
+import AuthGuard from '@/components/AuthGuard'; // <-- Import the new guard
 
 const playfair = Playfair_Display({ subsets: ['latin'], variable: '--font-playfair' });
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
@@ -25,16 +25,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className={`${inter.variable} ${playfair.variable} font-sans bg-slate-50 text-slate-900 flex`}>
-        {/* Note: If your file is named leftsidebar.tsx, make sure the import at the top of this file matches! */}
-        <Sidebar />
-        
-        {/* Make content full width on mobile, and push it right on desktop */}
-        <main className="flex-1 w-full md:ml-64 overflow-y-auto h-screen">
-          {/* Add padding to the top on mobile so the 3-line button isn't covering your dashboard */}
-          <div className="pt-16 md:pt-0">
-            {children}
-          </div>
-        </main>
+        {/* The AuthGuard will now handle deciding whether to show the Sidebar or not */}
+        <AuthGuard>
+          {children}
+        </AuthGuard>
       </body>
     </html>
   );
