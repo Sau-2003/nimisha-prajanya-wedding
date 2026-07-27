@@ -24,6 +24,7 @@ import {
   ArrowUpDown,
   Folders,
   LogOut,
+  ShieldCheck
   User, // <-- Imported User icon for the profile section
 } from "lucide-react";
 import { DressIcon } from "@phosphor-icons/react";
