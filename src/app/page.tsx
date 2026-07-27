@@ -21,22 +21,30 @@ const events = [
 ];
 
 export default function Dashboard() {
-  // --- Auth States ---
   const [isChecking, setIsChecking] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
   
-  // Added "reset" to the auth modes
-  const [authMode, setAuthMode] = useState<"signin" | "signup" | "reset">("signin");
+  // Added "update-password" to handle the state when they click the email link
+  const [authMode, setAuthMode] = useState<"signin" | "signup" | "reset" | "update-password">("signin");
   
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSuccess, setAuthSuccess] = useState<string | null>(null);
 
-  // 1. Initial Authentication Check
+  // 1. Initial Authentication & Reset Link Check
   useEffect(() => {
     const checkUser = async () => {
+      // Check if the URL contains a password recovery token from the email link
+      const hash = window.location.hash;
+      if (hash && hash.includes("type=recovery")) {
+        setAuthMode("update-password");
+        setIsChecking(false);
+        return;
+      }
+
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -55,7 +63,7 @@ export default function Dashboard() {
     checkUser();
   }, []);
 
-  // 2. Handle Auth Forms (Sign In, Sign Up, Password Reset)
+  // 2. Handle Auth Forms
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthLoading(true);
@@ -63,7 +71,6 @@ export default function Dashboard() {
     setAuthSuccess(null);
 
     if (authMode === "reset") {
-      // Handle Forgot Password
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/`,
       });
@@ -74,8 +81,21 @@ export default function Dashboard() {
         setAuthSuccess("A password reset link has been sent to your email.");
         setAuthMode("signin");
       }
+    } else if (authMode === "update-password") {
+      // Save the new password
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (error) {
+        setAuthError(error.message);
+      } else {
+        setAuthSuccess("Password updated successfully! You are now signed in.");
+        setTimeout(() => {
+          window.location.href = "/"; // Clear the URL hash and load dashboard
+        }, 1500);
+      }
     } else if (authMode === "signup") {
-      // Handle Sign Up
       const { error, data } = await supabase.auth.signUp({
         email,
         password,
@@ -91,7 +111,6 @@ export default function Dashboard() {
         setPassword("");
       }
     } else {
-      // Handle Sign In
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -108,10 +127,8 @@ export default function Dashboard() {
     setAuthLoading(false);
   };
 
-  // Main Wedding Date Calculation
   const targetDate = new Date("2027-01-31");
   const today = new Date();
-
   const daysToGo = differenceInDays(targetDate, today);
   const weeksToGo = differenceInWeeks(targetDate, today);
 
@@ -119,8 +136,8 @@ export default function Dashboard() {
     return null;
   }
 
-  // --- RENDER COMPACT LOGIN / SIGNUP UI (NO SCROLL ON MOBILE) ---
-  if (!isAuthorized) {
+  // --- RENDER LOGIN / SIGNUP / RESET UI ---
+  if (!isAuthorized && authMode !== "update-password") {
     return (
       <div className="h-[100dvh] w-screen overflow-hidden flex items-center justify-center bg-slate-50 p-4">
         <div className="max-w-sm w-full bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col justify-center">
@@ -154,29 +171,46 @@ export default function Dashboard() {
           )}
 
           <form onSubmit={handleAuth} className="space-y-3">
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">
-                Email Address
-              </label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="email"
-                className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
-                placeholder="you@email.com"
-              />
-            </div>
+            {authMode !== "reset" && (
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
+                  className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
+                  placeholder="you@email.com"
+                />
+              </div>
+            )}
 
-            {/* Hide password field if we are in Reset Password mode */}
+            {authMode === "reset" && (
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
+                  className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
+                  placeholder="you@email.com"
+                />
+              </div>
+            )}
+
             {authMode !== "reset" && (
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="block text-xs font-medium text-slate-700">
                     Password
                   </label>
-                  {/* Forgot Password Button */}
                   {authMode === "signin" && (
                     <button
                       type="button"
@@ -218,7 +252,6 @@ export default function Dashboard() {
             </button>
           </form>
 
-          {/* Toggle states */}
           <div className="mt-4 text-center text-xs text-slate-500">
             {authMode === "reset" ? (
               <button
@@ -252,10 +285,63 @@ export default function Dashboard() {
     );
   }
 
+  // --- RENDER SCREEN WHEN CLICKING EMAIL LINK (UPDATE PASSWORD) ---
+  if (authMode === "update-password") {
+    return (
+      <div className="h-[100dvh] w-screen overflow-hidden flex items-center justify-center bg-slate-50 p-4">
+        <div className="max-w-sm w-full bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col justify-center">
+          <div className="text-center mb-5">
+            <h1 className="text-xl font-serif font-bold text-emerald-900">
+              Set New Password
+            </h1>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Please enter your new password below.
+            </p>
+          </div>
+
+          {authError && (
+            <div className="mb-3 p-2 bg-red-50 text-red-600 text-xs rounded-lg border border-red-100">
+              {authError}
+            </div>
+          )}
+
+          {authSuccess && (
+            <div className="mb-3 p-2 bg-emerald-50 text-emerald-700 text-xs rounded-lg border border-emerald-100">
+              {authSuccess}
+            </div>
+          )}
+
+          <form onSubmit={handleAuth} className="space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">
+                New Password
+              </label>
+              <input
+                type="password"
+                required
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
+                placeholder="••••••••"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={authLoading}
+              className="w-full bg-emerald-600 text-white font-medium py-2 rounded-lg text-sm hover:bg-emerald-700 transition-colors disabled:opacity-50 mt-1"
+            >
+              {authLoading ? "Updating..." : "Update Password"}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   // --- RENDER DASHBOARD UI IF AUTHORIZED ---
   return (
     <div className="min-h-screen p-6 md:p-12 max-w-5xl mx-auto space-y-10">
-      {/* Hero Section & Countdown */}
       <div className="flex flex-col md:flex-row justify-between items-center gap-8">
         <div>
           <h1 className="font-serif text-4xl md:text-5xl font-bold text-slate-900 mb-2">
@@ -264,7 +350,6 @@ export default function Dashboard() {
           <p className="text-xl text-slate-500">January 31, 2027</p>
         </div>
 
-        {/* Global Countdown Badges */}
         <div className="flex gap-4">
           <div className="flex flex-col items-center justify-center bg-emerald-50 border border-emerald-100 px-6 py-4 rounded-2xl shadow-sm min-w-[120px]">
             <span className="text-4xl font-bold text-emerald-700">
@@ -286,7 +371,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Event Schedule */}
       <Card className="shadow-sm border-slate-200">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-2xl">
