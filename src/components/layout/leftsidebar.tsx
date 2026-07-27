@@ -7,6 +7,7 @@ import Image from "next/image";
 import { motion } from "framer-motion";
 import {
   LayoutDashboard,
+  User,
   Gem,
   CalendarHeart,
   ClipboardList,
@@ -24,8 +25,7 @@ import {
   ArrowUpDown,
   Folders,
   LogOut,
-  ShieldCheck
-  User, // <-- Imported User icon for the profile section
+  ShieldCheck,
 } from "lucide-react";
 import { DressIcon } from "@phosphor-icons/react";
 
@@ -34,7 +34,7 @@ import { ADMIN_EMAILS } from "@/lib/admin";
 
 // --- Navigation Data ---
 const mainNav = [
-  { name: "Admin", href: "/admin", icon: LayoutDashboard, adminOnly: true },
+  { name: "Admin", href: "/admin", icon: ShieldCheck, adminOnly: true },
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Global Task Board", href: "/global_task_board", icon: ClipboardList },
   { name: "Menu", href: "/menu", icon: SquareMenu },
