@@ -201,7 +201,6 @@ export default function Dashboard() {
     setAuthSuccess(null);
 
     if (authMode === "reset") {
-      // 🚨 CRITICAL CHANGE HERE: Redirect exactly to the new page 🚨
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`,
       });
@@ -240,36 +239,36 @@ export default function Dashboard() {
 
   if (!isAuthorized) {
     return (
-      <div className="h-[100dvh] w-screen overflow-hidden flex items-center justify-center bg-slate-50 p-4">
-        <div className="max-w-sm w-full bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col justify-center">
-          <div className="text-center mb-5">
-            <h1 className="text-xl font-serif font-bold text-emerald-900">
+      <div className="h-[100dvh] w-screen overflow-y-auto flex items-center justify-center bg-slate-50 p-4 sm:p-6">
+        <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl border border-slate-200 p-6 sm:p-8 flex flex-col justify-center my-auto">
+          <div className="text-center mb-6">
+            <h1 className="text-2xl font-serif font-bold text-emerald-900">
               {authMode === "signin" ? "Welcome Back" : authMode === "signup" ? "Create an Account" : "Reset Password"}
             </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-sm text-slate-500 mt-1.5">
               {authMode === "signin" ? "Sign in to access the wedding planner" : authMode === "signup" ? "Sign up with your email to get started" : "Enter your email to receive a reset link"}
             </p>
           </div>
-          {authError && <div className="mb-3 p-2 bg-red-50 text-red-600 text-xs rounded-lg">{authError}</div>}
-          {authSuccess && <div className="mb-3 p-2 bg-emerald-50 text-emerald-700 text-xs rounded-lg">{authSuccess}</div>}
+          {authError && <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded-xl border border-red-100">{authError}</div>}
+          {authSuccess && <div className="mb-4 p-3 bg-emerald-50 text-emerald-700 text-sm rounded-xl border border-emerald-100">{authSuccess}</div>}
           
-          <form onSubmit={handleAuth} className="space-y-3">
+          <form onSubmit={handleAuth} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Email Address</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Email Address</label>
               <input
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg text-slate-800"
+                className="w-full px-4 py-2.5 text-base sm:text-sm border border-slate-200 rounded-xl text-slate-800"
                 placeholder="you@email.com"
               />
             </div>
 
             {authMode !== "reset" && (
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-medium text-slate-700">Password</label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-sm font-medium text-slate-700">Password</label>
                   {authMode === "signin" && (
                     <button
                       type="button"
@@ -278,7 +277,7 @@ export default function Dashboard() {
                         setAuthError(null);
                         setAuthSuccess(null);
                       }}
-                      className="text-[10px] text-emerald-600 hover:text-emerald-700 hover:underline font-medium"
+                      className="text-xs text-emerald-600 hover:text-emerald-700 hover:underline font-medium"
                     >
                       Forgot?
                     </button>
@@ -289,18 +288,18 @@ export default function Dashboard() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg text-slate-800"
+                  className="w-full px-4 py-2.5 text-base sm:text-sm border border-slate-200 rounded-xl text-slate-800"
                   placeholder="••••••••"
                 />
               </div>
             )}
 
-            <button type="submit" disabled={authLoading} className="w-full bg-emerald-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-emerald-700">
+            <button type="submit" disabled={authLoading} className="w-full bg-emerald-600 text-white py-3 rounded-xl text-base sm:text-sm font-medium hover:bg-emerald-700 shadow-sm mt-2">
               {authLoading ? "Processing..." : authMode === "signin" ? "Sign In" : authMode === "signup" ? "Sign Up" : "Send Reset Link"}
             </button>
           </form>
 
-          <div className="mt-4 text-center text-xs text-slate-500">
+          <div className="mt-5 text-center text-sm text-slate-500">
             {authMode === "reset" ? (
               <button
                 onClick={() => {
@@ -334,52 +333,60 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen p-6 md:p-12 max-w-5xl mx-auto space-y-10 relative">
-      <div className="flex flex-col md:flex-row justify-between items-center gap-8">
+    // Replaced large paddings and fixed max-width for full mobile utilization
+    <div className="min-h-screen p-4 sm:p-6 md:p-12 w-full max-w-6xl mx-auto space-y-6 md:space-y-10 relative">
+      
+      {/* Changed to items-start on mobile for better text layout */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 md:gap-8">
         <div>
-          <h1 className="font-serif text-4xl md:text-5xl font-bold text-slate-900 mb-2">Nimisha & Prajanya</h1>
-          <p className="text-xl text-slate-500">January 31, 2027</p>
+          <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl font-bold text-slate-900 mb-1.5 md:mb-2">
+            Nimisha & Prajanya
+          </h1>
+          <p className="text-lg md:text-xl text-slate-500">January 31, 2027</p>
         </div>
 
-        <div className="flex gap-4">
-          <div className="flex flex-col items-center justify-center bg-emerald-50 border border-emerald-100 px-6 py-4 rounded-2xl shadow-sm min-w-[120px]">
-            <span className="text-4xl font-bold text-emerald-700">{daysToGo > 0 ? daysToGo : 0}</span>
-            <span className="text-sm font-medium text-emerald-600 uppercase tracking-wide mt-1">Days to go</span>
+        {/* Changed to a full-width grid on mobile so the boxes stretch perfectly */}
+        <div className="grid grid-cols-2 gap-3 w-full md:w-auto md:flex md:gap-4">
+          <div className="flex flex-col items-center justify-center bg-emerald-50 border border-emerald-100 px-4 py-4 sm:px-6 rounded-2xl shadow-sm md:min-w-[120px]">
+            <span className="text-3xl md:text-4xl font-bold text-emerald-700">{daysToGo > 0 ? daysToGo : 0}</span>
+            <span className="text-xs sm:text-sm font-medium text-emerald-600 uppercase tracking-wide mt-1">Days to go</span>
           </div>
-          <div className="flex flex-col items-center justify-center bg-emerald-50 border border-emerald-100 px-6 py-4 rounded-2xl shadow-sm min-w-[120px]">
-            <span className="text-4xl font-bold text-emerald-700">{weeksToGo > 0 ? weeksToGo : 0}</span>
-            <span className="text-sm font-medium text-emerald-600 uppercase tracking-wide mt-1">Weeks to go</span>
+          <div className="flex flex-col items-center justify-center bg-emerald-50 border border-emerald-100 px-4 py-4 sm:px-6 rounded-2xl shadow-sm md:min-w-[120px]">
+            <span className="text-3xl md:text-4xl font-bold text-emerald-700">{weeksToGo > 0 ? weeksToGo : 0}</span>
+            <span className="text-xs sm:text-sm font-medium text-emerald-600 uppercase tracking-wide mt-1">Weeks to go</span>
           </div>
         </div>
       </div>
 
       <Card className="shadow-sm border-slate-200">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="flex items-center gap-2 text-2xl">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4">
+          <CardTitle className="flex items-center gap-2 text-xl md:text-2xl">
             <CheckCircle2 className="text-emerald-600" /> Event Schedule
           </CardTitle>
           <button
             onClick={handleOpenAddModal}
-            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors"
+            className="flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors w-full sm:w-auto shadow-sm"
           >
             <Plus className="w-4 h-4" /> Add Event
           </button>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        
+        {/* Adjusted padding in CardContent for mobile */}
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 p-4 sm:p-6 pt-0">
           {events.map((evt, idx) => (
             <div
               key={evt.id || idx}
-              className="p-5 border border-slate-200 rounded-xl flex items-center justify-between gap-3 hover:border-emerald-500 hover:shadow-md transition-all bg-white group"
+              className="p-4 sm:p-5 border border-slate-200 rounded-xl flex items-center justify-between gap-3 hover:border-emerald-500 hover:shadow-md transition-all bg-white group"
             >
-              <Link href={evt.link} className="flex items-center gap-4 flex-1 min-w-0 cursor-pointer">
-                <div className={`w-2 h-16 rounded-full shrink-0 ${evt.color}`}></div>
+              <Link href={evt.link} className="flex items-center gap-3 md:gap-4 flex-1 min-w-0 cursor-pointer">
+                <div className={`w-2 h-14 md:h-16 rounded-full shrink-0 ${evt.color}`}></div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-lg font-semibold text-slate-800 truncate">{evt.name}</p>
-                  <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-1">
+                  <p className="text-base md:text-lg font-semibold text-slate-800 truncate">{evt.name}</p>
+                  <p className="text-xs sm:text-sm text-slate-500 flex items-center gap-1.5 mt-1">
                     <CalendarDays className="w-3.5 h-3.5 shrink-0" /> {formatDateDisplay(evt.date)}
                   </p>
                   {evt.place && (
-                    <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5 truncate">
+                    <p className="text-xs sm:text-sm text-slate-500 flex items-center gap-1.5 mt-0.5 truncate">
                       <MapPin className="w-3.5 h-3.5 shrink-0" /> {evt.place}
                     </p>
                   )}
@@ -389,7 +396,7 @@ export default function Dashboard() {
               <div className="flex items-center gap-1 shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                 <button
                   onClick={() => handleOpenEditModal(evt)}
-                  className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                  className="p-2.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
                   title="Edit Event"
                 >
                   <Pencil className="w-4 h-4" />
@@ -398,7 +405,7 @@ export default function Dashboard() {
                 {evt.id && (
                   <button
                     onClick={() => handleDeleteEvent(evt.id!)}
-                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                     title="Delete Event"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -411,57 +418,57 @@ export default function Dashboard() {
       </Card>
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 space-y-5 shadow-2xl border border-slate-200 my-auto">
             <div className="flex justify-between items-center">
-              <h3 className="text-lg font-serif font-bold text-slate-900">
+              <h3 className="text-xl font-serif font-bold text-slate-900">
                 {editingEventId ? "Edit Event" : "Add Event"}
               </h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 p-1.5 rounded-full transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveEvent} className="space-y-3">
+            <form onSubmit={handleSaveEvent} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Event Name <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Event Name <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   required
                   value={newEvent.name}
                   onChange={(e) => setNewEvent({ ...newEvent, name: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg text-slate-800"
+                  className="w-full px-4 py-2.5 text-base sm:text-sm border border-slate-200 rounded-xl text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                   placeholder="e.g., Reception"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Date (Optional)</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Date (Optional)</label>
                 <input
                   type="date"
                   value={newEvent.date}
                   onChange={(e) => setNewEvent({ ...newEvent, date: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg text-slate-800 bg-white"
+                  className="w-full px-4 py-2.5 text-base sm:text-sm border border-slate-200 rounded-xl text-slate-800 bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Place / Venue (Optional)</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Place / Venue (Optional)</label>
                 <input
                   type="text"
                   value={newEvent.place}
                   onChange={(e) => setNewEvent({ ...newEvent, place: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg text-slate-800"
+                  className="w-full px-4 py-2.5 text-base sm:text-sm border border-slate-200 rounded-xl text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                   placeholder="e.g., Grand Ballroom"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Theme Color</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Theme Color</label>
                 <select
                   value={newEvent.color}
                   onChange={(e) => setNewEvent({ ...newEvent, color: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-slate-800"
+                  className="w-full px-4 py-2.5 text-base sm:text-sm border border-slate-200 rounded-xl bg-white text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 >
                   {colorOptions.map((col) => (
                     <option key={col.value} value={col.value}>
@@ -475,14 +482,14 @@ export default function Dashboard() {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="flex-1 bg-slate-100 text-slate-700 py-2 rounded-lg text-sm font-medium hover:bg-slate-200"
+                  className="flex-1 bg-slate-100 text-slate-700 py-3 rounded-xl text-base sm:text-sm font-medium hover:bg-slate-200 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={savingEvent}
-                  className="flex-1 bg-emerald-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
+                  className="flex-1 bg-emerald-600 text-white py-3 rounded-xl text-base sm:text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm"
                 >
                   {savingEvent ? "Saving..." : "Save Event"}
                 </button>
