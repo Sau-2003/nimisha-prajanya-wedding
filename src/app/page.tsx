@@ -1339,7 +1339,8 @@ export default function Dashboard() {
 
     if (authMode === "reset") {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/`,
+        // This explicitly forces the recovery flag to survive the redirect!
+        redirectTo: `${window.location.origin}/?type=recovery`,
       });
       if (error) setAuthError(error.message);
       else {
