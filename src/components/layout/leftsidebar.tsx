@@ -5,28 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import {
-  LayoutDashboard,
-  User,
-  Gem,
-  CalendarHeart,
-  ClipboardList,
-  Gift,
-  ShoppingBag,
-  Users,
-  IndianRupee,
-  Menu,
-  X,
-  BookIcon,
-  CalendarClock,
-  Handshake,
-  SquareMenu,
-  Search,
-  ArrowUpDown,
-  Folders,
-  LogOut,
-  ShieldCheck,
-} from "lucide-react";
+import {LayoutDashboard,
+Gem,CalendarHeart,ClipboardList,Gift,ShoppingBag,Users,IndianRupee,Menu,X,BookIcon,CalendarClock,Handshake,SquareMenu,Search,ArrowUpDown,Folders,LogOut,ShieldCheck,} from "lucide-react";
 import { DressIcon } from "@phosphor-icons/react";
 
 import { supabase } from "@/lib/supabase";
@@ -323,7 +303,7 @@ export default function Sidebar() {
           )}
 
           {(filteredEventNav.length > 0 || searchQuery) && (
-            <div>
+            <div className="mb-6">
               <div className="px-3 mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
                   <CalendarHeart className="w-3.5 h-3.5" /> Wedding Events
@@ -373,37 +353,34 @@ export default function Sidebar() {
               </nav>
             </div>
           )}
-        </div>
 
-        {/* --- Profile and Logout Section --- */}
-        <div className="p-4 border-t border-slate-100 bg-slate-50/50">
-          {email ? (
-            <div className="flex items-center justify-between gap-3 bg-white border border-slate-200 p-2 rounded-xl shadow-sm">
-              <div className="flex items-center gap-2.5 overflow-hidden">
-                {/* <div className="w-7 h-7 rounded-full bg-emerald-100 border border-emerald-200 flex items-center justify-center shrink-0"> */}
-                  {/* <User className="w-3.5 h-3.5 text-emerald-700" /> */}
-                {/* </div> */}
-                <span className="text-xs font-semibold text-slate-700 truncate" title={email}>
-                  {email}
-                </span>
+          {/* --- Profile and Logout Section (Scrollable) --- */}
+          <div className="pt-4 border-t border-slate-100 bg-slate-50/50 -mx-6 -mb-6 p-4">
+            {email ? (
+              <div className="flex items-center justify-between gap-3 bg-white border border-slate-200 p-2 rounded-xl shadow-sm">
+                <div className="flex items-center gap-2.5 overflow-hidden">
+                  <span className="text-xs font-semibold text-slate-700 truncate" title={email}>
+                    {email}
+                  </span>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                  title="Log Out"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
               </div>
+            ) : (
               <button
                 onClick={handleLogout}
-                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0"
-                title="Log Out"
+                className="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-lg text-slate-600 hover:text-red-600 hover:bg-red-50 transition-colors"
               >
                 <LogOut className="w-4 h-4" />
+                <span className="text-sm font-medium">Log Out</span>
               </button>
-            </div>
-          ) : (
-            <button
-              onClick={handleLogout}
-              className="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-lg text-slate-600 hover:text-red-600 hover:bg-red-50 transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
-              <span className="text-sm font-medium">Log Out</span>
-            </button>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </>
