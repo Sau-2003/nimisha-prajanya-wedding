@@ -109,13 +109,8 @@ export function useOptions() {
     const tab = tabs.find((t) => t.id === tabId);
     if (!tab) return;
 
-    if (
-      !confirm(
-        `Delete "${tab.label}" and all options inside it?`
-      )
-    )
-      return;
-
+    // We removed the window.confirm from here because you built a nice custom Modal in your UI!
+    
     await supabase.from("option_tabs").delete().eq("id", tabId);
 
     await supabase
@@ -136,8 +131,27 @@ export function useOptions() {
     }
   };
 
-  const renameTab = (id: string, newLabel: string) => {
-    setTabs(tabs.map(tab => tab.id === id ? { ...tab, label: newLabel } : tab));
+  // --- THE FIX ---
+  const renameTab = async (id: string, newLabel: string) => {
+    const trimmedLabel = newLabel.trim();
+    if (!trimmedLabel) return;
+
+    // 1. Update local state immediately for a snappy UI
+    setTabs((prev) =>
+      prev.map((tab) => (tab.id === id ? { ...tab, label: trimmedLabel } : tab))
+    );
+
+    // 2. Save the change permanently to the database
+    const { error } = await supabase
+      .from("option_tabs")
+      .update({ label: trimmedLabel })
+      .eq("id", id);
+
+    if (error) {
+      alert("Error renaming tab: " + error.message);
+      // Revert the UI change if the database fails
+      fetchData(); 
+    }
   };
 
   const uploadImage = async (file: File) => {

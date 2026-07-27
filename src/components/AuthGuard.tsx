@@ -3,78 +3,67 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+// 🚨 Notice: NO curly braces around Sidebar! 🚨
 import Sidebar from "@/components/layout/leftsidebar"; 
 
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
-  const [isAuthorized, setIsAuthorized] = useState(false);
-  const [isChecking, setIsChecking] = useState(true);
-  const pathname = usePathname();
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [isChecking, setIsChecking] = useState(true);
+  const pathname = usePathname();
 
-  useEffect(() => {
-    const handleAuthState = (user: any) => {
-      if (user) {
-        setIsAuthorized(true);
-      } else {
-        setIsAuthorized(false);
-        // If they are NOT logged in, and NOT on the home/login page, redirect them back!
-        if (pathname !== "/") {
-          window.location.href = "/";
-        }
-      }
-      setIsChecking(false);
-    };
+  useEffect(() => {
+    const handleAuthState = (user: any) => {
+      if (user) {
+        setIsAuthorized(true);
+      } else {
+        setIsAuthorized(false);
+        // Allow unauthenticated users on home AND reset-password pages
+        if (pathname !== "/" && pathname !== "/reset-password") {
+          window.location.href = "/";
+        }
+      }
+      setIsChecking(false);
+    };
 
-    // 1. Initial check when the app loads
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      handleAuthState(user);
-    });
+    // 1. Initial check when the app loads
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      handleAuthState(user);
+    });
 
-    // 2. Listen in real-time for Logins and Logouts
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      handleAuthState(session?.user);
-    });
+    // 2. Listen in real-time for Logins and Logouts
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      handleAuthState(session?.user);
+    });
 
-    return () => {
-      authListener.subscription.unsubscribe();
-    };
-  }, [pathname]);
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, [pathname]);
 
-  // Show a blank screen for a split second while verifying their credentials
-  if (isChecking) return null; 
+  // Show a blank screen for a split second while verifying credentials
+  if (isChecking) return null; 
 
-  // If they are LOGGED OUT and on the home page, show the Login screen (NO SIDEBAR)
-  if (!isAuthorized && pathname === "/") {
-    return <>{children}</>;
-  }
+  // If LOGGED OUT and on a public page, render full screen (NO SIDEBAR, NO MARGINS)
+  if (!isAuthorized && (pathname === "/" || pathname === "/reset-password")) {
+    return <>{children}</>;
+  }
 
-  // If they are LOGGED OUT and tried to visit a secure page, render nothing while they are redirected
-  if (!isAuthorized) {
-    return null;
-  }
+  // If LOGGED OUT and tried to visit a secure page, block render while redirecting
+  if (!isAuthorized) {
+    return null;
+  }
 
-  // If they are LOGGED IN, show the Sidebar AND your custom layout structure!
-  return (
-    <>
-      <Sidebar />
-      <main className="flex-1 w-full md:ml-64 overflow-y-auto h-screen">
-        <div className="pt-16 md:pt-0">
-          {children}
-        </div>
-      </main>
-    </>
-  );
+  // If LOGGED IN, show Sidebar and add the correct padding to make room for it
+  return (
+    <>
+      <Sidebar />
+      {/* 
+        Removed flex, h-screen, and simplified to block layout. 
+        Uses md:pl-64 to make exact room for the desktop sidebar. 
+      */}
+      <main className="w-full md:pl-64 pt-14 md:pt-0 transition-all duration-300 ease-in-out block">
+        {children}
+      </main>
+    </>
+  );
 }
-[{
-	"resource": "/c:/Users/saumy/nimisha-prajanya-wedding/src/components/AuthGuard.tsx",
-	"owner": "typescript",
-	"code": "2614",
-	"severity": 8,
-	"message": "Module '\"@/components/layout/leftsidebar\"' has no exported member 'Sidebar'. Did you mean to use 'import Sidebar from \"@/components/layout/leftsidebar\"' instead?",
-	"source": "ts",
-	"startLineNumber": 6,
-	"startColumn": 10,
-	"endLineNumber": 6,
-	"endColumn": 17,
-	"modelVersionId": 4,
-	"origin": "extHost1"
-}]

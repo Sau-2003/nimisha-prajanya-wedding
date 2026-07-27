@@ -17,24 +17,20 @@ export const metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Wedding Planner",
+    // title: "Wedding Planner",
   },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${playfair.variable} font-sans bg-slate-50 text-slate-900 flex overflow-x-hidden min-h-[100dvh]`}>
+      {/* Basic body structure. No flex, no padding, just the background color and fonts. */}
+      <body className={`${inter.variable} ${playfair.variable} font-sans bg-slate-50 text-slate-900 overflow-x-hidden min-h-[100dvh]`}>
         
-        {/* 
-          1. pt-14 md:pt-0 -> Leaves just enough space for the mobile top bar.
-          2. md:ml-64 -> Pushes right for desktop sidebar.
-        */}
-        <div className="w-full min-h-[100dvh] md:ml-64 md:w-[calc(100%-16rem)] pt-14 md:pt-0 transition-all duration-300 ease-in-out flex flex-col">
-          <AuthGuard>
-            {children}
-          </AuthGuard>
-        </div>
+        {/* AuthGuard will decide whether to inject the Sidebar + Padding, or full screen */}
+        <AuthGuard>
+          {children}
+        </AuthGuard>
 
       </body>
     </html>

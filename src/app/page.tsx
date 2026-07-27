@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, CalendarDays, MapPin, Plus, X, Pencil, Trash2 } from "lucide-react";
+import { CheckCircle2, CalendarDays, MapPin, Plus, X, Pencil, Trash2, LayoutDashboard } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { differenceInDays, differenceInWeeks, format, parseISO } from "date-fns";
 import { supabase } from "@/lib/supabase";
@@ -333,19 +333,19 @@ export default function Dashboard() {
   }
 
   return (
-    // Replaced large paddings and fixed max-width for full mobile utilization
     <div className="min-h-screen px-3 py-4 sm:p-6 md:p-12 w-full max-w-6xl mx-auto space-y-6 md:space-y-10 relative">
       
-      {/* Changed to items-start on mobile for better text layout */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 md:gap-8">
+        
+        {/* MATCHED SHOPPING FORMAT HERE */}
         <div>
-          <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl font-bold text-slate-900 mb-1.5 md:mb-2">
-            Nimisha & Prajanya
-          </h1>
-          <p className="text-lg md:text-xl text-slate-500">January 31, 2027</p>
+          <h1 className="text-3xl font-serif font-bold text-emerald-900 flex items-center gap-3">
+            <LayoutDashboard className="w-8 h-8 text-emerald-700 shrink-0" />Wedding Planner</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            January 31, 2027
+          </p>
         </div>
 
-        {/* Changed to a full-width grid on mobile so the boxes stretch perfectly */}
         <div className="grid grid-cols-2 gap-3 w-full md:w-auto md:flex md:gap-4">
           <div className="flex flex-col items-center justify-center bg-emerald-50 border border-emerald-100 px-4 py-4 sm:px-6 rounded-2xl shadow-sm md:min-w-[120px]">
             <span className="text-3xl md:text-4xl font-bold text-emerald-700">{daysToGo > 0 ? daysToGo : 0}</span>
@@ -371,7 +371,6 @@ export default function Dashboard() {
           </button>
         </CardHeader>
         
-        {/* Adjusted padding in CardContent for mobile */}
         <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 p-4 sm:p-6 pt-0">
           {events.map((evt, idx) => (
             <div
