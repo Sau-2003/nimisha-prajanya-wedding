@@ -4,7 +4,14 @@ import Link from "next/link";
 import { CheckCircle2, CalendarDays } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { differenceInDays, differenceInWeeks } from 'date-fns';
+import { supabase } from "@/lib/supabase";
 
+
+const { data: { user } } = await supabase.auth.getUser();
+
+if (!user) {
+  window.location.href = "/login";
+}
 const events = [
   { name: 'Puja',       date: 'Jan 27, 2027', link: '/events/puja',      color: 'bg-orange-500' },  
   { name: 'Mehendi',    date: 'Jan 29, 2027', link: '/events/mehendi',   color: 'bg-emerald-500' }, 
