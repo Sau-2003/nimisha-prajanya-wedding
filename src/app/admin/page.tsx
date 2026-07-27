@@ -94,47 +94,6 @@ export default function AdminPage() {
         </p>
       </div>
 
-      {/* Add New User Form */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-        <h2 className="text-lg font-bold text-slate-800 mb-4">Grant New Access</h2>
-        <form onSubmit={handleAddUser} className="flex flex-col md:flex-row gap-4 md:items-end">
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              User's Email Address
-            </label>
-            <input
-              type="email"
-              required
-              value={newEmail}
-              onChange={(e) => setNewEmail(e.target.value)}
-              placeholder="guest@gmail.com"
-              className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            />
-          </div>
-          
-          <div className="flex items-center gap-2 h-[42px] px-2">
-            <input
-              type="checkbox"
-              id="budget"
-              checked={giveBudgetAccess}
-              onChange={(e) => setGiveBudgetAccess(e.target.checked)}
-              className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
-            />
-            <label htmlFor="budget" className="text-sm font-medium text-slate-700 cursor-pointer">
-              Allow Budget Access
-            </label>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="bg-emerald-600 text-white font-medium px-6 py-2 rounded-lg hover:bg-emerald-700 transition-colors h-[42px] flex items-center justify-center gap-2 disabled:opacity-50"
-          >
-            <Plus className="w-4 h-4" /> {loading ? "Adding..." : "Add User"}
-          </button>
-        </form>
-      </div>
-
       {/* Users List */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-slate-100">
