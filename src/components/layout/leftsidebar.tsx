@@ -18,7 +18,7 @@ const mainNav = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Global Task Board", href: "/global_task_board", icon: ClipboardList },
   { name: "Menu", href: "/menu", icon: SquareMenu },
-  { name: "Vendor Tracker", href: "/vendors", icon: Handshake },
+  { name: "Vendors", href: "/vendors", icon: Handshake },
   { name: "Budget", href: "/budget", icon: IndianRupee, requiresBudget: true },
   { name: "Guests", href: "/guests", icon: Users },
   { name: "Notes", href: "/notes", icon: BookIcon },

@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, CheckCircle2, Trash2, Phone, Pencil, Handshake, X, Link as LinkIcon, ChevronUp, ChevronDown, Pin } from "lucide-react";
+import { Plus, CheckCircle2, Trash2, Phone, Pencil, Handshake, X, Link as LinkIcon, ChevronUp, ChevronDown, Pin, Search } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useVendors } from "@/hooks/useVendors";
 
@@ -132,6 +132,7 @@ const renderTextWithLinks = (text: string) => {
 function VendorsTracker() {
   const { dbVendors, loading: vendorsLoading, fetchData: fetchVendors } = useVendors();
 
+  const [searchQuery, setSearchQuery] = useState("");
   const [customCategories, setCustomCategories] = useState<string[]>([]);
   const [hiddenCategories, setHiddenCategories] = useState<string[]>([]);
   const [pinnedCategoriesList, setPinnedCategoriesList] = useState<string[]>([]);
@@ -228,6 +229,20 @@ function VendorsTracker() {
           notes: v.notes || "",
         })) || [];
         
+      // Filter based on search query if present
+      if (searchQuery.trim() !== "") {
+        const query = searchQuery.toLowerCase();
+        const matchesCategory = categoryName.toLowerCase().includes(query);
+        if (!matchesCategory) {
+          matches = matches.filter((opt) => 
+            opt.name.toLowerCase().includes(query) ||
+            opt.status.toLowerCase().includes(query) ||
+            opt.notes?.toLowerCase().includes(query) ||
+            opt.contactNumber?.some(phone => phone.toLowerCase().includes(query))
+          );
+        }
+      }
+      
       // SORT: Bring "Confirmed" vendors to the top, then sort by Negotiating -> Enquired -> Recommendation -> Not Started
       matches = matches.sort((a, b) => {
         return statusOrder[a.status] - statusOrder[b.status];
@@ -247,8 +262,13 @@ function VendorsTracker() {
         isManuallyPinned,
         isPinned
       };
+    }).filter(cat => {
+      if (searchQuery.trim() === "") return true;
+      const query = searchQuery.toLowerCase();
+      const matchesCategoryName = cat.name.toLowerCase().includes(query);
+      return matchesCategoryName || cat.options.length > 0;
     });
-  }, [orderedCategories, dbVendors, pinnedCategoriesList]);
+  }, [orderedCategories, dbVendors, pinnedCategoriesList, searchQuery]);
 
   const pinnedGroup = useMemo(() => rawDisplayCategories.filter(c => c.isPinned), [rawDisplayCategories]);
   const unpinnedGroup = useMemo(() => rawDisplayCategories.filter(c => !c.isPinned), [rawDisplayCategories]);
@@ -480,7 +500,6 @@ function VendorsTracker() {
       return;
     }
 
-    // Handle pin status if changing away from "Confirmed"
     if (targetVendor && targetVendor.status === 'Confirmed' && editOptionStatus !== 'Confirmed') {
       const catName = targetVendor.category;
       
@@ -495,7 +514,6 @@ function VendorsTracker() {
       }
     }
 
-    // Close the popup after successful edit
     setIsDialogOpen(false);
     setEditingOptionId(null);
     await fetchVendors();
@@ -562,287 +580,315 @@ function VendorsTracker() {
   return (
     <>
       <div className="space-y-4 mb-2">
-        <div>
-          <h1 className="text-3xl font-serif font-bold text-emerald-900 flex items-center gap-3">
-            <Handshake className="w-8 h-8 text-emerald-700" /> Vendors
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Keep track of options and confirmed selections of your wedding team.
-          </p>
-        </div>
-        <div>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => setIsAddCategoryOpen(true)}
-            className="text-xs font-medium text-emerald-700 border-emerald-200 hover:bg-emerald-50 h-8 shadow-sm transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5 mr-1" /> Add Category
-          </Button>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-serif font-bold text-emerald-900 flex items-center gap-3">
+              <Handshake className="w-8 h-8 text-emerald-700" /> Vendors
+            </h1>
+            <p className="text-sm text-slate-500 mt-1">
+              Keep track of options and confirmed selections of your wedding team.
+            </p>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1 md:w-64">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search vendors..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-white pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:border-emerald-500 shadow-sm"
+              />
+              {searchQuery && (
+                <button 
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setIsAddCategoryOpen(true)}
+              className="text-xs font-medium text-emerald-700 border-emerald-200 hover:bg-emerald-50 h-9 shadow-sm transition-colors whitespace-nowrap"
+            >
+              <Plus className="w-3.5 h-3.5 mr-1" /> Add Category
+            </Button>
+          </div>
         </div>
       </div>
 
       <Card className="col-span-full border-slate-200 shadow-sm">
         <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {displayCategories.map((item) => {
-              const hasConfirmed = item.hasConfirmed;
+          {displayCategories.length === 0 ? (
+            <div className="text-center py-12 text-slate-400 text-sm italic">
+              No categories or vendors found matching &quot;{searchQuery}&quot;.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {displayCategories.map((item) => {
+                const hasConfirmed = item.hasConfirmed;
 
-              return (
-                <div
-                  key={item.name}
-                  className={`group/category p-4 rounded-xl border transition-colors shadow-sm flex flex-col min-h-[140px] ${
-                    hasConfirmed ? "border-emerald-200 bg-emerald-50/30" : "border-slate-100 bg-white hover:border-slate-300"
-                  }`}
-                >
-                  
-                  {/* CATEGORY HEADER ROW */}
-                  {editingCategoryTitle === item.name ? (
-                    <div className="flex items-center gap-1.5 w-full mb-3">
-                      <input 
-                        type="text" 
-                        value={editCategoryInput}
-                        onChange={(e) => setEditCategoryInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleSaveCategoryName(item.name);
-                          if (e.key === 'Escape') setEditingCategoryTitle(null);
-                        }}
-                        className="flex-1 border border-emerald-500 p-1 rounded text-sm focus:outline-none"
-                        autoFocus
-                      />
-                      <button onClick={() => handleSaveCategoryName(item.name)} className="p-1 text-emerald-600 bg-emerald-50 rounded border border-emerald-100 hover:bg-emerald-100">
-                        <CheckCircle2 className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => setEditingCategoryTitle(null)} className="p-1 text-slate-400 bg-slate-100 rounded border border-slate-200 hover:bg-slate-200">
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-2 mb-3 w-full border-b border-slate-100 pb-2">
-                      <div className="flex justify-between items-center w-full">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          {/* PIN/UNPIN TOGGLE */}
-                          <button
-                            onClick={() => !item.hasConfirmed && handleTogglePin(item.name, item.isManuallyPinned)}
-                            disabled={item.hasConfirmed}
-                            className={`transition-colors p-1 rounded ${
-                              item.hasConfirmed
-                                ? "text-emerald-500 cursor-not-allowed opacity-80"
-                                : item.isManuallyPinned 
-                                  ? "text-emerald-600 hover:bg-slate-100" 
-                                  : "text-slate-300 hover:text-slate-500 hover:bg-slate-100"
-                            }`}
-                            title={
-                              item.hasConfirmed 
-                                ? "Pinned automatically (Confirmed selection)" 
-                                : item.isManuallyPinned 
-                                  ? "Unpin category" 
-                                  : "Pin category to top"
-                            }
-                          >
-                            <Pin className={`w-3.5 h-3.5 ${item.isPinned ? "fill-emerald-600/20" : ""}`} />
-                          </button>
-                          
-                          <h3 className="font-semibold text-slate-800 text-base truncate">{item.name}</h3>
-                        </div>
-
-                        <Badge
-                          className={`${
-                            hasConfirmed
-                              ? "bg-emerald-100 text-emerald-700"
-                              : item.options.length > 0
-                              ? "bg-orange-100 text-orange-700"
-                              : "bg-slate-100 text-slate-600"
-                          } border-none shadow-none font-medium whitespace-nowrap ml-2`}
-                        >
-                          {hasConfirmed
-                            ? `${item.confirmedOptions.length} Confirmed`
-                            : item.options.length > 0
-                            ? `${item.options.length} Options`
-                            : "Not Started"}
-                        </Badge>
-                      </div>
-
-                      {/* FORMATTED ACTION BAR */}
-                      <div className="flex items-center justify-between text-xs pt-1">
-                        <button
-                          onClick={() => openDialog(item.name)}
-                          className="text-emerald-700 font-medium hover:underline flex items-center gap-1"
-                        >
-                          <Plus className="w-3.5 h-3.5" /> 
-                          {hasConfirmed ? "Manage" : item.options.length > 0 ? "Edit / Add Option" : "Add Options"}
+                return (
+                  <div
+                    key={item.name}
+                    className={`group/category p-4 rounded-xl border transition-colors shadow-sm flex flex-col min-h-[140px] ${
+                      hasConfirmed ? "border-emerald-200 bg-emerald-50/30" : "border-slate-100 bg-white hover:border-slate-300"
+                    }`}
+                  >
+                    
+                    {/* CATEGORY HEADER ROW */}
+                    {editingCategoryTitle === item.name ? (
+                      <div className="flex items-center gap-1.5 w-full mb-3">
+                        <input 
+                          type="text" 
+                          value={editCategoryInput}
+                          onChange={(e) => setEditCategoryInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSaveCategoryName(item.name);
+                            if (e.key === 'Escape') setEditingCategoryTitle(null);
+                          }}
+                          className="flex-1 border border-emerald-500 p-1 rounded text-sm focus:outline-none"
+                          autoFocus
+                        />
+                        <button onClick={() => handleSaveCategoryName(item.name)} className="p-1 text-emerald-600 bg-emerald-50 rounded border border-emerald-100 hover:bg-emerald-100">
+                          <CheckCircle2 className="w-4 h-4" />
                         </button>
-
-                        <div className="flex items-center gap-2 text-slate-500">
-                          <button
-                            onClick={() => {
-                              setEditingCategoryTitle(item.name);
-                              setEditCategoryInput(item.name);
-                            }}
-                            className="hover:text-emerald-600 transition-colors"
-                            title="Edit Category Name"
-                          >
-                            <Pencil className="w-3.5 h-3.5 inline" />
-                          </button>
-                          <span>•</span>
-                          <button
-                            onClick={() => setCategoryToDelete({ name: item.name, count: item.options.length })}
-                            className="hover:text-red-500 transition-colors"
-                            title="Delete Category"
-                          >
-                            <Trash2 className="w-3.5 h-3.5 inline" />
-                          </button>
-                          <span>•</span>
-                          
-                          {/* MOVE CONTROLS (Group Constrained) */}
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => handleMoveCategory(item.name, 'up', item.isPinned)}
-                              disabled={
-                                item.isPinned 
-                                  ? pinnedGroup.findIndex(c => c.name === item.name) === 0 
-                                  : unpinnedGroup.findIndex(c => c.name === item.name) === 0
-                              }
-                              className="hover:text-emerald-600 disabled:opacity-30"
-                              title="Move Up"
-                            >
-                              <ChevronUp className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleMoveCategory(item.name, 'down', item.isPinned)}
-                              disabled={
-                                item.isPinned 
-                                  ? pinnedGroup.findIndex(c => c.name === item.name) === pinnedGroup.length - 1 
-                                  : unpinnedGroup.findIndex(c => c.name === item.name) === unpinnedGroup.length - 1
-                              }
-                              className="hover:text-emerald-600 disabled:opacity-30"
-                              title="Move Down"
-                            >
-                              <ChevronDown className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="mt-1 space-y-2">
-                    {/* CONFIRMED STATE */}
-                    {hasConfirmed ? (
-                      <div className="space-y-2">
-                        {item.confirmedOptions.map((vendor) => (
-                          <div
-                            key={vendor.id}
-                            className="bg-emerald-100/60 p-2.5 rounded-lg border border-emerald-200 space-y-1 relative group/vendor"
-                          >
-                            <div className="flex items-start justify-between">
-                              <div className="flex flex-col min-w-0 flex-1 pr-2">
-                                <div className="flex items-center gap-2 text-emerald-900 font-semibold text-sm">
-                                  <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                                  <span className="truncate">{vendor.name}</span>
-                                </div>
-                                {vendor.estimatedCost ? (
-                                  <span className="text-xs text-emerald-800 font-medium ml-6 flex items-center mt-0.5">
-                                    ₹{vendor.estimatedCost.toLocaleString("en-IN")}
-                                  </span>
-                                ) : null}
-                              </div>
-
-                              <div className="flex items-center gap-1.5 flex-shrink-0 pt-0.5">
-                                <button onClick={() => { openDialog(item.name); startEditing(vendor); }} className="p-1 text-emerald-700 hover:text-emerald-900 transition-colors" title="Edit Vendor">
-                                  <Pencil className="w-3.5 h-3.5" />
-                                </button>
-                                <button onClick={() => setItemToDelete(vendor.id)} className="p-1 text-red-500 hover:text-red-700 transition-colors" title="Delete Vendor">
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </div>
-
-                            <div className="flex flex-wrap gap-3 text-xs text-emerald-800 ml-6 pt-1">
-                              {vendor.contactNumber?.map((phone, i) => (
-                                <a
-                                  key={i}
-                                  href={`tel:${phone}`}
-                                  className="flex items-center gap-1 hover:underline"
-                                >
-                                  <Phone className="w-3 h-3" />
-                                  {phone}
-                                </a>
-                              ))}
-                            </div>
-                            
-                            {vendor.notes && (
-                               <div className="mt-2 text-[11px] text-emerald-800/80 bg-white/60 p-2 rounded border border-emerald-100/50">
-                                 {renderTextWithLinks(vendor.notes)}
-                               </div>
-                            )}
-                          </div>
-                        ))}
+                        <button onClick={() => setEditingCategoryTitle(null)} className="p-1 text-slate-400 bg-slate-100 rounded border border-slate-200 hover:bg-slate-200">
+                          <X className="w-4 h-4" />
+                        </button>
                       </div>
                     ) : (
-                      
-                      /* UNCONFIRMED MULTI-OPTION STATE */
-                      <div>
-                        {item.options.length > 0 ? (
-                          <div className="space-y-2">
-                            {item.options.map((opt) => (
-                              <div key={opt.id} className="flex flex-col gap-1.5 text-xs text-slate-600 bg-slate-50 p-2.5 rounded border border-slate-100 relative group/vendor">
-                                <div className="flex items-start justify-between">
-                                  <div className="flex flex-col min-w-0 flex-1 pr-2">
-                                    <span className="font-medium text-slate-700 truncate">{opt.name}</span>
-                                    {opt.estimatedCost ? (
-                                      <span className="text-[11px] text-slate-500 flex items-center font-medium mt-0.5">
-                                        ₹{opt.estimatedCost.toLocaleString("en-IN")}
-                                      </span>
-                                    ) : null}
-                                  </div>
-
-                                  <div className="flex items-center gap-2 flex-shrink-0">
-                                    <span className="text-[10px] text-slate-500 bg-slate-200/60 px-1.5 py-0.5 rounded">{opt.status}</span>
-                                    <div className="flex items-center gap-1">
-                                      <button onClick={() => { openDialog(item.name); startEditing(opt); }} className="p-1 text-slate-500 hover:text-emerald-700" title="Edit Vendor">
-                                        <Pencil className="w-3.5 h-3.5" />
-                                      </button>
-                                      <button onClick={() => setItemToDelete(opt.id)} className="p-1 text-slate-400 hover:text-red-600" title="Delete Vendor">
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
-                                    </div>
-                                  </div>
-                                </div>
-                                
-                                {opt.contactNumber && opt.contactNumber.length > 0 && (
-                                  <div className="flex flex-wrap gap-3 pt-1">
-                                    {opt.contactNumber.map((phone, i) => (
-                                      <a
-                                        key={i}
-                                        href={`tel:${phone}`}
-                                        className="flex items-center gap-1 text-[11px] hover:text-emerald-600 transition-colors"
-                                      >
-                                        <Phone className="w-3 h-3" />
-                                        {phone}
-                                      </a>
-                                    ))}
-                                  </div>
-                                )}
-
-                                {opt.notes && (
-                                  <div className="mt-1 pt-1.5 border-t border-slate-200/60 text-[11px] text-slate-500">
-                                    {renderTextWithLinks(opt.notes)}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
+                      <div className="flex flex-col gap-2 mb-3 w-full border-b border-slate-100 pb-2">
+                        <div className="flex justify-between items-center w-full">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            {/* PIN/UNPIN TOGGLE */}
+                            <button
+                              onClick={() => !item.hasConfirmed && handleTogglePin(item.name, item.isManuallyPinned)}
+                              disabled={item.hasConfirmed}
+                              className={`transition-colors p-1 rounded ${
+                                item.hasConfirmed
+                                  ? "text-emerald-500 cursor-not-allowed opacity-80"
+                                  : item.isManuallyPinned 
+                                    ? "text-emerald-600 hover:bg-slate-100" 
+                                    : "text-slate-300 hover:text-slate-500 hover:bg-slate-100"
+                              }`}
+                              title={
+                                item.hasConfirmed 
+                                  ? "Pinned automatically (Confirmed selection)" 
+                                  : item.isManuallyPinned 
+                                    ? "Unpin category" 
+                                    : "Pin category to top"
+                              }
+                            >
+                              <Pin className={`w-3.5 h-3.5 ${item.isPinned ? "fill-emerald-600/20" : ""}`} />
+                            </button>
+                            
+                            <h3 className="font-semibold text-slate-800 text-base truncate">{item.name}</h3>
                           </div>
-                        ) : (
-                          <p className="text-xs text-slate-400 italic">No options added yet.</p>
-                        )}
+
+                          <Badge
+                            className={`${
+                              hasConfirmed
+                                ? "bg-emerald-100 text-emerald-700"
+                                : item.options.length > 0
+                                ? "bg-orange-100 text-orange-700"
+                                : "bg-slate-100 text-slate-600"
+                            } border-none shadow-none font-medium whitespace-nowrap ml-2`}
+                          >
+                            {hasConfirmed
+                              ? `${item.confirmedOptions.length} Confirmed`
+                              : item.options.length > 0
+                              ? `${item.options.length} Options`
+                              : "Not Started"}
+                          </Badge>
+                        </div>
+
+                        {/* FORMATTED ACTION BAR */}
+                        <div className="flex items-center justify-between text-xs pt-1">
+                          <button
+                            onClick={() => openDialog(item.name)}
+                            className="text-emerald-700 font-medium hover:underline flex items-center gap-1"
+                          >
+                            <Plus className="w-3.5 h-3.5" /> 
+                            {hasConfirmed ? "Manage" : item.options.length > 0 ? "Edit / Add Option" : "Add Options"}
+                          </button>
+
+                          <div className="flex items-center gap-2 text-slate-500">
+                            <button
+                              onClick={() => {
+                                setEditingCategoryTitle(item.name);
+                                setEditCategoryInput(item.name);
+                              }}
+                              className="hover:text-emerald-600 transition-colors"
+                              title="Edit Category Name"
+                            >
+                              <Pencil className="w-3.5 h-3.5 inline" />
+                            </button>
+                            <span>•</span>
+                            <button
+                              onClick={() => setCategoryToDelete({ name: item.name, count: item.options.length })}
+                              className="hover:text-red-500 transition-colors"
+                              title="Delete Category"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 inline" />
+                            </button>
+                            <span>•</span>
+                            
+                            {/* MOVE CONTROLS (Group Constrained) */}
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleMoveCategory(item.name, 'up', item.isPinned)}
+                                disabled={
+                                  item.isPinned 
+                                    ? pinnedGroup.findIndex(c => c.name === item.name) === 0 
+                                    : unpinnedGroup.findIndex(c => c.name === item.name) === 0
+                                }
+                                className="hover:text-emerald-600 disabled:opacity-30"
+                                title="Move Up"
+                              >
+                                <ChevronUp className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleMoveCategory(item.name, 'down', item.isPinned)}
+                                disabled={
+                                  item.isPinned 
+                                    ? pinnedGroup.findIndex(c => c.name === item.name) === pinnedGroup.length - 1 
+                                    : unpinnedGroup.findIndex(c => c.name === item.name) === unpinnedGroup.length - 1
+                                }
+                                className="hover:text-emerald-600 disabled:opacity-30"
+                                title="Move Down"
+                              >
+                                <ChevronDown className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     )}
+
+                    <div className="mt-1 space-y-2">
+                      {/* CONFIRMED STATE */}
+                      {hasConfirmed ? (
+                        <div className="space-y-2">
+                          {item.confirmedOptions.map((vendor) => (
+                            <div
+                              key={vendor.id}
+                              className="bg-emerald-100/60 p-2.5 rounded-lg border border-emerald-200 space-y-1 relative group/vendor"
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex flex-col min-w-0 flex-1 pr-2">
+                                  <div className="flex items-center gap-2 text-emerald-900 font-semibold text-sm">
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                                    <span className="truncate">{vendor.name}</span>
+                                  </div>
+                                  {vendor.estimatedCost ? (
+                                    <span className="text-xs text-emerald-800 font-medium ml-6 flex items-center mt-0.5">
+                                      ₹{vendor.estimatedCost.toLocaleString("en-IN")}
+                                    </span>
+                                  ) : null}
+                                </div>
+
+                                <div className="flex items-center gap-1.5 flex-shrink-0 pt-0.5">
+                                  <button onClick={() => { openDialog(item.name); startEditing(vendor); }} className="p-1 text-emerald-700 hover:text-emerald-900 transition-colors" title="Edit Vendor">
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button onClick={() => setItemToDelete(vendor.id)} className="p-1 text-red-500 hover:text-red-700 transition-colors" title="Delete Vendor">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-wrap gap-3 text-xs text-emerald-800 ml-6 pt-1">
+                                {vendor.contactNumber?.map((phone, i) => (
+                                  <a
+                                    key={i}
+                                    href={`tel:${phone}`}
+                                    className="flex items-center gap-1 hover:underline"
+                                  >
+                                    <Phone className="w-3 h-3" />
+                                    {phone}
+                                  </a>
+                                ))}
+                              </div>
+                              
+                              {vendor.notes && (
+                                 <div className="mt-2 text-[11px] text-emerald-800/80 bg-white/60 p-2 rounded border border-emerald-100/50">
+                                   {renderTextWithLinks(vendor.notes)}
+                                 </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        
+                        /* UNCONFIRMED MULTI-OPTION STATE */
+                        <div>
+                          {item.options.length > 0 ? (
+                            <div className="space-y-2">
+                              {item.options.map((opt) => (
+                                <div key={opt.id} className="flex flex-col gap-1.5 text-xs text-slate-600 bg-slate-50 p-2.5 rounded border border-slate-100 relative group/vendor">
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex flex-col min-w-0 flex-1 pr-2">
+                                      <span className="font-medium text-slate-700 truncate">{opt.name}</span>
+                                      {opt.estimatedCost ? (
+                                        <span className="text-[11px] text-slate-500 flex items-center font-medium mt-0.5">
+                                          ₹{opt.estimatedCost.toLocaleString("en-IN")}
+                                        </span>
+                                      ) : null}
+                                    </div>
+
+                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                      <span className="text-[10px] text-slate-500 bg-slate-200/60 px-1.5 py-0.5 rounded">{opt.status}</span>
+                                      <div className="flex items-center gap-1">
+                                        <button onClick={() => { openDialog(item.name); startEditing(opt); }} className="p-1 text-slate-500 hover:text-emerald-700" title="Edit Vendor">
+                                          <Pencil className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button onClick={() => setItemToDelete(opt.id)} className="p-1 text-slate-400 hover:text-red-600" title="Delete Vendor">
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  
+                                  {opt.contactNumber && opt.contactNumber.length > 0 && (
+                                    <div className="flex flex-wrap gap-3 pt-1">
+                                      {opt.contactNumber.map((phone, i) => (
+                                        <a
+                                          key={i}
+                                          href={`tel:${phone}`}
+                                          className="flex items-center gap-1 text-[11px] hover:text-emerald-600 transition-colors"
+                                        >
+                                          <Phone className="w-3 h-3" />
+                                          {phone}
+                                        </a>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  {opt.notes && (
+                                    <div className="mt-1 pt-1.5 border-t border-slate-200/60 text-[11px] text-slate-500">
+                                      {renderTextWithLinks(opt.notes)}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-slate-400 italic">No options added yet.</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -1133,7 +1179,7 @@ function VendorsTracker() {
           </DialogHeader>
           <div className="py-2">
             <p className="text-sm text-slate-600">
-              Are you sure you want to delete the <strong>"{categoryToDelete?.name}"</strong> category{categoryToDelete && categoryToDelete.count > 0 ? ` and its ${categoryToDelete.count} vendor(s)` : ""}? This action cannot be undone.
+              Are you sure you want to delete the <strong>&quot;{categoryToDelete?.name}&quot;</strong> category{categoryToDelete && categoryToDelete.count > 0 ? ` and its ${categoryToDelete.count} vendor(s)` : ""}? This action cannot be undone.
             </p>
           </div>
           <div className="flex justify-end gap-2">
