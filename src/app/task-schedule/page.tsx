@@ -322,6 +322,18 @@ export default function DateSchedulePage() {
     reader.readAsDataURL(file);
   };
 
+  // Helper to check if a task is today
+  const isToday = (dateString: string | null) => {
+    if (!dateString) return false;
+    const today = new Date();
+    const dueDate = new Date(dateString);
+    return (
+      dueDate.getDate() === today.getDate() &&
+      dueDate.getMonth() === today.getMonth() &&
+      dueDate.getFullYear() === today.getFullYear()
+    );
+  };
+
   // Helper to check if a task is overdue
   const isOverdue = (dateString: string | null) => {
     if (!dateString) return false;
@@ -399,29 +411,40 @@ export default function DateSchedulePage() {
           ).sort(([dateA], [dateB]) => {
             if (dateA === "Unscheduled Tasks") return 1;
             if (dateB === "Unscheduled Tasks") return -1;
+            
+            // Bring today's group to the absolute top
+            const todayStr = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+            if (dateA === todayStr) return -1;
+            if (dateB === todayStr) return 1;
+
             return new Date(dateA).getTime() - new Date(dateB).getTime();
           }).map(([dueDateKey, items]) => {
             const isUnscheduled = dueDateKey === "Unscheduled Tasks";
+            const groupIsToday = !isUnscheduled && (items as any[]).some(item => isToday(item.due_date));
             const groupHasOverdue = !isUnscheduled && (items as any[]).some(item => isOverdue(item.due_date));
 
             return (
               <div key={dueDateKey}>
-                <h2 className={`mb-3 text-lg font-semibold ${isUnscheduled ? 'text-slate-600' : groupHasOverdue ? 'text-red-600' : 'text-emerald-700'}`}>
-                  Due: {dueDateKey}
+                <h2 className={`mb-3 text-lg font-semibold flex items-center gap-2 ${isUnscheduled ? 'text-slate-600' : groupIsToday ? 'text-emerald-700 font-bold' : groupHasOverdue ? 'text-red-600' : 'text-emerald-700'}`}>
+                  <span>Due: {dueDateKey}</span>
+                  {groupIsToday && (
+                    <span className="bg-emerald-100 text-emerald-800 text-[10px] uppercase font-bold px-2 py-0.5 rounded-full tracking-wider">Today</span>
+                  )}
                 </h2>
 
                 <div className="space-y-3">
                   {(items as any[]).map((item) => {
+                    const todayTask = !isUnscheduled && isToday(item.due_date);
                     const overdue = !isUnscheduled && isOverdue(item.due_date);
 
                     return (
                       <div
                         key={item.id}
                         className={`flex items-start gap-4 rounded-xl border p-4 shadow-sm transition-colors ${
-                          overdue ? 'border-red-300 bg-red-50/30' : 'border-slate-200 bg-white'
+                          todayTask ? 'border-emerald-300 bg-emerald-50/20' : overdue ? 'border-red-300 bg-red-50/30' : 'border-slate-200 bg-white'
                         }`}
                       >
-                        <Calendar className={`w-5 h-5 mt-0.5 shrink-0 ${overdue ? 'text-red-500' : 'text-emerald-600'}`} />
+                        <Calendar className={`w-5 h-5 mt-0.5 shrink-0 ${todayTask ? 'text-emerald-600' : overdue ? 'text-red-500' : 'text-emerald-600'}`} />
 
                         {/* EDIT MODE */}
                         {editingItemId === item.id ? (
@@ -599,6 +622,11 @@ export default function DateSchedulePage() {
             const sortedDueDateEntries = Object.entries(dueDateGroups).sort(([dateA], [dateB]) => {
               if (dateA === "Unscheduled Tasks") return 1;
               if (dateB === "Unscheduled Tasks") return -1;
+              
+              const todayStr = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+              if (dateA === todayStr) return -1;
+              if (dateB === todayStr) return 1;
+
               return new Date(dateA).getTime() - new Date(dateB).getTime();
             });
 
@@ -614,25 +642,30 @@ export default function DateSchedulePage() {
                 <div className="space-y-4 pl-4 border-l-2 border-emerald-100">
                   {sortedDueDateEntries.map(([dueDateKey, items]) => {
                     const isUnscheduled = dueDateKey === "Unscheduled Tasks";
+                    const groupIsToday = !isUnscheduled && dueDateKey === new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
                     return (
                       <div key={dueDateKey} className="space-y-3">
-                        <h3 className={`text-sm font-semibold ${isUnscheduled ? 'text-slate-500' : 'text-emerald-700'}`}>
-                          Due: {dueDateKey}
+                        <h3 className={`text-sm font-semibold flex items-center gap-2 ${isUnscheduled ? 'text-slate-500' : groupIsToday ? 'text-emerald-700 font-bold' : 'text-emerald-700'}`}>
+                          <span>Due: {dueDateKey}</span>
+                          {groupIsToday && (
+                            <span className="bg-emerald-100 text-emerald-800 text-[10px] uppercase font-bold px-2 py-0.5 rounded-full tracking-wider">Today</span>
+                          )}
                         </h3>
 
                         <div className="space-y-3">
                           {(items as any[]).map((item) => {
+                            const todayTask = !isUnscheduled && isToday(item.due_date);
                             const overdue = !isUnscheduled && isOverdue(item.due_date);
 
                             return (
                               <div
                                 key={item.id}
                                 className={`flex items-start gap-4 rounded-xl border p-4 shadow-sm transition-colors ${
-                                  overdue ? 'border-red-300 bg-red-50/30' : 'border-slate-200 bg-white'
+                                  todayTask ? 'border-emerald-300 bg-emerald-50/20' : overdue ? 'border-red-300 bg-red-50/30' : 'border-slate-200 bg-white'
                                 }`}
                               >
-                                <Calendar className={`w-5 h-5 mt-0.5 shrink-0 ${overdue ? 'text-red-500' : 'text-emerald-600'}`} />
+                                <Calendar className={`w-5 h-5 mt-0.5 shrink-0 ${todayTask ? 'text-emerald-600' : overdue ? 'text-red-500' : 'text-emerald-600'}`} />
 
                                 {/* EDIT MODE */}
                                 {editingItemId === item.id ? (

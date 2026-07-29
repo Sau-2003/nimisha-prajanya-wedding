@@ -18,6 +18,7 @@ interface VendorOption {
   estimatedCost?: number;
   contactNumber?: string[];
   notes?: string;
+  comments?: string;
 }
 
 const initialCategories = [
@@ -154,12 +155,14 @@ function VendorsTracker() {
   const [newEstimatedCost, setNewEstimatedCost] = useState<string>("");
   const [newContactNumbers, setNewContactNumbers] = useState<string[]>([""]);
   const [newNotes, setNewNotes] = useState("");
+  const [newComments, setNewComments] = useState(""); // <-- ADDED
 
   const [editingOptionId, setEditingOptionId] = useState<string | null>(null);
   const [editOptionName, setEditOptionName] = useState("");
   const [editEstimatedCost, setEditEstimatedCost] = useState<string>("");
   const [editContactNumbers, setEditContactNumbers] = useState<string[]>([""]);
   const [editNotes, setEditNotes] = useState("");
+  const [editComments, setEditComments] = useState(""); // <-- ADDED
   const [editOptionStatus, setEditOptionStatus] = useState<BookingStatus>("Not Started"); 
 
   // Delete Confirmation States
@@ -227,6 +230,7 @@ function VendorsTracker() {
           estimatedCost: v.estimated_cost || 0,
           contactNumber: v.contact_numbers ?? [],
           notes: v.notes || "",
+          comments: v.comments || "", // <-- ADDED
         })) || [];
         
       // Filter based on search query if present
@@ -238,6 +242,7 @@ function VendorsTracker() {
             opt.name.toLowerCase().includes(query) ||
             opt.status.toLowerCase().includes(query) ||
             opt.notes?.toLowerCase().includes(query) ||
+            opt.comments?.toLowerCase().includes(query) ||
             opt.contactNumber?.some(phone => phone.toLowerCase().includes(query))
           );
         }
@@ -434,6 +439,7 @@ function VendorsTracker() {
     setNewEstimatedCost("");
     setNewContactNumbers([""]);
     setNewNotes("");
+    setNewComments("");
     setEditingOptionId(null);
     setIsDialogOpen(true);
   };
@@ -450,6 +456,7 @@ function VendorsTracker() {
       estimated_cost: newEstimatedCost ? parseFloat(newEstimatedCost) : 0,
       contact_numbers: filteredPhones.length > 0 ? filteredPhones : null,
       notes: newNotes.trim() || null,
+      comments: newComments.trim() || null, // <-- ADDED
       updated_at: new Date().toISOString(),
     });
 
@@ -464,6 +471,7 @@ function VendorsTracker() {
     setNewEstimatedCost("");
     setNewContactNumbers([""]);
     setNewNotes("");
+    setNewComments("");
     
     await fetchVendors();
   };
@@ -474,6 +482,7 @@ function VendorsTracker() {
     setEditEstimatedCost(opt.estimatedCost ? opt.estimatedCost.toString() : "");
     setEditContactNumbers(opt.contactNumber && opt.contactNumber.length > 0 ? opt.contactNumber : [""]);
     setEditNotes(opt.notes || "");
+    setEditComments(opt.comments || ""); // <-- ADDED
     setEditOptionStatus(opt.status);
   };
 
@@ -490,6 +499,7 @@ function VendorsTracker() {
       estimated_cost: editEstimatedCost ? parseFloat(editEstimatedCost) : 0,
       contact_numbers: filteredPhones.length > 0 ? filteredPhones : null,
       notes: editNotes.trim() || null,
+      comments: editComments.trim() || null, // <-- ADDED
       status: editOptionStatus,
       updated_at: new Date().toISOString(),
     }).eq("id", optionId);
@@ -818,7 +828,13 @@ function VendorsTracker() {
                               
                               {vendor.notes && (
                                  <div className="mt-2 text-[11px] text-emerald-800/80 bg-white/60 p-2 rounded border border-emerald-100/50">
-                                   {renderTextWithLinks(vendor.notes)}
+                                   <strong>Notes:</strong> {renderTextWithLinks(vendor.notes)}
+                                 </div>
+                              )}
+
+                              {vendor.comments && (
+                                 <div className="mt-2 text-[11px] text-emerald-800/80 bg-white/60 p-2 rounded border border-emerald-100/50">
+                                   <strong>Comments:</strong> {renderTextWithLinks(vendor.comments)}
                                  </div>
                               )}
                             </div>
@@ -872,7 +888,13 @@ function VendorsTracker() {
 
                                   {opt.notes && (
                                     <div className="mt-1 pt-1.5 border-t border-slate-200/60 text-[11px] text-slate-500">
-                                      {renderTextWithLinks(opt.notes)}
+                                      <strong>Notes:</strong> {renderTextWithLinks(opt.notes)}
+                                    </div>
+                                  )}
+                                  
+                                  {opt.comments && (
+                                    <div className="mt-1 pt-1.5 border-t border-slate-200/60 text-[11px] text-slate-500">
+                                      <strong>Comments:</strong> {renderTextWithLinks(opt.comments)}
                                     </div>
                                   )}
                                 </div>
@@ -894,7 +916,7 @@ function VendorsTracker() {
 
       {/* ADD CUSTOM CATEGORY MODAL */}
       <Dialog open={isAddCategoryOpen} onOpenChange={setIsAddCategoryOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md overflow-x-hidden">
           <DialogHeader>
             <DialogTitle>Add Vendor Category</DialogTitle>
           </DialogHeader>
@@ -917,7 +939,7 @@ function VendorsTracker() {
 
       {/* MANAGE OPTIONS MODAL */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
           
           <button type="button" aria-hidden="true" className="opacity-0 absolute w-0 h-0 pointer-events-none" />
 
@@ -1006,6 +1028,15 @@ function VendorsTracker() {
                   rows={2}
                   value={editNotes}
                   onChange={(e) => setEditNotes(e.target.value)}
+                />
+                
+                {/* NEW COMMENTS TEXT AREA (EDIT) */}
+                <textarea
+                  placeholder="Comments (Feedback, ongoing conversation...)"
+                  className="w-full border border-emerald-500 p-2 rounded-lg text-sm focus:outline-none resize-none"
+                  rows={2}
+                  value={editComments}
+                  onChange={(e) => setEditComments(e.target.value)}
                 />
 
                 <div className="flex justify-end gap-2 mt-2">
@@ -1142,6 +1173,15 @@ function VendorsTracker() {
                     value={newNotes}
                     onChange={(e) => setNewNotes(e.target.value)}
                   />
+
+                  {/* NEW COMMENTS TEXT AREA (ADD) */}
+                  <textarea
+                    placeholder="Comments (Feedback, ongoing conversation...)"
+                    className="w-full border border-slate-300 p-2 rounded-lg text-sm focus:outline-none focus:border-emerald-500 resize-none"
+                    rows={2}
+                    value={newComments}
+                    onChange={(e) => setNewComments(e.target.value)}
+                  />
                 </div>
 
                 <Button onClick={handleAddOption} className="w-full bg-emerald-600 hover:bg-emerald-700 text-sm font-semibold transition-colors">
@@ -1155,7 +1195,7 @@ function VendorsTracker() {
 
       {/* --- CONFIRM ITEM DELETE MODAL --- */}
       <Dialog open={!!itemToDelete} onOpenChange={(open) => !open && setItemToDelete(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md overflow-x-hidden">
           <DialogHeader>
             <DialogTitle>Confirm Deletion</DialogTitle>
           </DialogHeader>
@@ -1173,7 +1213,7 @@ function VendorsTracker() {
 
       {/* --- CONFIRM CATEGORY DELETE MODAL --- */}
       <Dialog open={!!categoryToDelete} onOpenChange={(open) => !open && setCategoryToDelete(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md overflow-x-hidden">
           <DialogHeader>
             <DialogTitle>Confirm Deletion</DialogTitle>
           </DialogHeader>

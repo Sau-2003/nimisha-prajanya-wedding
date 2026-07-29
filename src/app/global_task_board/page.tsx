@@ -394,7 +394,7 @@ export default function TasksPage() {
                         value={editingTaskText}
                         onChange={(val) => setEditingTaskText(val)}
                         placeholder="What needs to be done?"
-                        className="border border-emerald-500 rounded-lg outline-none px-3 py-2 text-slate-700 min-h-[60px] bg-white"          
+                        className="border border-emerald-500 rounded-lg outline-none px-3 py-2 text-slate-700 min-h-[60px] bg-white"      
                         autoFocus
                       />
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-center">
@@ -438,8 +438,15 @@ export default function TasksPage() {
                     </div>
                   ) : (
                     <div className="flex-1">
-                      <div className="flex justify-between items-center mb-1.5">
-                        <span className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">{task.created_at ? formatDate(task.created_at) : "Just now"}</span>
+                      <div className="flex flex-wrap justify-between items-center gap-2 mb-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">{task.created_at ? formatDate(task.created_at) : "Just now"}</span>
+                          {task.due_date && (
+                            <span className={`text-[11px] px-2 py-0.5 rounded-md font-medium flex items-center gap-1 ${overdue ? 'bg-red-100 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                              <Calendar className="w-3 h-3" /> Due: {formatDate(task.due_date)}
+                            </span>
+                          )}
+                        </div>
                         {task.assigned_to && (
                           <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1">
                             <User className="w-3 h-3 text-emerald-600" /> {task.assigned_to}
@@ -480,8 +487,15 @@ export default function TasksPage() {
             {completedTasks.map((task: any) => (
               <div key={task.id} className="bg-white border p-4 rounded-xl shadow-sm flex justify-between items-start group">
                 <div className="flex-1">
-                  <div className="flex justify-between items-center mb-1.5 opacity-70">
-                    <span className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">{task.created_at ? formatDate(task.created_at) : "Just now"}</span>
+                  <div className="flex flex-wrap justify-between items-center gap-2 mb-1.5 opacity-70">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">{task.created_at ? formatDate(task.created_at) : "Just now"}</span>
+                      {task.due_date && (
+                        <span className="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md font-medium flex items-center gap-1">
+                          <Calendar className="w-3 h-3" /> Due: {formatDate(task.due_date)}
+                        </span>
+                      )}
+                    </div>
                     {task.assigned_to && (
                       <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1">
                         <User className="w-3 h-3 text-slate-400" /> {task.assigned_to}
