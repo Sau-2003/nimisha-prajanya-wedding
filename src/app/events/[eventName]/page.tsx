@@ -9,7 +9,7 @@ import {
   ExternalLink, Plus, Trash2, Check, RotateCcw, 
   Pencil, X, Calendar, Image as ImageIcon, User, ChevronDown,
   Bold, Italic, Strikethrough, Video, AudioLines, Loader2,
-  Film, Music // Added Film and Music icons
+  Film, Music
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -17,12 +17,12 @@ import { useEventItems, CategoryId, WorkspaceItem } from '@/hooks/useEventItems'
 import { useTeamMembers } from '@/hooks/useTeamMembers';
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize Supabase Client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// --- FIX 1: Safe Supabase Initialization ---
+// This prevents the entire page from crashing if .env variables are missing
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
-// Update this to match your actual Supabase bucket name
 const BUCKET_NAME = "event-media";
 
 // --- FLOATING TEXT FORMATTING TOOLBAR ---
@@ -200,8 +200,10 @@ export default function EventWorkspacePage() {
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [itemToDelete, setItemToDelete] = useState<{ categoryId: CategoryId; itemId: string } | null>(null);
 
-  const totalTasks = (items.tasks?.length || 0) + (items.taskDone?.length || 0);
-  const completedTasks = items.taskDone?.length || 0;
+  // --- FIX 2: Optional Chaining on `items` ---
+  // If `items` is null initially, this prevents "Cannot read properties of undefined"
+  const totalTasks = (items?.tasks?.length || 0) + (items?.taskDone?.length || 0);
+  const completedTasks = items?.taskDone?.length || 0;
   const percentComplete = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
 
   const handleAddItem = async () => {
@@ -284,10 +286,15 @@ export default function EventWorkspacePage() {
     return dueDate < today;
   };
 
-  // --- SUPABASE STORAGE MEDIA UPLOAD ---
   const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>, isEditMode: boolean) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Guard clause in case Supabase failed to initialize
+    if (!supabase) {
+      alert("Upload failed: Supabase connection is missing. Please check your .env variables.");
+      return;
+    }
 
     setIsUploading(true);
 
@@ -306,6 +313,7 @@ export default function EventWorkspacePage() {
 
       if (error) {
         console.error("Upload error:", error.message);
+        alert(`Upload error: ${error.message}`);
         setIsUploading(false);
         return;
       }
@@ -345,7 +353,8 @@ export default function EventWorkspacePage() {
   };
 
   const renderCardPreview = (categoryId: CategoryId) => {
-    const list = items[categoryId] || [];
+    // Add optional chaining here to prevent crash
+    const list = items?.[categoryId] || [];
     if (list.length === 0) return <p className="text-sm text-slate-400 italic">Empty</p>;
 
     const sortedList = [...list].sort((a: any, b: any) => 
@@ -626,7 +635,7 @@ export default function EventWorkspacePage() {
             )}
 
             <div className="mt-4 space-y-3 pb-4">
-              {activeModal && [...(items[activeModal] || [])].sort((a: any, b: any) => 
+              {activeModal && [...(items?.[activeModal] || [])].sort((a: any, b: any) => 
                 new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime()
               ).map((item: any) => {
                 const overdue = activeModal === 'tasks' && isOverdue(item.dueDate || null);
@@ -827,7 +836,7 @@ export default function EventWorkspacePage() {
                 );
               })}
               
-              {activeModal && (!items[activeModal] || items[activeModal].length === 0) && (
+              {activeModal && (!items?.[activeModal] || items[activeModal].length === 0) && (
                 <p className="text-center text-slate-400 text-sm py-8 border-2 border-dashed border-slate-100 rounded-xl">No entries yet.</p>
               )}
             </div>
