@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { supabase } from '@/lib/supabase'; // Using your clean centralized import!
+import { supabase } from '@/lib/supabase';
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { 
@@ -18,6 +18,19 @@ import { useEventItems, CategoryId, WorkspaceItem } from '@/hooks/useEventItems'
 import { useTeamMembers } from '@/hooks/useTeamMembers';
 
 const BUCKET_NAME = "event-media";
+
+// --- HELPER: SMARTER MEDIA DETECTION ---
+// Automatically detects video/audio from the URL if the database forgets what type it is
+const guessMediaType = (url?: string, dbType?: string) => {
+  if (dbType && dbType !== 'image') return dbType; 
+  if (!url) return 'image';
+  
+  const cleanUrl = url.split('?')[0].toLowerCase();
+  if (cleanUrl.endsWith('.mp4') || cleanUrl.endsWith('.webm') || cleanUrl.endsWith('.mov')) return 'video';
+  if (cleanUrl.endsWith('.mp3') || cleanUrl.endsWith('.wav') || cleanUrl.endsWith('.m4a') || cleanUrl.endsWith('.aac') || cleanUrl.endsWith('.ogg')) return 'audio';
+  
+  return 'image';
+};
 
 // --- FLOATING TEXT FORMATTING TOOLBAR ---
 function FloatingToolbar() {
@@ -239,7 +252,7 @@ export default function EventWorkspacePage() {
     setEditingTaskText(item.content);
     setEditingTaskDate(item.dueDate || "");
     setEditingAssignedTo((item as any).assignedTo || "");
-    setEditingTaskMedia(item.imageUrl ? { url: item.imageUrl, type: item.mediaType || 'image' } : null);
+    setEditingTaskMedia(item.imageUrl ? { url: item.imageUrl, type: guessMediaType(item.imageUrl, item.mediaType) } : null);
   };
 
   const cancelEditing = () => setEditingItemId(null);
@@ -629,7 +642,9 @@ export default function EventWorkspacePage() {
                 new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime()
               ).map((item: any) => {
                 const overdue = activeModal === 'tasks' && isOverdue(item.dueDate || null);
-                const itemMediaType = item.mediaType || 'image'; 
+                
+                // --- FIX: Use our new smarter media detector! ---
+                const itemMediaType = guessMediaType(item.imageUrl, item.mediaType);
 
                 return (
                   <div 
