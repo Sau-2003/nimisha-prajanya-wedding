@@ -18,7 +18,6 @@ import { useTeamMembers } from '@/hooks/useTeamMembers';
 import { createClient } from '@supabase/supabase-js';
 
 // --- FIX 1: Safe Supabase Initialization ---
-// This prevents the entire page from crashing if .env variables are missing
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
@@ -197,11 +196,11 @@ export default function EventWorkspacePage() {
   const [editingAssignedTo, setEditingAssignedTo] = useState("");
   const [editingTaskMedia, setEditingTaskMedia] = useState<{ url: string, type: string } | null>(null);
 
-  const [expandedImage, setExpandedImage] = useState<string | null>(null);
+  // Replaced expandedImage with expandedMedia to handle multiple types
+  const [expandedMedia, setExpandedMedia] = useState<{ url: string, type: string } | null>(null);
   const [itemToDelete, setItemToDelete] = useState<{ categoryId: CategoryId; itemId: string } | null>(null);
 
   // --- FIX 2: Optional Chaining on `items` ---
-  // If `items` is null initially, this prevents "Cannot read properties of undefined"
   const totalTasks = (items?.tasks?.length || 0) + (items?.taskDone?.length || 0);
   const completedTasks = items?.taskDone?.length || 0;
   const percentComplete = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
@@ -290,7 +289,6 @@ export default function EventWorkspacePage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Guard clause in case Supabase failed to initialize
     if (!supabase) {
       alert("Upload failed: Supabase connection is missing. Please check your .env variables.");
       return;
@@ -340,7 +338,7 @@ export default function EventWorkspacePage() {
     return (
       <div className="relative h-[42px] sm:h-full aspect-[4/3] border border-emerald-200 rounded-lg overflow-hidden shadow-sm group bg-black/5 shrink-0 flex items-center justify-center">
         {media.type === 'video' && <video src={media.url} className="w-full h-full object-cover" muted />}
-        {media.type === 'audio' && <div className="w-full h-full flex items-center justify-center bg-slate-100"><AudioLines className="w-6 h-6 text-slate-500" /></div>}
+        {media.type === 'audio' && <div className="w-full h-full flex items-center justify-center bg-slate-100"><Music className="w-6 h-6 text-slate-400" /></div>}
         {media.type === 'image' && <img src={media.url} className="w-full h-full object-cover" alt="" />}
         
         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -353,7 +351,6 @@ export default function EventWorkspacePage() {
   };
 
   const renderCardPreview = (categoryId: CategoryId) => {
-    // Add optional chaining here to prevent crash
     const list = items?.[categoryId] || [];
     if (list.length === 0) return <p className="text-sm text-slate-400 italic">Empty</p>;
 
@@ -786,23 +783,32 @@ export default function EventWorkspacePage() {
                           )}
 
                           {item.imageUrl && (
-                            <div className="mt-3 overflow-hidden w-full max-w-[240px] rounded-lg border border-slate-200 shadow-sm relative">
+                            <div 
+                              className="mt-3 overflow-hidden w-full max-w-[240px] rounded-lg border border-slate-200 shadow-sm relative cursor-pointer group hover:opacity-90 transition-opacity bg-slate-50 flex items-center justify-center"
+                              onClick={() => setExpandedMedia({ url: item.imageUrl, type: itemMediaType })}
+                            >
                               {itemMediaType === 'image' && (
-                                <div className="cursor-pointer group relative hover:opacity-90 transition-opacity" onClick={() => setExpandedImage(item.imageUrl)}>
+                                <>
                                   <img src={item.imageUrl} alt="attached media" className="w-full h-auto object-cover max-h-[150px]" />
-                                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center">
-                                    <ImageIcon className="w-6 h-6 text-white opacity-0 group-hover:opacity-100" />
+                                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center transition-colors">
+                                    <ImageIcon className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 drop-shadow-md" />
                                   </div>
-                                </div>
+                                </>
                               )}
                               
                               {itemMediaType === 'video' && (
-                                <video src={item.imageUrl} controls className="w-full h-auto max-h-[200px] bg-black" />
+                                <>
+                                  <video src={`${item.imageUrl}#t=0.1`} className="w-full h-auto max-h-[150px] object-cover bg-black" muted />
+                                  <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 flex items-center justify-center transition-colors">
+                                    <Film className="w-8 h-8 text-white drop-shadow-md" />
+                                  </div>
+                                </>
                               )}
 
                               {itemMediaType === 'audio' && (
-                                <div className="p-2 bg-slate-50 flex flex-col items-center gap-2">
-                                  <audio src={item.imageUrl} controls className="w-full h-8" />
+                                <div className="w-full h-24 flex items-center justify-center">
+                                  <Music className="w-8 h-8 text-slate-400 group-hover:scale-110 transition-transform" />
+                                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors" />
                                 </div>
                               )}
                             </div>
@@ -844,23 +850,43 @@ export default function EventWorkspacePage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!expandedImage} onOpenChange={(open) => !open && setExpandedImage(null)}>
+      {/* --- EXPANDED MEDIA MODAL --- */}
+      <Dialog open={!!expandedMedia} onOpenChange={(open) => !open && setExpandedMedia(null)}>
         <DialogContent 
           className="max-w-screen-lg w-[90vw] bg-transparent border-none shadow-none flex items-center justify-center p-0 [&>button]:bg-black/50 [&>button]:text-white [&>button]:hover:bg-black/80 [&>button]:rounded-full [&>button]:p-2 focus-visible:outline-none"
         >
           <DialogHeader className="sr-only">
-            <DialogTitle>Image Preview</DialogTitle>
+            <DialogTitle>Media Preview</DialogTitle>
           </DialogHeader>
-          {expandedImage && (
+          
+          {expandedMedia?.type === 'image' && (
             <img 
-              src={expandedImage} 
+              src={expandedMedia.url} 
               className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl" 
               alt="Expanded preview" 
               onError={(e) => {
                 e.currentTarget.style.display = 'none';
-                setExpandedImage(null);
+                setExpandedMedia(null);
               }}
             />
+          )}
+
+          {expandedMedia?.type === 'video' && (
+            <video 
+              src={expandedMedia.url} 
+              controls 
+              autoPlay 
+              className="max-w-full max-h-[85vh] rounded-lg shadow-2xl bg-black" 
+            />
+          )}
+
+          {expandedMedia?.type === 'audio' && (
+            <div className="bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center gap-6 w-full max-w-md">
+              <div className="w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center">
+                <Music className="w-12 h-12 text-emerald-600" />
+              </div>
+              <audio src={expandedMedia.url} controls autoPlay className="w-full" />
+            </div>
           )}
         </DialogContent>
       </Dialog>
