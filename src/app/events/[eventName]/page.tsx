@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { supabase } from '@/lib/supabase'; // Using your clean centralized import!
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { 
@@ -15,12 +16,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { useEventItems, CategoryId, WorkspaceItem } from '@/hooks/useEventItems';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
-import { createClient } from '@supabase/supabase-js';
-
-// --- FIX 1: Safe Supabase Initialization ---
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
 const BUCKET_NAME = "event-media";
 
@@ -196,11 +191,9 @@ export default function EventWorkspacePage() {
   const [editingAssignedTo, setEditingAssignedTo] = useState("");
   const [editingTaskMedia, setEditingTaskMedia] = useState<{ url: string, type: string } | null>(null);
 
-  // Replaced expandedImage with expandedMedia to handle multiple types
   const [expandedMedia, setExpandedMedia] = useState<{ url: string, type: string } | null>(null);
   const [itemToDelete, setItemToDelete] = useState<{ categoryId: CategoryId; itemId: string } | null>(null);
 
-  // --- FIX 2: Optional Chaining on `items` ---
   const totalTasks = (items?.tasks?.length || 0) + (items?.taskDone?.length || 0);
   const completedTasks = items?.taskDone?.length || 0;
   const percentComplete = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
