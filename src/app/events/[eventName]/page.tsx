@@ -9,8 +9,8 @@ import {
   Gamepad2, Store, Lightbulb, Shirt, IndianRupee, 
   ExternalLink, Plus, Trash2, Check, RotateCcw, 
   Pencil, X, Calendar, Image as ImageIcon, User, ChevronDown,
-  Bold, Italic, Strikethrough, Video, AudioLines, Loader2,
-  Film, Music
+  Bold, Italic, Strikethrough, Loader2,
+  Film, Music, Play
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -808,14 +808,14 @@ export default function EventWorkspacePage() {
                                 <>
                                   <video src={`${item.imageUrl}#t=0.1`} className="w-full h-auto max-h-[150px] object-cover bg-black" muted />
                                   <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 flex items-center justify-center transition-colors">
-                                    <Film className="w-8 h-8 text-white drop-shadow-md" />
+                                    <Play className="w-8 h-8 text-white drop-shadow-md" />
                                   </div>
                                 </>
                               )}
 
                               {itemMediaType === 'audio' && (
                                 <div className="w-full h-24 flex items-center justify-center">
-                                  <Music className="w-8 h-8 text-slate-400 group-hover:scale-110 transition-transform" />
+                                  <Play className="w-8 h-8 text-slate-400 group-hover:scale-110 transition-transform" />
                                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors" />
                                 </div>
                               )}
