@@ -8,12 +8,22 @@ import {
   Gamepad2, Store, Lightbulb, Shirt, IndianRupee, 
   ExternalLink, Plus, Trash2, Check, RotateCcw, 
   Pencil, X, Calendar, Image as ImageIcon, User, ChevronDown,
-  Bold, Italic, Strikethrough
+  Bold, Italic, Strikethrough, Video, AudioLines, Loader2,
+  Film, Music // Added Film and Music icons
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useEventItems, CategoryId, WorkspaceItem } from '@/hooks/useEventItems';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
+import { createClient } from '@supabase/supabase-js';
+
+// Initialize Supabase Client
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// Update this to match your actual Supabase bucket name
+const BUCKET_NAME = "event-media";
 
 // --- FLOATING TEXT FORMATTING TOOLBAR ---
 function FloatingToolbar() {
@@ -30,7 +40,6 @@ function FloatingToolbar() {
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       
-      // Ensure selection is inside an editable cell to avoid showing it everywhere
       let node = selection.anchorNode as Node | null;
       let isEditable = false;
       while (node && node !== document.body) {
@@ -43,7 +52,7 @@ function FloatingToolbar() {
 
       if (isEditable && rect.width > 0) {
         setPosition({
-          top: rect.top - 44, // Position above the selection
+          top: rect.top - 44, 
           left: rect.left + rect.width / 2,
         });
       } else {
@@ -72,7 +81,7 @@ function FloatingToolbar() {
     <div 
       className="fixed z-[9999] flex items-center bg-slate-900 text-white rounded-md shadow-lg p-1 gap-1 -translate-x-1/2 transition-all animate-in fade-in zoom-in-95"
       style={{ top: position.top, left: position.left }}
-      onMouseDown={(e) => e.preventDefault()} // Important: prevents losing text selection when clicking a button
+      onMouseDown={(e) => e.preventDefault()} 
     >
       <button onClick={() => applyFormat('bold')} className="p-1.5 hover:bg-slate-700 rounded text-white transition-colors" title="Bold">
         <Bold className="w-4 h-4" />
@@ -108,7 +117,6 @@ function EditableCell({
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Only update innerHTML if it changed externally (and isn't the active element to prevent cursor jumping)
     if (ref.current && value !== ref.current.innerHTML && document.activeElement !== ref.current) {
       ref.current.innerHTML = value || "";
     }
@@ -117,7 +125,6 @@ function EditableCell({
   useEffect(() => {
     if (autoFocus && ref.current) {
       ref.current.focus();
-      // Move cursor to the end when auto-focusing
       const range = document.createRange();
       const sel = window.getSelection();
       range.selectNodeContents(ref.current);
@@ -152,70 +159,61 @@ function EditableCell({
   );
 }
 
-// --- HELPER: Safely auto-links URLs inside HTML strings without breaking HTML tags ---
 const linkifyHtml = (htmlText: string) => {
   if (!htmlText) return "";
   const urlRegex = /(?<!href="|src=")(https?:\/\/[^\s<]+)/g;
   return htmlText.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-emerald-600 font-medium hover:underline break-all">$1</a>');
 };
 
-// --- HELPER: Strip HTML tags to render clean preview texts ---
 const stripHtml = (html: string) => {
   if (!html) return "";
   const doc = new DOMParser().parseFromString(html, 'text/html');
   return doc.body.textContent || "";
 };
 
+// --- MAIN PAGE COMPONENT ---
 export default function EventWorkspacePage() {
   const params = useParams();
   const rawEventName = (params?.eventName as string) || "Event";
   const formattedEventName = rawEventName.charAt(0).toUpperCase() + rawEventName.slice(1);
 
-  // 1. Data States 
   const { items, loading, addItem, updateItem, deleteItem, moveItem } = useEventItems(rawEventName);
-  
-  // Custom Hook replaces localStorage for sharing state with Global Task Board
   const { teamMembers, addTeamMember } = useTeamMembers();
 
-  // Dropdown UI State
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
-  // 2. Modal Add/View State
   const [activeModal, setActiveModal] = useState<CategoryId | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newItemText, setNewItemText] = useState("");
   const [newItemDate, setNewItemDate] = useState("");
   const [newItemAssignedTo, setNewItemAssignedTo] = useState("");
-  const [newItemImage, setNewItemImage] = useState<string | null>(null);
+  
+  const [newItemMedia, setNewItemMedia] = useState<{ url: string, type: string } | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
-  // 3. Edit Mode State
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingTaskText, setEditingTaskText] = useState("");
   const [editingTaskDate, setEditingTaskDate] = useState("");
   const [editingAssignedTo, setEditingAssignedTo] = useState("");
-  const [editingTaskImage, setEditingTaskImage] = useState<string | null>(null);
+  const [editingTaskMedia, setEditingTaskMedia] = useState<{ url: string, type: string } | null>(null);
 
-  // 4. Image Preview State
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
-
-  // 5. Delete Confirmation State
   const [itemToDelete, setItemToDelete] = useState<{ categoryId: CategoryId; itemId: string } | null>(null);
 
-  // Progress Bar Calculations
   const totalTasks = (items.tasks?.length || 0) + (items.taskDone?.length || 0);
   const completedTasks = items.taskDone?.length || 0;
   const percentComplete = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
 
-  // --- ACTIONS ---
   const handleAddItem = async () => {
     const plainTextContent = newItemText.replace(/<[^>]*>?/gm, '').trim();
-    if (!activeModal || !plainTextContent) return;
+    if (!activeModal || !plainTextContent || isUploading) return;
     
     const payload = {
       content: newItemText.trim(),
       dueDate: newItemDate || undefined, 
       assignedTo: newItemAssignedTo.trim() || undefined,
-      imageUrl: newItemImage || undefined, 
+      imageUrl: newItemMedia?.url || undefined,
+      mediaType: newItemMedia?.type || undefined, 
       created_at: new Date().toISOString() 
     };
 
@@ -224,7 +222,7 @@ export default function EventWorkspacePage() {
     setNewItemText("");
     setNewItemDate("");
     setNewItemAssignedTo("");
-    setNewItemImage(null);
+    setNewItemMedia(null);
     setShowAddForm(false);
   };
 
@@ -242,21 +240,20 @@ export default function EventWorkspacePage() {
     await moveItem(itemId, toCategory);
   };
 
-  const startEditing = (item: WorkspaceItem) => {
+  const startEditing = (item: WorkspaceItem & { mediaType?: string }) => {
     setEditingItemId(item.id);
     setEditingTaskText(item.content);
     setEditingTaskDate(item.dueDate || "");
     setEditingAssignedTo((item as any).assignedTo || "");
-    setEditingTaskImage(item.imageUrl || null);
+    setEditingTaskMedia(item.imageUrl ? { url: item.imageUrl, type: item.mediaType || 'image' } : null);
   };
 
   const cancelEditing = () => setEditingItemId(null);
 
   const saveEditedItem = async (categoryId: CategoryId, itemId: string) => {
     const plainTextContent = editingTaskText.replace(/<[^>]*>?/gm, '').trim();
-    if (!plainTextContent) return;
+    if (!plainTextContent || isUploading) return;
     
-    // Save new assignee to global hook automatically if it's a new name
     if (editingAssignedTo.trim()) {
       addTeamMember(editingAssignedTo.trim());
     }
@@ -265,14 +262,14 @@ export default function EventWorkspacePage() {
       content: editingTaskText.trim(),
       dueDate: editingTaskDate || undefined,
       assignedTo: editingAssignedTo.trim() || undefined,
-      imageUrl: editingTaskImage || undefined
+      imageUrl: editingTaskMedia?.url || undefined,
+      mediaType: editingTaskMedia?.type || undefined
     };
 
     await updateItem(itemId, payload);
     setEditingItemId(null);
   };
 
-  // --- HELPERS ---
   const formatDate = (dateString: string) => {
     if (!dateString) return "";
     return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -282,51 +279,69 @@ export default function EventWorkspacePage() {
     if (!dateString) return false;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
     const dueDate = new Date(dateString);
     dueDate.setHours(0, 0, 0, 0);
-    
     return dueDate < today;
   };
 
-  // COMPRESSED IMAGE UPLOAD
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, isEditMode: boolean) => {
+  // --- SUPABASE STORAGE MEDIA UPLOAD ---
+  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>, isEditMode: boolean) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new window.Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const MAX_SIZE = 500; 
-        let width = img.width;
-        let height = img.height;
+    setIsUploading(true);
 
-        if (width > height && width > MAX_SIZE) {
-          height *= MAX_SIZE / width;
-          width = MAX_SIZE;
-        } else if (height > MAX_SIZE) {
-          width *= MAX_SIZE / height;
-          height = MAX_SIZE;
-        }
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `workspace/${fileName}`;
+      
+      const mediaType = file.type.startsWith('video/') ? 'video' 
+                      : file.type.startsWith('audio/') ? 'audio' 
+                      : 'image';
 
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        ctx?.drawImage(img, 0, 0, width, height);
+      const { data, error } = await supabase.storage
+        .from(BUCKET_NAME)
+        .upload(filePath, file, { upsert: false });
+
+      if (error) {
+        console.error("Upload error:", error.message);
+        setIsUploading(false);
+        return;
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from(BUCKET_NAME)
+        .getPublicUrl(filePath);
+
+      const mediaPayload = { url: publicUrl, type: mediaType };
+
+      if (isEditMode) {
+        setEditingTaskMedia(mediaPayload);
+      } else {
+        setNewItemMedia(mediaPayload);
+      }
+    } catch (error) {
+      console.error("Failed to upload media:", error);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const renderMediaPreview = (media: { url: string, type: string }, onRemove: () => void) => {
+    return (
+      <div className="relative h-[42px] sm:h-full aspect-[4/3] border border-emerald-200 rounded-lg overflow-hidden shadow-sm group bg-black/5 shrink-0 flex items-center justify-center">
+        {media.type === 'video' && <video src={media.url} className="w-full h-full object-cover" muted />}
+        {media.type === 'audio' && <div className="w-full h-full flex items-center justify-center bg-slate-100"><AudioLines className="w-6 h-6 text-slate-500" /></div>}
+        {media.type === 'image' && <img src={media.url} className="w-full h-full object-cover" alt="" />}
         
-        const compressedBase64 = canvas.toDataURL("image/jpeg", 0.5);
-        
-        if (isEditMode) {
-          setEditingTaskImage(compressedBase64);
-        } else {
-          setNewItemImage(compressedBase64);
-        }
-      };
-      img.src = event.target?.result as string;
-    };
-    reader.readAsDataURL(file);
+        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+          <button onClick={onRemove} className="text-white hover:text-red-400">
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    );
   };
 
   const renderCardPreview = (categoryId: CategoryId) => {
@@ -388,10 +403,8 @@ export default function EventWorkspacePage() {
   return (
     <div className="min-h-screen p-6 md:p-12 max-w-6xl mx-auto">
       
-      {/* Global Floating Toolbar for Rich Text Formatting */}
       <FloatingToolbar />
 
-      {/* Header Section */}
       <div className="mb-10">
         <div className="flex flex-col md:flex-row md:items-center gap-4 mb-2">
           <h1 className="text-3xl font-serif font-bold text-emerald-900">
@@ -411,7 +424,6 @@ export default function EventWorkspacePage() {
         </div>
       </div>
 
-      {/* Grid Workspace */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {workspaceCards.map((card) => {
           if (card.isLink) {
@@ -458,7 +470,6 @@ export default function EventWorkspacePage() {
         })}
       </div>
 
-      {/* Main Workspace Modal */}
       <Dialog 
         open={!!activeModal} 
         onOpenChange={(open) => {
@@ -480,7 +491,6 @@ export default function EventWorkspacePage() {
           </DialogHeader>
           
           <div className="flex-1 overflow-y-auto pr-2 min-h-0">
-            {/* Add New Item Toggle/Form */}
             {!showAddForm ? (
               <div 
                 onClick={() => setShowAddForm(true)}
@@ -498,8 +508,6 @@ export default function EventWorkspacePage() {
                   className="w-full border border-emerald-400 p-3 rounded-lg outline-none focus:border-emerald-600 text-sm bg-white min-h-[60px]"
                   autoFocus
                   onKeyDown={(e) => {
-                    // Only submit on desktop when Enter is pressed without Shift.
-                    // On mobile, let Enter create a new line naturally.
                     if (e.key === 'Enter' && !e.shiftKey && window.innerWidth > 768) {
                       e.preventDefault(); 
                       handleAddItem();    
@@ -564,36 +572,31 @@ export default function EventWorkspacePage() {
                     </div>
                   )}
 
-                  {/* Thumbnail Preview for Add Form */}
-                  {newItemImage ? (
-                    <div className="relative h-[42px] sm:h-full aspect-[4/3] border border-emerald-200 rounded-lg overflow-hidden shadow-sm group bg-black/5 shrink-0 flex items-center justify-center">
-                      <img 
-                        src={newItemImage} 
-                        className="w-full h-full object-cover" 
-                        alt="" 
-                        onError={(e) => (e.currentTarget.style.display = 'none')}
-                      />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                        <button onClick={() => setNewItemImage(null)} className="text-white hover:text-red-400">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
+                  {/* Add File / Media Upload Section */}
+                  {newItemMedia ? renderMediaPreview(newItemMedia, () => setNewItemMedia(null)) : (
                     <div className="relative h-[42px] sm:h-full">
                       <input 
                         type="file"
-                        accept="image/*"
-                        id="add-image"
+                        accept="image/*,video/*,audio/*"
+                        id="add-media"
                         className="hidden"
-                        onChange={(e) => handleImageUpload(e, false)}
+                        onChange={(e) => handleMediaUpload(e, false)}
+                        disabled={isUploading}
                       />
                       <label 
-                        htmlFor="add-image" 
-                        className="flex items-center justify-center w-full h-full border border-dashed rounded-lg cursor-pointer text-sm transition-colors bg-white border-slate-300 text-slate-500 hover:bg-slate-50"
+                        htmlFor="add-media" 
+                        className={`flex items-center justify-center w-full h-full border border-dashed rounded-lg cursor-pointer text-sm transition-colors bg-white border-slate-300 text-slate-500 hover:bg-slate-50 ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
-                        <ImageIcon className="w-4 h-4 mr-2" />
-                        Image
+                        {isUploading ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <div className="flex gap-1 mr-2 items-center text-slate-400">
+                            <ImageIcon className="w-4 h-4" />
+                            <Film className="w-4 h-4" />
+                            <Music className="w-4 h-4" />
+                          </div>
+                        )}
+                        {isUploading ? "Uploading..." : "Media"}
                       </label>
                     </div>
                   )}
@@ -607,32 +610,33 @@ export default function EventWorkspacePage() {
                       setNewItemText("");
                       setNewItemDate("");
                       setNewItemAssignedTo("");
-                      setNewItemImage(null);
+                      setNewItemMedia(null);
                       setOpenDropdownId(null);
                     }} 
                     className="px-3 py-1.5 h-9 text-slate-500 border-slate-200 text-xs"
+                    disabled={isUploading}
                   >
                     Cancel
                   </Button>
-                  <Button onClick={handleAddItem} className="bg-emerald-600 hover:bg-emerald-700 h-9 px-4 text-xs">
+                  <Button onClick={handleAddItem} disabled={isUploading} className="bg-emerald-600 hover:bg-emerald-700 h-9 px-4 text-xs">
                     <Plus className="w-3.5 h-3.5 mr-1" /> Add Entry
                   </Button>
                 </div>
               </div>
             )}
 
-            {/* List Items */}
             <div className="mt-4 space-y-3 pb-4">
               {activeModal && [...(items[activeModal] || [])].sort((a: any, b: any) => 
                 new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime()
               ).map((item: any) => {
                 const overdue = activeModal === 'tasks' && isOverdue(item.dueDate || null);
+                const itemMediaType = item.mediaType || 'image'; 
+
                 return (
                   <div 
                     key={item.id} 
                     className={`flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 border p-3.5 rounded-xl bg-white shadow-sm transition-colors ${overdue ? 'border-red-300 bg-red-50/30' : 'border-slate-200'}`}
                   >
-                    
                     {/* --- EDIT MODE --- */}
                     {editingItemId === item.id ? (
                       <div className="flex-1 flex flex-col gap-2 w-full">
@@ -705,46 +709,42 @@ export default function EventWorkspacePage() {
                             </div>
                           )}
                           
-                          {/* Thumbnail Preview for Edit Form */}
-                          {editingTaskImage ? (
-                            <div className="h-9 rounded border border-emerald-200 relative overflow-hidden group flex items-center justify-center shrink-0">
-                              <img 
-                                src={editingTaskImage} 
-                                className="w-full h-full object-cover" 
-                                alt="" 
-                                onError={(e) => (e.currentTarget.style.display = 'none')}
-                              />
-                              <button onClick={() => setEditingTaskImage(null)} className="absolute inset-0 bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          ) : (
+                          {/* Media Preview for Edit Form */}
+                          {editingTaskMedia ? renderMediaPreview(editingTaskMedia, () => setEditingTaskMedia(null)) : (
                             <div className="relative h-9">
                               <input 
                                 type="file"
-                                accept="image/*"
-                                id={`edit-image-${item.id}`}
+                                accept="image/*,video/*,audio/*"
+                                id={`edit-media-${item.id}`}
                                 className="hidden"
-                                onChange={(e) => handleImageUpload(e, true)}
+                                onChange={(e) => handleMediaUpload(e, true)}
+                                disabled={isUploading}
                               />
                               <label 
-                                htmlFor={`edit-image-${item.id}`} 
-                                className="flex items-center justify-center w-full h-full border border-dashed rounded cursor-pointer text-slate-500 hover:bg-slate-50 text-xs"
+                                htmlFor={`edit-media-${item.id}`} 
+                                className={`flex items-center justify-center w-full h-full border border-dashed rounded cursor-pointer text-slate-500 hover:bg-slate-50 text-xs ${isUploading ? 'opacity-50' : ''}`}
                               >
-                                <ImageIcon className="w-3 h-3 mr-1" />
-                                Image
+                                {isUploading ? (
+                                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                ) : (
+                                  <div className="flex gap-0.5 mr-1 items-center text-slate-400">
+                                    <ImageIcon className="w-3 h-3" />
+                                    <Film className="w-3 h-3" />
+                                    <Music className="w-3 h-3" />
+                                  </div>
+                                )}
+                                Media
                               </label>
                             </div>
                           )}
                         </div>
                         
                         <div className="flex justify-end gap-2 mt-2">
-                          <button onClick={cancelEditing} className="px-3 py-1 text-xs bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200">Cancel</button>
-                          <button onClick={() => saveEditedItem(activeModal, item.id)} className="px-3 py-1 text-xs bg-emerald-600 text-white rounded-md hover:bg-emerald-700">Save</button>
+                          <button onClick={cancelEditing} disabled={isUploading} className="px-3 py-1 text-xs bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200">Cancel</button>
+                          <button onClick={() => saveEditedItem(activeModal, item.id)} disabled={isUploading} className="px-3 py-1 text-xs bg-emerald-600 text-white rounded-md hover:bg-emerald-700">Save</button>
                         </div>
                       </div>
                     ) : (
-                      
                       /* --- DISPLAY MODE --- */
                       <>
                         <div className="flex-1 min-w-0">
@@ -777,21 +777,25 @@ export default function EventWorkspacePage() {
                           )}
 
                           {item.imageUrl && (
-                            <div 
-                              className="mt-3 rounded-lg border border-slate-200 overflow-hidden w-full max-w-[150px] shadow-sm cursor-pointer hover:opacity-90 transition-opacity relative group"
-                              onClick={() => setExpandedImage(item.imageUrl)}
-                            >
-                              <img 
-                                src={item.imageUrl} 
-                                alt="" 
-                                className="w-full h-auto object-cover" 
-                                onError={(e) => {
-                                  e.currentTarget.parentElement!.style.display = 'none';
-                                }}
-                              />
-                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-                                <ImageIcon className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 drop-shadow-md" />
-                              </div>
+                            <div className="mt-3 overflow-hidden w-full max-w-[240px] rounded-lg border border-slate-200 shadow-sm relative">
+                              {itemMediaType === 'image' && (
+                                <div className="cursor-pointer group relative hover:opacity-90 transition-opacity" onClick={() => setExpandedImage(item.imageUrl)}>
+                                  <img src={item.imageUrl} alt="attached media" className="w-full h-auto object-cover max-h-[150px]" />
+                                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center">
+                                    <ImageIcon className="w-6 h-6 text-white opacity-0 group-hover:opacity-100" />
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {itemMediaType === 'video' && (
+                                <video src={item.imageUrl} controls className="w-full h-auto max-h-[200px] bg-black" />
+                              )}
+
+                              {itemMediaType === 'audio' && (
+                                <div className="p-2 bg-slate-50 flex flex-col items-center gap-2">
+                                  <audio src={item.imageUrl} controls className="w-full h-8" />
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -831,7 +835,6 @@ export default function EventWorkspacePage() {
         </DialogContent>
       </Dialog>
 
-      {/* Expanded Image Lightbox Modal */}
       <Dialog open={!!expandedImage} onOpenChange={(open) => !open && setExpandedImage(null)}>
         <DialogContent 
           className="max-w-screen-lg w-[90vw] bg-transparent border-none shadow-none flex items-center justify-center p-0 [&>button]:bg-black/50 [&>button]:text-white [&>button]:hover:bg-black/80 [&>button]:rounded-full [&>button]:p-2 focus-visible:outline-none"
@@ -853,7 +856,6 @@ export default function EventWorkspacePage() {
         </DialogContent>
       </Dialog>
 
-      {/* --- CONFIRM ITEM DELETE MODAL --- */}
       <Dialog open={!!itemToDelete} onOpenChange={(open) => !open && setItemToDelete(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>

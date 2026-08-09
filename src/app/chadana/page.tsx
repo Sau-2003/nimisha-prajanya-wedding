@@ -2,14 +2,14 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, Image as ImageIcon, X, Pin, Gem, Bold, Italic, Strikethrough } from "lucide-react";
+import { Plus, Trash2, Image as ImageIcon, X, Pin, Gem, Bold, Italic, Strikethrough, Film, Music } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
 import { useChadana } from "@/hooks/useChadana"; 
 
 // --- FLOATING TEXT FORMATTING TOOLBAR ---
 function FloatingToolbar() {
-  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+ const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
 
   useEffect(() => {
     const handleSelection = () => {
@@ -138,7 +138,7 @@ function ChadanaCard({
   gift, 
   onDelete, 
   onUpdate, 
-  onImageClick
+  onMediaClick
 }: any) {
   const [title, setTitle] = useState(gift.title);
   const [content, setContent] = useState(gift.content || "");
@@ -149,7 +149,7 @@ function ChadanaCard({
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
 
   // Custom Delete Confirmation State
-  const [deleteTarget, setDeleteTarget] = useState<{ type: 'item' } | { type: 'image', index: number } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ type: 'item' } | { type: 'media', index: number } | null>(null);
 
   // Safely treat null/undefined as false for older entries
   const isPinned = Boolean(gift.is_pinned);
@@ -170,7 +170,6 @@ function ChadanaCard({
     return htmlText.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline hover:text-blue-800">$1</a>');
   };
 
-  // Prevent entering edit mode if the user is just clicking an embedded link
   const handleBodyClick = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).tagName.toLowerCase() === 'a') {
       e.stopPropagation();
@@ -179,63 +178,50 @@ function ChadanaCard({
     setIsEditing(true);
   };
 
-  // MULTIPLE IMAGE UPLOAD HANDLER
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // MULTIPLE MEDIA UPLOAD HANDLER
+  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     const files = Array.from(e.target.files);
 
-    const newBase64Images = await Promise.all(
-      files.map((file) => {
-        return new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            const img = new window.Image();
-            img.onload = () => {
-              const canvas = document.createElement("canvas");
-              let width = img.width;
-              let height = img.height;
-              
-              const MAX_WIDTH = 500; 
-              const MAX_HEIGHT = 500;
+    try {
+      const uploadedMedia = await Promise.all(
+        files.map(async (file) => {
+          // Create a unique filename
+          const fileExt = file.name.split('.').pop();
+          const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+          const filePath = `uploads/${fileName}`;
 
-              if (width > height) {
-                if (width > MAX_WIDTH) {
-                  height = Math.round(height * (MAX_WIDTH / width));
-                  width = MAX_WIDTH;
-                }
-              } else {
-                if (height > MAX_HEIGHT) {
-                  width = Math.round(width * (MAX_HEIGHT / height));
-                  height = MAX_HEIGHT;
-                }
-              }
+          // 1. Upload file directly to Supabase Storage Bucket
+          const { error: uploadError } = await supabase.storage
+            .from('chadana-media') // replace with your bucket name
+            .upload(filePath, file);
 
-              canvas.width = width;
-              canvas.height = height;
-              const ctx = canvas.getContext("2d");
-              ctx?.drawImage(img, 0, 0, width, height);
+          if (uploadError) throw uploadError;
 
-              resolve(canvas.toDataURL("image/jpeg", 0.5));
-            };
-            img.src = event.target?.result as string;
+          // 2. Get the Public URL of the uploaded file
+          const { data } = supabase.storage
+            .from('chadana-media')
+            .getPublicUrl(filePath);
+
+          return {
+            url: data.publicUrl,
+            type: file.type,
+            caption: ""
           };
-          reader.readAsDataURL(file);
-        });
-      })
-    );
+        })
+      );
 
-    const formattedNewImages = newBase64Images.map((url: string) => ({
-      url,
-      caption: ""
-    }));
+      const currentMedia = gift.images || gift.image_urls || [];
+      const updatedMedia = [...currentMedia, ...uploadedMedia];
 
-    const currentImages = gift.images || gift.image_urls || [];
-    const updatedImages = [...currentImages, ...formattedNewImages];
-
-    onUpdate(gift.id, { 
-      images: updatedImages,
-      image_urls: updatedImages 
-    });
+      // Save only the clean URLs and metadata into your DB table
+      onUpdate(gift.id, { 
+        images: updatedMedia,
+        image_urls: updatedMedia 
+      });
+    } catch (error: any) {
+      alert("Error uploading file: " + error.message);
+    }
   };
 
   const handleConfirmDelete = () => {
@@ -243,15 +229,15 @@ function ChadanaCard({
 
     if (deleteTarget.type === 'item') {
       onDelete(gift.id);
-    } else if (deleteTarget.type === 'image') {
-      const currentImages = gift.images || gift.image_urls || [];
-      const updatedImages = currentImages.filter(
+    } else if (deleteTarget.type === 'media') {
+      const currentMedia = gift.images || gift.image_urls || [];
+      const updatedMedia = currentMedia.filter(
         (_: any, i: number) => i !== deleteTarget.index
       );
 
       onUpdate(gift.id, {
-        images: updatedImages,
-        image_urls: updatedImages
+        images: updatedMedia,
+        image_urls: updatedMedia
       });
     }
 
@@ -267,7 +253,7 @@ function ChadanaCard({
     ? new Date(gift.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : "Just now";
 
-  const imagesList = gift.images || gift.image_urls || [];
+  const mediaList = gift.images || gift.image_urls || [];
 
   return (
     <div className={`relative bg-white w-full rounded-xl shadow-md border overflow-hidden group transition-all duration-300 ${
@@ -353,41 +339,62 @@ function ChadanaCard({
           />
         )}
 
-        {/* --- Multi-Image Preview Section --- */}
-        {imagesList.length > 0 && (
-          <div className="mt-4 flex flex-wrap gap-4 px-4">
-            {imagesList.map((image: any, idx: number) => {
-              const imgUrl = typeof image === 'string' ? image : image.url;
-              const imgCaption = typeof image === 'string' ? '' : (image.caption || '');
+        {/* --- Multi-Media Preview Section --- */}
+        {mediaList.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-4 px-4 items-end">
+            {mediaList.map((media: any, idx: number) => {
+              const url = typeof media === 'string' ? media : media.url;
+              const caption = typeof media === 'string' ? '' : (media.caption || '');
+              const type = typeof media === 'string' ? 'image/jpeg' : (media.type || 'image/jpeg');
 
               return (
-                <div key={idx} className="relative inline-block group/image">
-                  <img
-                    src={imgUrl}
-                    className="h-32 rounded-lg object-cover cursor-pointer"
-                    onClick={() => onImageClick(imgUrl)}
-                  />
+                <div key={idx} className="relative inline-block group/media">
+                  
+                  {/* Conditional Rendering Based on Media Type */}
+                  {type.startsWith('video/') ? (
+                    <video 
+                      src={url} 
+                      controls
+                      className="h-32 rounded-lg object-cover cursor-pointer bg-slate-900"
+                      onClick={(e) => {
+                        // Only open modal if they click outside the controls
+                        if (e.target === e.currentTarget) onMediaClick({ url, type });
+                      }}
+                    />
+                  ) : type.startsWith('audio/') ? (
+                    <audio 
+                      src={url} 
+                      controls 
+                      className="h-12 w-64 rounded-lg shadow-sm"
+                    />
+                  ) : (
+                    <img
+                      src={url}
+                      className="h-32 rounded-lg object-cover cursor-pointer"
+                      onClick={() => onMediaClick({ url, type })}
+                    />
+                  )}
 
                   {/* Caption Input */}
                   <EditableCell
-                    value={imgCaption}
+                    value={caption}
                     onChange={(newVal) => {
-                      const updatedImages = [...imagesList];
-                      if (typeof updatedImages[idx] === 'string') {
-                        updatedImages[idx] = { url: updatedImages[idx], caption: newVal };
+                      const updatedMedia = [...mediaList];
+                      if (typeof updatedMedia[idx] === 'string') {
+                        updatedMedia[idx] = { url: updatedMedia[idx], caption: newVal, type };
                       } else {
-                        updatedImages[idx] = { ...updatedImages[idx], caption: newVal };
+                        updatedMedia[idx] = { ...updatedMedia[idx], caption: newVal };
                       }
-                      onUpdate(gift.id, { images: updatedImages, image_urls: updatedImages });
+                      onUpdate(gift.id, { images: updatedMedia, image_urls: updatedMedia });
                     }}
                     placeholder="Caption..."
                     className="mt-2 w-full text-xs text-center border-b border-slate-200 focus:border-emerald-500 focus:outline-none pb-1 bg-transparent block"
                   />
 
                   <button 
-                    onClick={() => setDeleteTarget({ type: 'image', index: idx })} 
-                    className="absolute -top-2 -right-2 bg-red-100 text-red-600 rounded-full p-1.5 opacity-50 md:opacity-0 group-hover/image:opacity-100 transition-opacity shadow-md hover:bg-red-200"
-                    title="Remove Image"
+                    onClick={() => setDeleteTarget({ type: 'media', index: idx })} 
+                    className="absolute -top-2 -right-2 bg-red-100 text-red-600 rounded-full p-1.5 opacity-50 md:opacity-0 group-hover/media:opacity-100 transition-opacity shadow-md hover:bg-red-200 z-10"
+                    title="Remove Media"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -401,18 +408,22 @@ function ChadanaCard({
         <div className="mt-6 flex items-center px-4">
           <input 
             type="file" 
-            accept="image/*" 
+            accept="image/*,video/*,audio/*" 
             multiple 
-            id={`gift-image-${gift.id}`} 
+            id={`gift-media-${gift.id}`} 
             className="hidden" 
-            onChange={handleImageUpload} 
+            onChange={handleMediaUpload} 
           />
           <label 
-            htmlFor={`gift-image-${gift.id}`}
+            htmlFor={`gift-media-${gift.id}`}
             className="flex items-center gap-2 text-xs text-slate-500 hover:text-emerald-700 cursor-pointer transition-colors bg-slate-50 border border-slate-200 px-3 py-2 rounded-md hover:bg-slate-100"
           >
-            <ImageIcon className="w-4 h-4" />
-            Add Images
+            <div className="flex gap-1">
+              <ImageIcon className="w-4 h-4" />
+              <Film className="w-4 h-4" />
+              <Music className="w-4 h-4" />
+            </div>
+            Add Media
           </label>
         </div>
       </div>
@@ -434,7 +445,7 @@ function ChadanaCard({
             <DialogTitle className="text-xl font-semibold text-slate-900">Confirm Deletion</DialogTitle>
           </DialogHeader>
           <div className="py-2 text-slate-600">
-            Are you sure you want to delete this {deleteTarget?.type === 'image' ? 'image' : 'item'}? This action cannot be undone.
+            Are you sure you want to delete this {deleteTarget?.type === 'media' ? 'media file' : 'item'}? This action cannot be undone.
           </div>
           <div className="flex justify-end gap-3 mt-4">
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>
@@ -458,7 +469,7 @@ export default function ChadanaPage() {
   const { chadana, loading, fetchData } = useChadana();
   const [localChadana, setLocalChadana] = useState<any[]>([]);
   
-  const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
+  const [fullScreenMedia, setFullScreenMedia] = useState<{url: string, type: string} | null>(null);
 
   // Safely sort Chadana ensuring pinned items are on top
   useEffect(() => {
@@ -566,26 +577,33 @@ export default function ChadanaPage() {
               gift={gift} 
               onDelete={handleDelete} 
               onUpdate={handleUpdate} 
-              onImageClick={setFullScreenImage}
+              onMediaClick={setFullScreenMedia}
             />
           ))
         )}
       </div>
 
-      {/* Full Screen Image Lightbox */}
-      <Dialog open={!!fullScreenImage} onOpenChange={(open) => !open && setFullScreenImage(null)}>
+      {/* Full Screen Media Lightbox */}
+      <Dialog open={!!fullScreenMedia} onOpenChange={(open) => !open && setFullScreenMedia(null)}>
         <DialogContent className="max-w-4xl p-1 bg-transparent border-none shadow-none [&>button]:text-white [&>button]:bg-black/50 [&>button]:rounded-full [&>button]:hover:bg-black/80">
           <DialogHeader className="sr-only">
-            <DialogTitle>View Image</DialogTitle>
+            <DialogTitle>View Media</DialogTitle>
           </DialogHeader>
           <div className="flex items-center justify-center">
-            {fullScreenImage && (
+            {fullScreenMedia && fullScreenMedia.type.startsWith('video/') ? (
+              <video 
+                src={fullScreenMedia.url} 
+                controls 
+                autoPlay
+                className="w-auto h-auto max-w-full max-h-[85vh] rounded-md shadow-2xl bg-black" 
+              />
+            ) : fullScreenMedia ? (
               <img 
-                src={fullScreenImage} 
+                src={fullScreenMedia.url} 
                 alt="Full size view" 
                 className="w-auto h-auto max-w-full max-h-[85vh] rounded-md object-contain shadow-2xl" 
               />
-            )}
+            ) : null}
           </div>
         </DialogContent>
       </Dialog>

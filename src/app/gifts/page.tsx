@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, Image as ImageIcon, X, Pin, Gift, Bold, Italic, Strikethrough } from "lucide-react";
+import { Plus, Trash2, Image as ImageIcon, X, Pin, Gift, Bold, Italic, Strikethrough, Film, Music, Play } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
-import { useGifts } from "@/hooks/useGifts"; 
+import { useGifts } from "@/hooks/useGifts";
 
 // --- FLOATING TEXT FORMATTING TOOLBAR ---
 function FloatingToolbar() {
@@ -138,18 +138,19 @@ function GiftCard({
   gift, 
   onDelete, 
   onUpdate, 
-  onImageClick
+  onMediaClick
 }: any) {
   const [title, setTitle] = useState(gift.title);
   const [content, setContent] = useState(gift.content || "");
   const [isEditing, setIsEditing] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   
   // Custom Cursor-Following Tooltip State
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
 
   // Unified Delete Confirmation State
-  const [deleteTarget, setDeleteTarget] = useState<{ type: 'item' } | { type: 'image', index: number } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ type: 'item' } | { type: 'media', index: number } | null>(null);
 
   // Safely treat null/undefined as false for older entries
   const isPinned = Boolean(gift.is_pinned);
@@ -179,65 +180,61 @@ function GiftCard({
     setIsEditing(true);
   };
 
-  // MULTIPLE IMAGE UPLOAD HANDLER
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // MULTIPLE MEDIA UPLOAD HANDLER VIA SUPABASE STORAGE
+  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     const files = Array.from(e.target.files);
+    
+    setIsUploading(true);
 
-    const newBase64Images = await Promise.all(
-      files.map((file) => {
-        return new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            const img = new window.Image();
-            img.onload = () => {
-              const canvas = document.createElement("canvas");
-              let width = img.width;
-              let height = img.height;
-              
-              const MAX_WIDTH = 500; 
-              const MAX_HEIGHT = 500;
+    try {
+      const uploadedMedia = await Promise.all(
+        files.map(async (file) => {
+          // Create a unique filename
+          const fileExt = file.name.split('.').pop();
+          const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+          const filePath = `uploads/${fileName}`;
 
-              if (width > height) {
-                if (width > MAX_WIDTH) {
-                  height = Math.round(height * (MAX_WIDTH / width));
-                  width = MAX_WIDTH;
-                }
-              } else {
-                if (height > MAX_HEIGHT) {
-                  width = Math.round(width * (MAX_HEIGHT / height));
-                  height = MAX_HEIGHT;
-                }
-              }
+          // 1. Upload file directly to Supabase Storage Bucket
+          const { error: uploadError } = await supabase.storage
+            .from('chadana-media') // replace with your bucket name if different
+            .upload(filePath, file);
 
-              canvas.width = width;
-              canvas.height = height;
-              const ctx = canvas.getContext("2d");
-              ctx?.drawImage(img, 0, 0, width, height);
+          if (uploadError) throw uploadError;
 
-              resolve(canvas.toDataURL("image/jpeg", 0.5));
-            };
-            img.src = event.target?.result as string;
+          // 2. Get the Public URL of the uploaded file
+          const { data } = supabase.storage
+            .from('chadana-media')
+            .getPublicUrl(filePath);
+
+          // 3. Determine base type for UI mapping (image, video, or audio)
+          const baseType = file.type.startsWith('video/') ? 'video' 
+                         : file.type.startsWith('audio/') ? 'audio' 
+                         : 'image';
+
+          return {
+            url: data.publicUrl,
+            type: baseType,
+            caption: ""
           };
-          reader.readAsDataURL(file);
-        });
-      })
-    );
+        })
+      );
 
-    // Map base64 strings to objects with url and caption properties
-    const formattedNewImages = newBase64Images.map((url: string) => ({
-      url,
-      caption: ""
-    }));
+      const currentMedia = gift.images || gift.image_urls || [];
+      const updatedMedia = [...currentMedia, ...uploadedMedia];
 
-    // Append new image objects to existing array (falling back to image_urls if needed)
-    const currentImages = gift.images || gift.image_urls || [];
-    const updatedImages = [...currentImages, ...formattedNewImages];
-
-    onUpdate(gift.id, { 
-      images: updatedImages,
-      image_urls: updatedImages 
-    });
+      // Save only the clean URLs and metadata into your DB table
+      onUpdate(gift.id, { 
+        images: updatedMedia,
+        image_urls: updatedMedia 
+      });
+    } catch (error: any) {
+      alert("Error uploading file: " + error.message);
+    } finally {
+      setIsUploading(false);
+      // Reset input so you can upload the same file again if needed
+      e.target.value = ""; 
+    }
   };
 
   const handleConfirmDelete = () => {
@@ -245,7 +242,7 @@ function GiftCard({
 
     if (deleteTarget.type === 'item') {
       onDelete(gift.id);
-    } else if (deleteTarget.type === 'image') {
+    } else if (deleteTarget.type === 'media') {
       const currentImages = gift.images || gift.image_urls || [];
       const updatedImages = currentImages.filter(
         (_: any, i: number) => i !== deleteTarget.index
@@ -255,6 +252,7 @@ function GiftCard({
         images: updatedImages,
         image_urls: updatedImages
       });
+      // Optionally: You could also write logic here to delete the file from the Supabase bucket to save space
     }
 
     setDeleteTarget(null);
@@ -269,7 +267,7 @@ function GiftCard({
     ? new Date(gift.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : "Just now";
 
-  const imagesList = gift.images || gift.image_urls || [];
+  const mediaList = gift.images || gift.image_urls || [];
 
   return (
     <div className={`relative bg-white w-full rounded-xl shadow-md border overflow-hidden group transition-all duration-300 ${
@@ -355,41 +353,69 @@ function GiftCard({
           />
         )}
 
-        {/* --- Multi-Image Preview Section --- */}
-        {imagesList.length > 0 && (
-          <div className="mt-4 flex flex-wrap gap-4 px-4">
-            {imagesList.map((image: any, idx: number) => {
-              const imgUrl = typeof image === 'string' ? image : image.url;
-              const imgCaption = typeof image === 'string' ? '' : (image.caption || '');
+        {/* --- Multi-Media Preview Section --- */}
+        {mediaList.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-4 px-4 items-end">
+            {mediaList.map((media: any, idx: number) => {
+              const url = typeof media === 'string' ? media : media.url;
+              const caption = typeof media === 'string' ? '' : (media.caption || '');
+              
+              // Infer type for older entries that might just be strings
+              let type = media.type || 'image';
+              if (typeof media === 'string' || !media.type) {
+                if (url.startsWith('data:video')) type = 'video';
+                else if (url.startsWith('data:audio')) type = 'audio';
+              }
 
               return (
-                <div key={idx} className="relative inline-block group/image">
-                  <img
-                    src={imgUrl}
-                    className="h-32 rounded-lg object-cover cursor-pointer"
-                    onClick={() => onImageClick(imgUrl)}
-                  />
+                <div key={idx} className="relative inline-block group/image min-w-[8rem]">
+                  {type === 'image' && (
+                    <img
+                      src={url}
+                      className="h-32 w-auto rounded-lg object-cover cursor-pointer bg-slate-100"
+                      onClick={() => onMediaClick({ url, type })}
+                    />
+                  )}
+                  
+                  {type === 'video' && (
+                    <div 
+                      className="relative h-32 w-auto rounded-lg overflow-hidden bg-black cursor-pointer group"
+                      onClick={() => onMediaClick({ url, type })}
+                    >
+                      <video src={url} className="h-full w-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <Play className="w-8 h-8 text-white opacity-70 drop-shadow-lg  opacity-0" />
+                      </div>
+                    </div>
+                  )}
+
+                  {type === 'audio' && (
+                    <div className="flex flex-col items-center justify-center bg-slate-100 h-32 w-48 rounded-lg p-3">
+                      <Play className="w-6 h-6 text-slate-400 mb-2 opacity-0" />
+                      <audio src={url} controls className="w-full h-8" />
+                    </div>
+                  )}
 
                   {/* Caption Input */}
                   <EditableCell
-                    value={imgCaption}
+                    value={caption}
                     onChange={(newVal) => {
-                      const updatedImages = [...imagesList];
-                      if (typeof updatedImages[idx] === 'string') {
-                        updatedImages[idx] = { url: updatedImages[idx], caption: newVal };
+                      const updatedMedia = [...mediaList];
+                      if (typeof updatedMedia[idx] === 'string') {
+                        updatedMedia[idx] = { url: updatedMedia[idx], caption: newVal, type };
                       } else {
-                        updatedImages[idx] = { ...updatedImages[idx], caption: newVal };
+                        updatedMedia[idx] = { ...updatedMedia[idx], caption: newVal };
                       }
-                      onUpdate(gift.id, { images: updatedImages, image_urls: updatedImages });
+                      onUpdate(gift.id, { images: updatedMedia, image_urls: updatedMedia });
                     }}
                     placeholder="Caption..."
                     className="mt-2 w-full text-xs text-center border-b border-slate-200 focus:border-emerald-500 focus:outline-none pb-1 bg-transparent block"
                   />
 
                   <button 
-                    onClick={() => setDeleteTarget({ type: 'image', index: idx })} 
+                    onClick={() => setDeleteTarget({ type: 'media', index: idx })} 
                     className="absolute -top-2 -right-2 bg-red-100 text-red-600 rounded-full p-1.5 opacity-50 md:opacity-0 group-hover/image:opacity-100 transition-opacity shadow-md hover:bg-red-200"
-                    title="Remove Image"
+                    title="Remove Media"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -400,21 +426,31 @@ function GiftCard({
         )}
 
         {/* --- Toolbar --- */}
-        <div className="mt-6 flex items-center px-4">
+        <div className="mt-6 flex items-center px-4 gap-3">
           <input 
             type="file" 
-            accept="image/*" 
+            accept="image/*, video/*, audio/*" 
             multiple 
-            id={`gift-image-${gift.id}`} 
+            id={`gift-media-${gift.id}`} 
             className="hidden" 
-            onChange={handleImageUpload} 
+            onChange={handleMediaUpload}
+            disabled={isUploading} 
           />
           <label 
-            htmlFor={`gift-image-${gift.id}`}
-            className="flex items-center gap-2 text-xs text-slate-500 hover:text-emerald-700 cursor-pointer transition-colors bg-slate-50 border border-slate-200 px-3 py-2 rounded-md hover:bg-slate-100"
+            htmlFor={`gift-media-${gift.id}`}
+            className={`flex items-center gap-2 text-xs text-slate-500 transition-colors bg-slate-50 border border-slate-200 px-3 py-2 rounded-md ${
+              isUploading 
+                ? 'opacity-50 cursor-not-allowed' 
+                : 'hover:text-emerald-700 cursor-pointer hover:bg-slate-100'
+            }`}
           >
             <ImageIcon className="w-4 h-4" />
-            Add Images
+            <Film className="w-4 h-4" />
+            <Music className="w-4 h-4" />
+            <span className="hidden sm:inline">
+              {isUploading ? 'Uploading...' : 'Add'}
+            </span> 
+            {!isUploading && "Media"}
           </label>
         </div>
       </div>
@@ -436,7 +472,7 @@ function GiftCard({
             <DialogTitle className="text-xl font-semibold text-slate-900">Confirm Deletion</DialogTitle>
           </DialogHeader>
           <div className="py-2 text-slate-600">
-            Are you sure you want to delete this {deleteTarget?.type === 'image' ? 'image' : 'item'}? This action cannot be undone.
+            Are you sure you want to delete this {deleteTarget?.type === 'media' ? 'media file' : 'item'}? This action cannot be undone.
           </div>
           <div className="flex justify-end gap-3 mt-4">
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>
@@ -460,7 +496,7 @@ export default function GiftsPage() {
   const { gifts, loading, fetchData } = useGifts();
   const [localGifts, setLocalGifts] = useState<any[]>([]);
   
-  const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
+  const [fullScreenMedia, setFullScreenMedia] = useState<{ url: string, type: string } | null>(null);
 
   // Safely sort Gifts ensuring pinned items are on top
   useEffect(() => {
@@ -533,7 +569,7 @@ export default function GiftsPage() {
         alert(error.message);
         fetchData(); // only on error if you want to restore
     }
-    };
+  };
 
   if (loading) return <div className="p-12 text-center text-emerald-600 font-bold">Loading Gifts...</div>;
 
@@ -569,24 +605,32 @@ export default function GiftsPage() {
               gift={gift} 
               onDelete={handleDelete} 
               onUpdate={handleUpdate} 
-              onImageClick={setFullScreenImage}
+              onMediaClick={setFullScreenMedia}
             />
           ))
         )}
       </div>
 
-      {/* Full Screen Image Lightbox */}
-      <Dialog open={!!fullScreenImage} onOpenChange={(open) => !open && setFullScreenImage(null)}>
+      {/* Full Screen Media Lightbox */}
+      <Dialog open={!!fullScreenMedia} onOpenChange={(open) => !open && setFullScreenMedia(null)}>
         <DialogContent className="max-w-4xl p-1 bg-transparent border-none shadow-none [&>button]:text-white [&>button]:bg-black/50 [&>button]:rounded-full [&>button]:hover:bg-black/80">
           <DialogHeader className="sr-only">
-            <DialogTitle>View Image</DialogTitle>
+            <DialogTitle>View Media</DialogTitle>
           </DialogHeader>
           <div className="flex items-center justify-center">
-            {fullScreenImage && (
+            {fullScreenMedia?.type === 'image' && (
               <img 
-                src={fullScreenImage} 
+                src={fullScreenMedia.url} 
                 alt="Full size view" 
-                className="w-auto h-auto max-w-full max-h-[85vh] rounded-md object-contain shadow-2xl" 
+                className="w-auto h-auto max-w-full max-h-[85vh] rounded-md object-contain shadow-2xl bg-black" 
+              />
+            )}
+            {fullScreenMedia?.type === 'video' && (
+              <video 
+                src={fullScreenMedia.url} 
+                controls 
+                autoPlay
+                className="w-auto h-auto max-w-full max-h-[85vh] rounded-md object-contain shadow-2xl bg-black" 
               />
             )}
           </div>
