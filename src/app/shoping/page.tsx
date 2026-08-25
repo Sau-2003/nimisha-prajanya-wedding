@@ -146,7 +146,7 @@ export default function OptionsPage() {
   };
 
   return (
-    <div className="min-h-screen p-4 md:p-10 max-w-7xl mx-auto space-y-8 md:ml-64">
+    <div className="min-h-screen p-4 md:p-10 max-w-7xl mx-auto space-y-8 mx-auto">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-serif font-bold text-emerald-900 flex items-center gap-3">
