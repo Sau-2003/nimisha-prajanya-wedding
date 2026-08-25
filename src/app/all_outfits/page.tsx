@@ -175,9 +175,26 @@ function EventOutfitsSection({
                       <Maximize2 className="w-6 h-6" />
                     </div>
                   </div>
+                  
+                  {/* Clickable link detection logic applied here */}
                   {(outfit.caption && outfit.caption !== 'Outfit Image' && outfit.caption !== 'Option Choice') && (
                     <p className="mt-2 text-xs font-medium text-slate-700 px-1 break-words hyphens-auto line-clamp-3" title={outfit.caption}>
-                      {outfit.caption}
+                      {outfit.caption.split(/(https?:\/\/[^\s]+)/g).map((part, index) =>
+                        /^https?:\/\/[^\s]+$/.test(part) ? (
+                          <a
+                            key={index}
+                            href={part}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()} // Prevents the image lightbox from opening
+                            className="text-emerald-600 underline hover:text-emerald-700"
+                          >
+                            {part}
+                          </a>
+                        ) : (
+                          part
+                        )
+                      )}
                     </p>
                   )}
                 </div>
@@ -300,31 +317,61 @@ export default function AllOutfitsPage() {
         console.error("Error fetching data:", error);
       } else if (data) {
         const mappedData: ParsedOutfit[] = data.map((item: any) => {
-          const isOption = item.category.startsWith('option_');
-          const isShoppingLink = item.category.startsWith('shopping_link_');
-          const isLink = item.category.startsWith('outfit_link_') || isShoppingLink;
+          const category = item.category || '';
+          const content = item.content || '';
+          const text = item.text || '';
+          
+          const isOption = category.startsWith('option_');
+          const isShoppingLink = category.startsWith('shopping_link_');
+          
+          // 1. Is the content a standard image URL?
+          const isSupabaseImage = content.includes('supabase.co/storage') || content.includes('supabase.in/storage');
+          
+          // 2. Is the content actually a URL string? (Masterlist adds them this way)
+          const isLegacyShoppingLink = isOption && !isSupabaseImage && content.startsWith('http');
+
+          // 3. Is it a link added from the Shopping page? 
+          // (Shopping page puts the URL in the text/caption and leaves content empty)
+          const textHasLink = /(https?:\/\/[^\s]+)/.test(text);
+          const isPureTextLink = isOption && !content && textHasLink;
+          
+          // Flag as a link if it matches ANY of the link criteria
+          const isLink = category.startsWith('outfit_link_') || isShoppingLink || isLegacyShoppingLink || isPureTextLink;
+
+          let finalUrl = content;
+          let finalCaption = text || (isLink ? "Link" : "Option Choice");
+
+          // If created on the Shopping page, extract the URL from the caption string
+          if (isPureTextLink) {
+            const match = text.match(/(https?:\/\/[^\s]+)/);
+            if (match) {
+              finalUrl = match[0]; // Use this as the clickable link href
+              const extractedTitle = text.replace(finalUrl, "").replace(/[:\s-]+$/, "").trim();
+              finalCaption = extractedTitle || finalUrl;
+            }
+          }
 
           if (isOption || isShoppingLink) {
-            const tabId = item.category.replace('option_', '').replace('shopping_link_', '');
+            const tabId = category.replace('option_', '').replace('shopping_link_', '');
             const actualTabLabel = tabLabelMap.get(tabId) || tabId;
 
             return {
               id: item.id,
               event_name: actualTabLabel, 
               category: 'Shopping',      
-              caption: item.text || (isLink ? "Link" : "Option Choice"),
-              image_url: item.content,
+              caption: finalCaption,
+              image_url: finalUrl,
               is_link: isLink,
               shopping_tab_id: tabId
             };
           } else {
-            const cleanCategory = item.category.replace('outfit_link_', '').replace('outfit_', '');
+            const cleanCategory = category.replace('outfit_link_', '').replace('outfit_', '');
             return {
               id: item.id,
               event_name: toTitleCase(item.event_name || 'General'),
               category: cleanCategory, 
-              caption: item.text || (isLink ? "Link" : "Outfit Image"),
-              image_url: item.content,
+              caption: finalCaption,
+              image_url: finalUrl,
               is_link: isLink
             };
           }
@@ -438,7 +485,8 @@ export default function AllOutfitsPage() {
     const isShopping = activeTab === 'Shopping';
     const { error: dbError } = await supabase.from('event_items').insert({
       event_name: isShopping ? 'Shopping' : sectionName.toLowerCase(),
-      category: isShopping ? `shopping_link_${tabId}` : `outfit_link_${activeTab}`,
+      // Use 'option_' for shopping links so the standalone Shopping page can fetch them seamlessly
+      category: isShopping ? `option_${tabId}` : `outfit_link_${activeTab}`,
       text: title.trim() || formattedUrl,
       content: formattedUrl
     });

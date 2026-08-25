@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Trash2, Plus, ArrowLeft, Loader2, Maximize2, X, Pencil, ImageIcon, Link as LinkIcon, ExternalLink, Check } from 'lucide-react';
+import { Trash2, Plus, ArrowLeft, Loader2, Maximize2, X, Pencil, Image as ImageIcon, Link as LinkIcon, ExternalLink, Check } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog";
 
@@ -14,6 +14,7 @@ type OutfitItem = {
   category: string;
   content: string; // Image URL or Link URL
   text?: string;   // Image Caption or Link Title
+  is_link: boolean; 
 };
 
 export default function OutfitPage() {
@@ -25,9 +26,12 @@ export default function OutfitPage() {
   const [outfitItems, setOutfitItems] = useState<OutfitItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [newCaption, setNewCaption] = useState("");
   
-  // States for Link input
+  // Toggles the Insert Menu
+  const [showAddMenu, setShowAddMenu] = useState(false);
+  
+  // States for inputs
+  const [newCaption, setNewCaption] = useState("");
   const [newLinkUrl, setNewLinkUrl] = useState("");
   const [newLinkTitle, setNewLinkTitle] = useState("");
   const [addingLink, setAddingLink] = useState(false);
@@ -41,11 +45,13 @@ export default function OutfitPage() {
   // States for unified Deletion Confirmation
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'item', id: string } | { type: 'tab', name: string } | null>(null);
   
-  // Derived tabs strictly from image categories (ignoring links so links don't create tabs)
-  const imageItems = outfitItems.filter(item => item.category.startsWith('outfit_') && !item.category.startsWith('outfit_link_'));
-  const dbTabs = Array.from(new Set(imageItems.map(item => item.category.replace('outfit_', ''))));
+  // Derive tabs from ALL items
+  const dbTabs = Array.from(new Set(
+    outfitItems
+      .filter(item => item.category.startsWith('outfit_'))
+      .map(item => item.category.replace('outfit_link_', '').replace('outfit_', ''))
+  ));
   
-  // REMOVED the default "Ideas" tab. Now it only relies on DB or User added tabs.
   const allTabs = Array.from(new Set([...dbTabs, ...customTabs]));
 
   const [activeTab, setActiveTab] = useState(allTabs[0] || "");
@@ -70,7 +76,24 @@ export default function OutfitPage() {
       .or(`category.like.outfit_%,category.like.outfit_link_%`);
 
     if (!error && data) {
-      setOutfitItems(data as OutfitItem[]);
+      const mappedData: OutfitItem[] = data.map((item: any) => {
+        const content = item.content || '';
+        const category = item.category || '';
+        
+        const isSupabaseImage = content.includes('supabase.co/storage') || content.includes('supabase.in/storage');
+        const isLegacyLink = category.startsWith('outfit_') && !isSupabaseImage && content.startsWith('http');
+        const isLink = category.startsWith('outfit_link_') || isLegacyLink;
+
+        return {
+          id: item.id,
+          category: item.category,
+          content: item.content,
+          text: item.text,
+          is_link: isLink
+        };
+      });
+
+      setOutfitItems(mappedData);
     }
     setLoading(false);
   }, [rawName]);
@@ -79,7 +102,7 @@ export default function OutfitPage() {
     fetchOutfits();
   }, [fetchOutfits]);
 
-  // Ensure activeTab stays valid if tabs change, or resets to empty if all deleted
+  // Ensure activeTab stays valid if tabs change
   useEffect(() => {
     if (allTabs.length > 0 && !allTabs.includes(activeTab)) {
       setActiveTab(allTabs[0]);
@@ -123,6 +146,7 @@ export default function OutfitPage() {
           alert(`Database Error: ${dbError.message}`);
         } else {
           setNewCaption("");
+          setShowAddMenu(false); // Close menu on success
           fetchOutfits(); 
         }
       }
@@ -157,6 +181,7 @@ export default function OutfitPage() {
       } else {
         setNewLinkUrl("");
         setNewLinkTitle("");
+        setShowAddMenu(false); // Close menu on success
         fetchOutfits();
       }
     } catch (err) {
@@ -204,7 +229,7 @@ export default function OutfitPage() {
 
   const openEditModal = (e: React.MouseEvent, item: OutfitItem) => {
     e.stopPropagation();
-    if (item.category.startsWith('outfit_link_')) {
+    if (item.is_link) { 
       const updatedTitle = prompt("Edit Link Title:", item.text);
       const updatedUrl = prompt("Edit URL:", item.content);
       if (updatedUrl !== null) {
@@ -267,7 +292,6 @@ export default function OutfitPage() {
     setSavingEdit(false);
   };
 
-  // --- TAB MANAGEMENT FUNCTIONS ---
   const addNewTab = () => {
     const name = prompt("Enter new outfit category (e.g., Sangeet, Reception):");
     if (name && name.trim()) {
@@ -298,7 +322,6 @@ export default function OutfitPage() {
     await supabase.from('event_items').update({ category: `outfit_link_${newName}` })
       .eq('event_name', rawName).eq('category', `outfit_link_${oldName}`);
 
-    // Update local state
     setCustomTabs(prev => prev.map(tab => tab === oldName ? newName : tab));
     if (activeTab === oldName) {
       setActiveTab(newName);
@@ -381,60 +404,53 @@ export default function OutfitPage() {
         <TabsContent value={activeTab} className="mt-0 space-y-4">
           {activeTab ? (
             <>
-              {/* Image Upload Row */}
-              <div className="bg-slate-50 border p-4 rounded-xl flex flex-col md:flex-row gap-3 items-stretch md:items-center">
-                <input 
-                  type="text" 
-                  placeholder="Add optional image caption..."
-                  value={newCaption}
-                  onChange={(e) => setNewCaption(e.target.value)}
-                  className="flex-1 border p-2 rounded-lg bg-white outline-none text-sm focus:border-emerald-500"
-                />
-                
-                <input 
-                  type="file" 
-                  ref={fileInputRef} 
-                  onChange={handleUpload} 
-                  accept="image/*" 
-                  className="hidden" 
-                />
-                
-                <Button 
-                  onClick={() => fileInputRef.current?.click()} 
-                  disabled={uploading}
-                  className="bg-emerald-600 hover:bg-emerald-700 shadow-sm whitespace-nowrap"
-                >
-                  {uploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
-                  {uploading ? "Uploading..." : `Add Image to ${activeTab}`}
-                </Button>
-              </div>
-
-              {/* Link Input Row */}
-              <div className="bg-slate-50 border p-4 rounded-xl flex flex-col md:flex-row gap-3 items-stretch md:items-center">
-                <input 
-                  type="text" 
-                  placeholder="Link title/label (optional)..."
-                  value={newLinkTitle}
-                  onChange={(e) => setNewLinkTitle(e.target.value)}
-                  className="w-full md:w-1/3 border p-2 rounded-lg bg-white outline-none text-sm focus:border-emerald-500"
-                />
-                <input 
-                  type="url" 
-                  placeholder="Paste link here (e.g., myntra.com/...)"
-                  value={newLinkUrl}
-                  onChange={(e) => setNewLinkUrl(e.target.value)}
-                  className="flex-1 border p-2 rounded-lg bg-white outline-none text-sm focus:border-emerald-500"
-                />
-                <Button 
-                  onClick={handleAddLink} 
-                  disabled={addingLink || !newLinkUrl.trim()}
-                  variant="outline"
-                  className="border-emerald-600 text-emerald-700 hover:bg-emerald-50 whitespace-nowrap"
-                >
-                  {addingLink ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <LinkIcon className="w-4 h-4 mr-2" />}
-                  Add Link
-                </Button>
-              </div>
+              {/* Toggled Upload UI */}
+              {!showAddMenu ? (
+                <div className="flex justify-start mb-4">
+                  <Button 
+                    onClick={() => setShowAddMenu(true)} 
+                    variant="outline" 
+                    className="border-dashed border-emerald-300 text-emerald-700 hover:bg-emerald-50 bg-white"
+                  >
+                    <Plus className="w-4 h-4 mr-2" /> Insert Option
+                  </Button>
+                </div>
+              ) : (
+                <div className="mb-6 p-4 pt-5 bg-slate-50 border border-slate-200 rounded-2xl relative shadow-sm">
+                  <button 
+                    onClick={() => setShowAddMenu(false)}
+                    className="absolute top-3 right-3 p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 transition-colors"
+                    title="Close Options"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                  
+                  <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4 pl-1">Insert New Option to {activeTab}</h4>
+                  
+                  <div className="flex flex-col xl:flex-row gap-4 xl:items-center">
+                    {/* Add Image */}
+                    <div className="flex flex-col sm:flex-row w-full xl:w-1/2 gap-2 items-stretch sm:items-center">
+                      <input type="text" placeholder="Image Caption..." value={newCaption} onChange={(e) => setNewCaption(e.target.value)} className="flex-1 border p-2 rounded-lg outline-none text-sm focus:border-emerald-500 bg-white" />
+                      <input type="file" ref={fileInputRef} onChange={handleUpload} className="hidden" accept="image/*" />
+                      <Button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="bg-emerald-600 hover:bg-emerald-700 whitespace-nowrap">
+                        {uploading ? <Loader2 className="animate-spin w-4 h-4 mr-2" /> : <ImageIcon className="w-4 h-4 mr-2" />} Upload Image
+                      </Button>
+                    </div>
+                    
+                    {/* Vertical Divider (desktop) */}
+                    <div className="hidden xl:block w-px h-10 bg-slate-200" />
+                    
+                    {/* Add Link */}
+                    <div className="flex flex-col sm:flex-row w-full xl:w-1/2 gap-2 items-stretch sm:items-center">
+                      <input type="text" placeholder="Link Title..." value={newLinkTitle} onChange={(e) => setNewLinkTitle(e.target.value)} className="w-full sm:w-1/3 border p-2 rounded-lg outline-none text-sm focus:border-emerald-500 bg-white" />
+                      <input type="url" placeholder="https://..." value={newLinkUrl} onChange={(e) => setNewLinkUrl(e.target.value)} className="flex-1 border p-2 rounded-lg outline-none text-sm focus:border-emerald-500 bg-white" />
+                      <Button onClick={handleAddLink} disabled={addingLink || !newLinkUrl.trim()} variant="outline" className="border-emerald-600 text-emerald-700 whitespace-nowrap bg-white">
+                        {addingLink ? <Loader2 className="animate-spin w-4 h-4 mr-2" /> : <LinkIcon className="w-4 h-4 mr-2" />} Add Link
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Items Grid (Images & Links) */}
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pt-2">
@@ -444,9 +460,7 @@ export default function OutfitPage() {
                   </div>
                 ) : (
                   activeItems.map((item) => {
-                    const isLink = item.category.startsWith('outfit_link_');
-
-                    if (isLink) {
+                    if (item.is_link) {
                       return (
                         <Card 
                           key={item.id} 
@@ -502,9 +516,25 @@ export default function OutfitPage() {
                             </div>
                           </div>
 
+                          {/* PROPERLY TYPED AND PLACED LINK LOGIC */}
                           {item.text && item.text !== 'Outfit Image' && (
                             <p className="mt-2 text-xs font-medium text-slate-700 px-1 break-words hyphens-auto line-clamp-3" title={item.text}>
-                              {item.text}
+                              {item.text.split(/(https?:\/\/[^\s]+)/g).map((part: string, index: number) =>
+                                /^https?:\/\/[^\s]+$/.test(part) ? (
+                                  <a
+                                    key={index}
+                                    href={part}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()} // Prevents the image lightbox from opening
+                                    className="text-emerald-600 underline hover:text-emerald-700"
+                                  >
+                                    {part}
+                                  </a>
+                                ) : (
+                                  part
+                                )
+                              )}
                             </p>
                           )}
                         </div>

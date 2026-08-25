@@ -109,7 +109,7 @@ export default function OptionsPage() {
       const formattedCaption = newLinkTitle.trim() 
         ? `${newLinkTitle.trim()}: ${formattedUrl}` 
         : formattedUrl;
-       
+        
       await addOptionItem(formattedCaption, selectedFile);
       setNewLinkTitle("");
       setNewLinkUrl("");
@@ -418,16 +418,31 @@ export default function OptionsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
             {items.map((item) => {
               const rawCaption = item.caption || "";
-              const isPureLinkItem = !item.imageUrl && /(https?:\/\/[^\s]+)/.test(rawCaption);
+              
+              // --- FIX: Unified Link Detection ---
+              // Check if the URL belongs to your Supabase image storage
+              const isSupabase = item.imageUrl?.includes('supabase.co') || item.imageUrl?.includes('supabase.in');
+              
+              // It is a link if the imageUrl is external (not Supabase) OR if the caption contains a link
+              const isExternalUrlLink = !!(item.imageUrl && !isSupabase && item.imageUrl.startsWith('http'));
+              const isPureLinkItem = isExternalUrlLink || (!item.imageUrl && /(https?:\/\/[^\s]+)/.test(rawCaption));
+              
               let linkUrl = "";
               let linkTitle = "";
-               
+                
               if (isPureLinkItem) {
-                const match = rawCaption.match(/(https?:\/\/[^\s]+)/);
-                if (match) {
-                  linkUrl = match[0];
-                  linkTitle = rawCaption.replace(linkUrl, "").replace(/[:\s-]+$/, "").trim();
-                  if (!linkTitle) linkTitle = linkUrl;
+                if (isExternalUrlLink) {
+                  // Handle links created by AllOutfitsPage
+                  linkUrl = item.imageUrl as string;
+                  linkTitle = (rawCaption && rawCaption !== "Option Choice") ? rawCaption : linkUrl;
+                } else {
+                  // Handle legacy links created by OptionsPage
+                  const match = rawCaption.match(/(https?:\/\/[^\s]+)/);
+                  if (match) {
+                    linkUrl = match[0];
+                    linkTitle = rawCaption.replace(linkUrl, "").replace(/[:\s-]+$/, "").trim();
+                    if (!linkTitle) linkTitle = linkUrl;
+                  }
                 }
               }
 
