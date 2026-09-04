@@ -253,7 +253,24 @@ function ChadanaCard({
     }`}>
       
       {/* Top Right Action Buttons */}
-      <div className="absolute top-6 right-6 flex items-center gap-2 z-20">
+      <div className="absolute top-6 right-6 flex items-center gap-2.5 z-20">
+        
+        {/* CHECKBOX */}
+        <div 
+          className="flex items-center justify-center p-1"
+          onMouseMove={(e) => handleTooltipMove(e, isCompleted ? "Mark as active" : "Mark as completed")}
+          onMouseLeave={handleTooltipLeave}
+        >
+          <input
+            type="checkbox"
+            checked={isCompleted}
+            onChange={(e) => {
+              onUpdate(gift.id, { is_completed: e.target.checked });
+              setActiveTooltip(null);
+            }}
+            className="w-5 h-5 accent-emerald-600 cursor-pointer rounded border-slate-300 transition-all m-0"
+          />
+        </div>
         
         {/* PIN BUTTON */}
         <button 
@@ -292,38 +309,23 @@ function ChadanaCard({
       </div>
 
       <div className="pt-6 pb-4 pl-6 md:pl-10 pr-32">
-        <div className="flex items-start gap-4">
-          {/* CHECKBOX */}
-          <div className="pt-1.5 z-10">
-            <input
-              type="checkbox"
-              checked={isCompleted}
-              onChange={(e) => onUpdate(gift.id, { is_completed: e.target.checked })}
-              className="w-5 h-5 accent-emerald-600 cursor-pointer rounded border-slate-300 transition-all"
-              title={isCompleted ? "Mark as incomplete" : "Mark as complete"}
-            />
-          </div>
-
-          <div className="flex-1">
-            {/* DATE DISPLAY */}
-            <div className="text-[10px] text-slate-400 font-bold tracking-widest uppercase mb-1.5 ml-1">
-              {formattedDate}
-            </div>
-
-            <EditableCell
-              value={title}
-              onChange={(val) => setTitle(val.toUpperCase())}
-              onBlur={() => onUpdate(gift.id, { title })}
-              placeholder="CHADANA TITLE..."
-              className={`text-xl font-sans tracking-widest uppercase w-full bg-transparent border-b-2 border-transparent hover:border-emerald-200 focus:border-emerald-400 focus:outline-none transition-all block ${
-                isCompleted ? 'text-slate-400 line-through' : 'text-emerald-700'
-              }`}
-            />
-          </div>
+        {/* DATE DISPLAY */}
+        <div className="text-[10px] text-slate-400 font-bold tracking-widest uppercase mb-1.5 ml-1">
+          {formattedDate}
         </div>
+
+        <EditableCell
+          value={title}
+          onChange={(val) => setTitle(val.toUpperCase())}
+          onBlur={() => onUpdate(gift.id, { title })}
+          placeholder="CHADANA TITLE..."
+          className={`text-xl font-sans tracking-widest uppercase w-full bg-transparent border-b-2 border-transparent hover:border-emerald-200 focus:border-emerald-400 focus:outline-none transition-all block ${
+            isCompleted ? 'text-slate-400 line-through' : 'text-emerald-700'
+          }`}
+        />
       </div>
 
-      <div className="w-full px-4 md:px-10 pb-6 pl-[4.5rem] md:pl-[5.5rem]">
+      <div className="w-full px-4 md:px-10 pb-6">
         {isEditing ? (
           <EditableCell
             value={content}
@@ -480,22 +482,15 @@ function ChadanaCard({
 export default function ChadanaPage() {
   const { chadana, loading, fetchData } = useChadana();
   const [localChadana, setLocalChadana] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'active' | 'done'>('active');
   
   const [fullScreenMedia, setFullScreenMedia] = useState<{url: string, type: string} | null>(null);
 
-  // Safely sort Chadana: Incomplete > Pinned > Newest > Completed
+  // Safely sort Chadana: Pinned > Newest
   useEffect(() => {
     if (chadana) {
       const sorted = [...chadana].sort((a, b) => {
-        const aCompleted = Boolean(a.is_completed);
-        const bCompleted = Boolean(b.is_completed);
-        
-        // Push completed items to the bottom
-        if (aCompleted !== bCompleted) {
-          return aCompleted ? 1 : -1;
-        }
-
-        // Pin logic for items with the same completion status
+        // Pin logic
         const aPinned = Boolean(a.is_pinned);
         const bPinned = Boolean(b.is_pinned);
         
@@ -503,6 +498,7 @@ export default function ChadanaPage() {
           return aPinned ? -1 : 1;
         }
         
+        // Date fallback
         const dateA = new Date(a.created_at || 0).getTime();
         const dateB = new Date(b.created_at || 0).getTime();
         return dateB - dateA;
@@ -512,6 +508,9 @@ export default function ChadanaPage() {
   }, [chadana]);
 
   const handleAddChadana = async () => {
+    // Switch to active tab so the user can immediately see the new item
+    setActiveTab('active');
+
     const { error } = await supabase.from('chadana').insert({ 
       title: '', 
       content: '', 
@@ -544,11 +543,6 @@ export default function ChadanaPage() {
 
       // Re-apply sorting on local state immediately after update
       return updated.sort((a, b) => {
-        const aCompleted = Boolean(a.is_completed);
-        const bCompleted = Boolean(b.is_completed);
-        
-        if (aCompleted !== bCompleted) return aCompleted ? 1 : -1;
-
         const aPinned = Boolean(a.is_pinned);
         const bPinned = Boolean(b.is_pinned);
 
@@ -570,6 +564,15 @@ export default function ChadanaPage() {
       alert(error.message);
     }
   };
+
+  // Filter items based on the active tab
+  const filteredChadana = localChadana.filter(item => {
+    if (activeTab === 'active') {
+      return !item.is_completed;
+    } else {
+      return item.is_completed;
+    }
+  });
 
   if (loading) return <div className="p-12 text-center text-emerald-600 font-bold">Loading Chadana...</div>;
 
@@ -594,12 +597,40 @@ export default function ChadanaPage() {
         </Button>
       </div>
 
+      {/* Tabs */}
+      <div className="flex space-x-1 bg-slate-100/70 p-1 rounded-lg w-fit border border-slate-200">
+        <button
+          onClick={() => setActiveTab('active')}
+          className={`px-6 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+            activeTab === 'active' 
+              ? 'bg-white shadow-sm text-emerald-800' 
+              : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+          }`}
+        >
+          Active
+        </button>
+        <button
+          onClick={() => setActiveTab('done')}
+          className={`px-6 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+            activeTab === 'done' 
+              ? 'bg-white shadow-sm text-emerald-800' 
+              : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+          }`}
+        >
+          Done
+        </button>
+      </div>
+
       {/* Chadana List */}
       <div className="space-y-6">
-        {localChadana.length === 0 ? (
-           <div className="text-center py-12 text-slate-400 italic">No chadana tracked yet. Click "Add Chadana Ideas" to get started!</div>
+        {filteredChadana.length === 0 ? (
+           <div className="text-center py-12 text-slate-400 italic">
+             {activeTab === 'active' 
+               ? 'No active chadana tracked yet. Click "Add Chadana Ideas" to get started!' 
+               : 'No completed ideas yet. Check off some active ideas to see them here!'}
+           </div>
         ) : (
-          localChadana.map((gift: any) => (
+          filteredChadana.map((gift: any) => (
             <ChadanaCard 
               key={gift.id} 
               gift={gift} 
