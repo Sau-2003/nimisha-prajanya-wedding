@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, CheckCircle2, Trash2, Phone, Pencil, Handshake, X, Link as LinkIcon, ChevronUp, ChevronDown, Pin, Search } from "lucide-react";
+import { Plus, CheckCircle2, Trash2, Phone, Pencil, Handshake, X, Link as LinkIcon, ChevronUp, ChevronDown, Pin, Search, List } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useVendors } from "@/hooks/useVendors";
 
@@ -155,15 +155,18 @@ function VendorsTracker() {
   const [newEstimatedCost, setNewEstimatedCost] = useState<string>("");
   const [newContactNumbers, setNewContactNumbers] = useState<string[]>([""]);
   const [newNotes, setNewNotes] = useState("");
-  const [newComments, setNewComments] = useState(""); // <-- ADDED
+  const [newComments, setNewComments] = useState("");
 
   const [editingOptionId, setEditingOptionId] = useState<string | null>(null);
   const [editOptionName, setEditOptionName] = useState("");
   const [editEstimatedCost, setEditEstimatedCost] = useState<string>("");
   const [editContactNumbers, setEditContactNumbers] = useState<string[]>([""]);
   const [editNotes, setEditNotes] = useState("");
-  const [editComments, setEditComments] = useState(""); // <-- ADDED
+  const [editComments, setEditComments] = useState("");
   const [editOptionStatus, setEditOptionStatus] = useState<BookingStatus>("Not Started"); 
+
+  // Tabs State - Added 'all'
+  const [activeTab, setActiveTab] = useState<'in_progress' | 'completed' | 'all'>('in_progress');
 
   // Delete Confirmation States
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
@@ -230,10 +233,9 @@ function VendorsTracker() {
           estimatedCost: v.estimated_cost || 0,
           contactNumber: v.contact_numbers ?? [],
           notes: v.notes || "",
-          comments: v.comments || "", // <-- ADDED
+          comments: v.comments || "",
         })) || [];
         
-      // Filter based on search query if present
       if (searchQuery.trim() !== "") {
         const query = searchQuery.toLowerCase();
         const matchesCategory = categoryName.toLowerCase().includes(query);
@@ -248,10 +250,7 @@ function VendorsTracker() {
         }
       }
       
-      // SORT: Bring "Confirmed" vendors to the top, then sort by Negotiating -> Enquired -> Recommendation -> Not Started
-      matches = matches.sort((a, b) => {
-        return statusOrder[a.status] - statusOrder[b.status];
-      });
+      matches = matches.sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
       
       const confirmedOptions = matches.filter((opt) => opt.status === "Confirmed");
       const hasConfirmed = confirmedOptions.length > 0;
@@ -270,8 +269,7 @@ function VendorsTracker() {
     }).filter(cat => {
       if (searchQuery.trim() === "") return true;
       const query = searchQuery.toLowerCase();
-      const matchesCategoryName = cat.name.toLowerCase().includes(query);
-      return matchesCategoryName || cat.options.length > 0;
+      return cat.name.toLowerCase().includes(query) || cat.options.length > 0;
     });
   }, [orderedCategories, dbVendors, pinnedCategoriesList, searchQuery]);
 
@@ -279,6 +277,15 @@ function VendorsTracker() {
   const unpinnedGroup = useMemo(() => rawDisplayCategories.filter(c => !c.isPinned), [rawDisplayCategories]);
   const displayCategories = useMemo(() => [...pinnedGroup, ...unpinnedGroup], [pinnedGroup, unpinnedGroup]);
   const currentCategoryData = useMemo(() => displayCategories.find((c) => c.name === editingCategory), [displayCategories, editingCategory]);
+
+  const inProgressCategories = useMemo(() => displayCategories.filter(c => !c.hasConfirmed), [displayCategories]);
+  const completedCategories = useMemo(() => displayCategories.filter(c => c.hasConfirmed), [displayCategories]);
+  
+  const currentTabCategories = useMemo(() => {
+    if (activeTab === 'all') return displayCategories;
+    if (activeTab === 'in_progress') return inProgressCategories;
+    return completedCategories;
+  }, [activeTab, displayCategories, inProgressCategories, completedCategories]);
 
   // --- ACTIONS ---
 
@@ -293,7 +300,6 @@ function VendorsTracker() {
 
     if (error) {
       console.error("Error updating pin state:", error);
-      alert("Failed to pin/unpin category.");
     } else {
       await fetchCategories();
     }
@@ -325,18 +331,14 @@ function VendorsTracker() {
     }));
 
     const { error } = await supabase.from('vendor_categories').upsert(updates, { onConflict: 'category_name' });
-    if (error) {
-      console.error("Error saving new order to DB:", error);
-    } else {
-      await fetchCategories();
-    }
+    if (error) console.error("Error saving new order:", error);
+    else await fetchCategories();
   };
 
   const handleAddCustomCategory = async () => {
     const trimmed = newCategoryName.trim();
     if (trimmed) {
       const updatedOrder = Array.from(new Set([trimmed, ...orderedCategories.filter(c => c !== trimmed)]));
-      
       const updates = updatedOrder.map((cat, idx) => ({
         category_name: cat,
         order_index: idx,
@@ -346,13 +348,8 @@ function VendorsTracker() {
       }));
 
       const { error } = await supabase.from('vendor_categories').upsert(updates, { onConflict: 'category_name' });
-
-      if (error) {
-        console.error("Error adding category:", error);
-        alert("Failed to add category.");
-      } else {
-        await fetchCategories();
-      }
+      if (error) alert("Failed to add category.");
+      else await fetchCategories();
     }
     setNewCategoryName("");
     setIsAddCategoryOpen(false);
@@ -360,26 +357,14 @@ function VendorsTracker() {
 
   const handleSaveCategoryName = async (oldName: string) => {
     const newName = editCategoryInput.trim();
-    
-    if (!newName || newName === oldName) {
-      setEditingCategoryTitle(null);
-      return;
-    }
-    
-    if (allCategories.includes(newName)) {
-      alert("A category with this name already exists.");
-      return;
-    }
+    if (!newName || newName === oldName) return setEditingCategoryTitle(null);
+    if (allCategories.includes(newName)) return alert("A category with this name already exists.");
 
     const currentIndex = categoryOrder.indexOf(oldName);
     const isCurrentlyPinned = pinnedCategoriesList.includes(oldName);
 
     const { error: vendorUpdateError } = await supabase.from('vendors').update({ category: newName }).eq('category', oldName);
-    if (vendorUpdateError) {
-      console.error("Error updating vendor categories:", vendorUpdateError);
-      alert("Failed to update category name on existing vendors.");
-      return;
-    }
+    if (vendorUpdateError) return alert("Failed to update category name on existing vendors.");
 
     if (initialCategories.includes(oldName)) {
       await supabase.from('vendor_categories').upsert(
@@ -408,10 +393,8 @@ function VendorsTracker() {
     if (vendorCount > 0) {
       const { error: vendorError } = await supabase.from("vendors").delete().eq("category", categoryName);
       if (vendorError) {
-        console.error("Error deleting vendors:", vendorError);
         alert("Failed to delete category vendors.");
-        setCategoryToDelete(null);
-        return;
+        return setCategoryToDelete(null);
       }
     }
 
@@ -421,10 +404,8 @@ function VendorsTracker() {
       is_custom: !initialCategories.includes(categoryName)
     }, { onConflict: 'category_name' });
 
-    if (catError) {
-      console.error("Error deleting category setting:", catError);
-      alert("Failed to delete category.");
-    } else {
+    if (catError) alert("Failed to delete category.");
+    else {
       setCategoryOrder(prev => prev.filter(name => name !== categoryName)); 
       await fetchCategories();
       await fetchVendors();
@@ -446,9 +427,7 @@ function VendorsTracker() {
 
   const handleAddOption = async () => {
     if (!newOptionName.trim() || !editingCategory) return;
-
     const filteredPhones = newContactNumbers.filter(phone => phone.trim() !== "");
-
     const { error } = await supabase.from("vendors").insert({
       category: editingCategory,
       assigned_vendor: newOptionName.trim(),
@@ -456,23 +435,18 @@ function VendorsTracker() {
       estimated_cost: newEstimatedCost ? parseFloat(newEstimatedCost) : 0,
       contact_numbers: filteredPhones.length > 0 ? filteredPhones : null,
       notes: newNotes.trim() || null,
-      comments: newComments.trim() || null, // <-- ADDED
+      comments: newComments.trim() || null, 
       updated_at: new Date().toISOString(),
     });
 
-    if (error) {
-      console.error("Supabase insert error:", error);
-      alert("Failed to add vendor. Check console for details.");
-      return;
-    }
-
+    if (error) return alert("Failed to add vendor. Check console for details.");
+    
     setNewOptionName("");
     setNewOptionStatus("Not Started");
     setNewEstimatedCost("");
     setNewContactNumbers([""]);
     setNewNotes("");
     setNewComments("");
-    
     await fetchVendors();
   };
 
@@ -482,15 +456,17 @@ function VendorsTracker() {
     setEditEstimatedCost(opt.estimatedCost ? opt.estimatedCost.toString() : "");
     setEditContactNumbers(opt.contactNumber && opt.contactNumber.length > 0 ? opt.contactNumber : [""]);
     setEditNotes(opt.notes || "");
-    setEditComments(opt.comments || ""); // <-- ADDED
+    setEditComments(opt.comments || ""); 
     setEditOptionStatus(opt.status);
   };
 
-  const cancelEditing = () => setEditingOptionId(null);
+  // ADDED MISSING cancelEditing FUNCTION HERE
+  const cancelEditing = () => {
+    setEditingOptionId(null);
+  };
 
   const saveEditedOption = async (optionId: string) => {
     if (!editOptionName.trim()) return;
-
     const filteredPhones = editContactNumbers.filter(phone => phone.trim() !== "");
     const targetVendor = dbVendors?.find((v: any) => v.id === optionId);
 
@@ -499,24 +475,18 @@ function VendorsTracker() {
       estimated_cost: editEstimatedCost ? parseFloat(editEstimatedCost) : 0,
       contact_numbers: filteredPhones.length > 0 ? filteredPhones : null,
       notes: editNotes.trim() || null,
-      comments: editComments.trim() || null, // <-- ADDED
+      comments: editComments.trim() || null,
       status: editOptionStatus,
       updated_at: new Date().toISOString(),
     }).eq("id", optionId);
 
-    if (error) {
-      console.error("Supabase update error:", error);
-      alert("Failed to update vendor. Check console.");
-      return;
-    }
+    if (error) return alert("Failed to update vendor.");
 
     if (targetVendor && targetVendor.status === 'Confirmed' && editOptionStatus !== 'Confirmed') {
       const catName = targetVendor.category;
-      
       const otherConfirmed = dbVendors?.filter(
         (v: any) => v.category === catName && v.id !== optionId && v.status === 'Confirmed'
       );
-
       if (!otherConfirmed || otherConfirmed.length === 0) {
         setPinnedCategoriesList(prev => prev.filter(c => c !== catName));
         await supabase.from("vendor_categories").update({ is_pinned: false }).eq("category_name", catName);
@@ -531,54 +501,41 @@ function VendorsTracker() {
 
   const handleStatusChange = async (optionId: string, status: BookingStatus) => {
     const targetVendor = dbVendors?.find((v: any) => v.id === optionId);
-    
     await supabase.from("vendors").update({ status }).eq("id", optionId);
 
     if (targetVendor && targetVendor.status === 'Confirmed' && status !== 'Confirmed') {
       const catName = targetVendor.category;
-      
       const otherConfirmed = dbVendors?.filter(
         (v: any) => v.category === catName && v.id !== optionId && v.status === 'Confirmed'
       );
-
       if (!otherConfirmed || otherConfirmed.length === 0) {
         setPinnedCategoriesList(prev => prev.filter(c => c !== catName));
         await supabase.from("vendor_categories").update({ is_pinned: false }).eq("category_name", catName);
         fetchCategories(); 
       }
     }
-
     await fetchVendors();
   };
 
   const confirmItemDelete = async () => {
     if (!itemToDelete) return;
     const optionId = itemToDelete;
-
     const targetVendor = dbVendors?.find((v: any) => v.id === optionId);
 
     const { error } = await supabase.from("vendors").delete().eq("id", optionId);
-    
-    if (error) {
-      alert("Failed to delete. Check console.");
-      setItemToDelete(null);
-      return;
-    }
+    if (error) return alert("Failed to delete.");
 
     if (targetVendor && targetVendor.status === 'Confirmed') {
       const catName = targetVendor.category;
-      
       const otherConfirmed = dbVendors?.filter(
         (v: any) => v.category === catName && v.id !== optionId && v.status === 'Confirmed'
       );
-
       if (!otherConfirmed || otherConfirmed.length === 0) {
         setPinnedCategoriesList(prev => prev.filter(c => c !== catName));
         await supabase.from("vendor_categories").update({ is_pinned: false }).eq("category_name", catName);
         fetchCategories();
       }
     }
-
     setItemToDelete(null);
     await fetchVendors(); 
   };
@@ -586,6 +543,9 @@ function VendorsTracker() {
   if (vendorsLoading || categoriesLoading) {
     return <div className="p-12 text-center text-emerald-600 font-medium">Loading Vendors...</div>;
   }
+
+  // Text for empty states dynamically based on the active tab
+  const activeTabText = activeTab === 'all' ? '' : activeTab === 'in_progress' ? 'in progress ' : 'completed ';
 
   return (
     <>
@@ -600,8 +560,8 @@ function VendorsTracker() {
             </p>
           </div>
           
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1 md:w-64">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
               <input
                 type="text"
@@ -621,6 +581,19 @@ function VendorsTracker() {
             </div>
             
             <Button 
+              variant={activeTab === 'all' ? "default" : "outline"}
+              size="sm" 
+              onClick={() => setActiveTab('all')}
+              className={`text-xs font-medium h-9 shadow-sm transition-colors whitespace-nowrap ${
+                activeTab === 'all' 
+                  ? "bg-slate-800 text-white hover:bg-slate-700" 
+                  : "text-slate-700 border-slate-200 hover:bg-slate-50"
+              }`}
+            >
+              <List className="w-3.5 h-3.5 mr-1" /> All Categories
+            </Button>
+
+            <Button 
               variant="outline" 
               size="sm" 
               onClick={() => setIsAddCategoryOpen(true)}
@@ -634,13 +607,37 @@ function VendorsTracker() {
 
       <Card className="col-span-full border-slate-200 shadow-sm">
         <CardContent className="pt-6">
-          {displayCategories.length === 0 ? (
+          {/* TABS NAVIGATION */}
+          <div className="flex items-center gap-6 border-b border-slate-200 mb-6 px-1">
+            <button
+              onClick={() => setActiveTab('in_progress')}
+              className={`pb-3 text-sm font-semibold transition-colors relative border-b-2 ${
+                activeTab === 'in_progress' 
+                  ? "text-emerald-700 border-emerald-600" 
+                  : "text-slate-500 border-transparent hover:text-slate-800"
+              }`}
+            >
+              In Progress ({inProgressCategories.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('completed')}
+              className={`pb-3 text-sm font-semibold transition-colors relative border-b-2 ${
+                activeTab === 'completed' 
+                  ? "text-emerald-700 border-emerald-600" 
+                  : "text-slate-500 border-transparent hover:text-slate-800"
+              }`}
+            >
+              Confirmed ({completedCategories.length})
+            </button>
+          </div>
+
+          {currentTabCategories.length === 0 ? (
             <div className="text-center py-12 text-slate-400 text-sm italic">
-              No categories or vendors found matching &quot;{searchQuery}&quot;.
+              {searchQuery ? `No ${activeTabText}vendors found matching "${searchQuery}".` : `No ${activeTabText}vendors right now.`}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {displayCategories.map((item) => {
+              {currentTabCategories.map((item) => {
                 const hasConfirmed = item.hasConfirmed;
 
                 return (
@@ -1030,7 +1027,6 @@ function VendorsTracker() {
                   onChange={(e) => setEditNotes(e.target.value)}
                 />
                 
-                {/* NEW COMMENTS TEXT AREA (EDIT) */}
                 <textarea
                   placeholder="Comments (Feedback, ongoing conversation...)"
                   className="w-full border border-emerald-500 p-2 rounded-lg text-sm focus:outline-none resize-none"
@@ -1167,14 +1163,13 @@ function VendorsTracker() {
                   </div>
 
                   <textarea
-                    placeholder="Notes / Links (Package details, inclusions, Instagram link, etc.)"
+                    placeholder="Notes / Links (Package details, inclusions, etc.)"
                     className="w-full border border-slate-300 p-2 rounded-lg text-sm focus:outline-none focus:border-emerald-500 resize-none"
                     rows={2}
                     value={newNotes}
                     onChange={(e) => setNewNotes(e.target.value)}
                   />
 
-                  {/* NEW COMMENTS TEXT AREA (ADD) */}
                   <textarea
                     placeholder="Comments (Feedback, ongoing conversation...)"
                     className="w-full border border-slate-300 p-2 rounded-lg text-sm focus:outline-none focus:border-emerald-500 resize-none"
@@ -1219,7 +1214,7 @@ function VendorsTracker() {
           </DialogHeader>
           <div className="py-2">
             <p className="text-sm text-slate-600">
-              Are you sure you want to delete the <strong>&quot;{categoryToDelete?.name}&quot;</strong> category{categoryToDelete && categoryToDelete.count > 0 ? ` and its ${categoryToDelete.count} vendor(s)` : ""}? This action cannot be undone.
+              Are you sure you want to delete the <strong>"{categoryToDelete?.name}"</strong> category{categoryToDelete && categoryToDelete.count > 0 ? ` and its ${categoryToDelete.count} vendor(s)` : ""}? This action cannot be undone.
             </p>
           </div>
           <div className="flex justify-end gap-2">

@@ -55,10 +55,12 @@ const defaultEvents: EventItem[] = [
   { name: "Vidai", date: "2027-02-01", place: "", link: "/events/vidai", color: "bg-pink-400" },
 ];
 
+type AuthMode = "signin" | "signup" | "reset" | "update-password";
+
 export default function Dashboard() {
   const [isChecking, setIsChecking] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
-  const [authMode, setAuthMode] = useState<"signin" | "signup" | "reset">("signin");
+  const [authMode, setAuthMode] = useState<AuthMode>("signin");
   
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -218,6 +220,14 @@ export default function Dashboard() {
         setAuthMode("signin");
         setPassword("");
       }
+    } else if (authMode === "update-password") {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) setAuthError(error.message);
+      else {
+        setAuthSuccess("Password updated successfully.");
+        setAuthMode("signin");
+        setPassword("");
+      }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) setAuthError(error.message);
@@ -229,6 +239,35 @@ export default function Dashboard() {
     }
     setAuthLoading(false);
   };
+
+  const authTitle =
+    authMode === "signin"
+      ? "Welcome Back"
+      : authMode === "signup"
+        ? "Create an Account"
+        : authMode === "reset"
+          ? "Reset Password"
+          : "Set New Password";
+
+  const authSubtitle =
+    authMode === "signin"
+      ? "Sign in to access the wedding planner"
+      : authMode === "signup"
+        ? "Sign up with your email to get started"
+        : authMode === "reset"
+          ? "Enter your email to receive a reset link"
+          : "Please enter your new password below";
+
+  const authButtonLabel =
+    authLoading
+      ? "Processing..."
+      : authMode === "signin"
+        ? "Sign In"
+        : authMode === "signup"
+          ? "Sign Up"
+          : authMode === "reset"
+            ? "Send Reset Link"
+            : "Update Password";
 
   const targetDate = new Date("2027-01-31");
   const today = new Date();
@@ -243,10 +282,10 @@ export default function Dashboard() {
         <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl border border-slate-200 p-6 sm:p-8 flex flex-col justify-center my-auto">
           <div className="text-center mb-6">
             <h1 className="text-2xl font-serif font-bold text-emerald-900">
-              {authMode === "signin" ? "Welcome Back" : authMode === "signup" ? "Create an Account" : "Reset Password"}
+              {authTitle}
             </h1>
             <p className="text-sm text-slate-500 mt-1.5">
-              {authMode === "signin" ? "Sign in to access the wedding planner" : authMode === "signup" ? "Sign up with your email to get started" : "Enter your email to receive a reset link"}
+              {authSubtitle}
             </p>
           </div>
           {authError && <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded-xl border border-red-100">{authError}</div>}
@@ -268,7 +307,9 @@ export default function Dashboard() {
             {authMode !== "reset" && (
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-sm font-medium text-slate-700">Password</label>
+                  <label className="block text-sm font-medium text-slate-700">
+                    {authMode === "update-password" ? "New Password" : "Password"}
+                  </label>
                   {authMode === "signin" && (
                     <button
                       type="button"
@@ -295,7 +336,7 @@ export default function Dashboard() {
             )}
 
             <button type="submit" disabled={authLoading} className="w-full bg-emerald-600 text-white py-3 rounded-xl text-base sm:text-sm font-medium hover:bg-emerald-700 shadow-sm mt-2">
-              {authLoading ? "Processing..." : authMode === "signin" ? "Sign In" : authMode === "signup" ? "Sign Up" : "Send Reset Link"}
+              {authButtonLabel}
             </button>
           </form>
 

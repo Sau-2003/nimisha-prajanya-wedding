@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, Image as ImageIcon, X, Pin, Gift, Bold, Italic, Strikethrough, Film, Music, Play } from "lucide-react";
+import { Plus, Trash2, Image as ImageIcon, X, Pin, Gift, Bold, Italic, Strikethrough, Film, Music, Play, ClipboardList, Pencil, Check } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
 import { useGifts } from "@/hooks/useGifts";
@@ -22,7 +22,6 @@ function FloatingToolbar() {
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       
-      // Ensure selection is inside an editable cell to avoid showing it everywhere
       let node = selection.anchorNode as Node | null;
       let isEditable = false;
       while (node && node !== document.body) {
@@ -35,7 +34,7 @@ function FloatingToolbar() {
 
       if (isEditable && rect.width > 0) {
         setPosition({
-          top: rect.top - 44, // Position above the selection
+          top: rect.top - 44, 
           left: rect.left + rect.width / 2,
         });
       } else {
@@ -64,7 +63,7 @@ function FloatingToolbar() {
     <div 
       className="fixed z-[9999] flex items-center bg-slate-900 text-white rounded-md shadow-lg p-1 gap-1 -translate-x-1/2 transition-all animate-in fade-in zoom-in-95"
       style={{ top: position.top, left: position.left }}
-      onMouseDown={(e) => e.preventDefault()} // Important: prevents losing text selection when clicking a button
+      onMouseDown={(e) => e.preventDefault()} 
     >
       <button onClick={() => applyFormat('bold')} className="p-1.5 hover:bg-slate-700 rounded text-white transition-colors" title="Bold">
         <Bold className="w-4 h-4" />
@@ -98,7 +97,6 @@ function EditableCell({
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Only update innerHTML if it changed externally (and isn't the active element to prevent cursor jumping)
     if (ref.current && value !== ref.current.innerHTML && document.activeElement !== ref.current) {
       ref.current.innerHTML = value || "";
     }
@@ -134,6 +132,29 @@ function EditableCell({
   );
 }
 
+// --- AUTO RESIZE TEXTAREA FOR MASTERLIST ---
+function AutoResizeTextarea({ value, onChange, placeholder, className }: any) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.style.height = 'auto';
+      ref.current.style.height = `${ref.current.scrollHeight}px`;
+    }
+  }, [value]);
+
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      rows={1}
+      className={`w-full bg-white border border-emerald-300 rounded-md outline-none resize-none overflow-hidden block p-1.5 focus:ring-2 focus:ring-emerald-200 transition-all ${className}`}
+    />
+  );
+}
+
 function GiftCard({ 
   gift, 
   onDelete, 
@@ -145,14 +166,9 @@ function GiftCard({
   const [isEditing, setIsEditing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   
-  // Custom Cursor-Following Tooltip State
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
-
-  // Unified Delete Confirmation State
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'item' } | { type: 'media', index: number } | null>(null);
-
-  // Safely treat null/undefined as false for older entries
   const isPinned = Boolean(gift.is_pinned);
 
   const handleTooltipMove = (e: React.MouseEvent, text: string) => {
@@ -164,14 +180,12 @@ function GiftCard({
     setActiveTooltip(null);
   };
 
-  // Safely auto-links URLs inside HTML strings without breaking HTML tags
   const linkifyHtml = (htmlText: string) => {
     if (!htmlText) return "";
     const urlRegex = /(?<!href="|src=")(https?:\/\/[^\s<]+)/g;
     return htmlText.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline hover:text-blue-800">$1</a>');
   };
 
-  // Prevent entering edit mode if the user is just clicking an embedded link
   const handleBodyClick = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).tagName.toLowerCase() === 'a') {
       e.stopPropagation();
@@ -180,7 +194,6 @@ function GiftCard({
     setIsEditing(true);
   };
 
-  // MULTIPLE MEDIA UPLOAD HANDLER VIA SUPABASE STORAGE
   const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     const files = Array.from(e.target.files);
@@ -190,24 +203,20 @@ function GiftCard({
     try {
       const uploadedMedia = await Promise.all(
         files.map(async (file) => {
-          // Create a unique filename
           const fileExt = file.name.split('.').pop();
           const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
           const filePath = `uploads/${fileName}`;
 
-          // 1. Upload file directly to Supabase Storage Bucket
           const { error: uploadError } = await supabase.storage
-            .from('chadana-media') // replace with your bucket name if different
+            .from('chadana-media')
             .upload(filePath, file);
 
           if (uploadError) throw uploadError;
 
-          // 2. Get the Public URL of the uploaded file
           const { data } = supabase.storage
             .from('chadana-media')
             .getPublicUrl(filePath);
 
-          // 3. Determine base type for UI mapping (image, video, or audio)
           const baseType = file.type.startsWith('video/') ? 'video' 
                          : file.type.startsWith('audio/') ? 'audio' 
                          : 'image';
@@ -223,7 +232,6 @@ function GiftCard({
       const currentMedia = gift.images || gift.image_urls || [];
       const updatedMedia = [...currentMedia, ...uploadedMedia];
 
-      // Save only the clean URLs and metadata into your DB table
       onUpdate(gift.id, { 
         images: updatedMedia,
         image_urls: updatedMedia 
@@ -232,7 +240,6 @@ function GiftCard({
       alert("Error uploading file: " + error.message);
     } finally {
       setIsUploading(false);
-      // Reset input so you can upload the same file again if needed
       e.target.value = ""; 
     }
   };
@@ -252,9 +259,7 @@ function GiftCard({
         images: updatedImages,
         image_urls: updatedImages
       });
-      // Optionally: You could also write logic here to delete the file from the Supabase bucket to save space
     }
-
     setDeleteTarget(null);
   };
 
@@ -273,11 +278,7 @@ function GiftCard({
     <div className={`relative bg-white w-full rounded-xl shadow-md border overflow-hidden group transition-all duration-300 ${
         isPinned ? 'border-emerald-800 ring-1 ring-emerald-800/20' : 'border-slate-100'
     }`}>
-      
-      {/* Top Right Action Buttons */}
       <div className="absolute top-6 right-6 flex items-center gap-2 z-20">
-        
-        {/* PIN BUTTON */}
         <button 
           type="button"
           onMouseMove={(e) => handleTooltipMove(e, isPinned ? "Unpin Gift" : "Pin Gift")}
@@ -297,7 +298,6 @@ function GiftCard({
           <Pin className="w-4 h-4" fill={isPinned ? "currentColor" : "none"} />
         </button>
 
-        {/* DELETE BUTTON */}
         <button 
           type="button"
           onMouseMove={(e) => handleTooltipMove(e, "Delete Gift")}
@@ -314,7 +314,6 @@ function GiftCard({
       </div>
 
       <div className="pt-6 pb-4 pl-6 md:pl-10 pr-32">
-        {/* DATE DISPLAY */}
         <div className="text-[10px] text-slate-400 font-bold tracking-widest uppercase mb-1.5 ml-1">
           {formattedDate}
         </div>
@@ -353,14 +352,12 @@ function GiftCard({
           />
         )}
 
-        {/* --- Multi-Media Preview Section --- */}
         {mediaList.length > 0 && (
           <div className="mt-4 flex flex-wrap gap-4 px-4 items-end">
             {mediaList.map((media: any, idx: number) => {
               const url = typeof media === 'string' ? media : media.url;
               const caption = typeof media === 'string' ? '' : (media.caption || '');
               
-              // Infer type for older entries that might just be strings
               let type = media.type || 'image';
               if (typeof media === 'string' || !media.type) {
                 if (url.startsWith('data:video')) type = 'video';
@@ -396,7 +393,6 @@ function GiftCard({
                     </div>
                   )}
 
-                  {/* Caption Input */}
                   <EditableCell
                     value={caption}
                     onChange={(newVal) => {
@@ -425,7 +421,6 @@ function GiftCard({
           </div>
         )}
 
-        {/* --- Toolbar --- */}
         <div className="mt-6 flex items-center px-4 gap-3">
           <input 
             type="file" 
@@ -455,7 +450,6 @@ function GiftCard({
         </div>
       </div>
 
-      {/* RENDER CURSOR-FOLLOWING TOOLTIP */}
       {activeTooltip && (
         <div 
           className="fixed z-[100] px-2.5 py-1 bg-slate-900 text-white text-[11px] font-medium rounded shadow-lg pointer-events-none whitespace-nowrap"
@@ -465,7 +459,6 @@ function GiftCard({
         </div>
       )}
 
-      {/* UNIFIED DELETE CONFIRMATION MODAL */}
       <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -491,6 +484,16 @@ function GiftCard({
   );
 }
 
+// --- MASTERLIST INTERFACE ---
+interface MasterlistItem {
+  id: string;
+  event: string;
+  item: string;
+  quantity: string;
+  price: string;
+  checked: boolean;
+}
+
 // --- MAIN PAGE ---
 export default function GiftsPage() {
   const { gifts, loading, fetchData } = useGifts();
@@ -498,17 +501,150 @@ export default function GiftsPage() {
   
   const [fullScreenMedia, setFullScreenMedia] = useState<{ url: string, type: string } | null>(null);
 
-  // Safely sort Gifts ensuring pinned items are on top
+  // Masterlist State
+  const [isMasterlistOpen, setIsMasterlistOpen] = useState(false);
+  const [masterlistItems, setMasterlistItems] = useState<MasterlistItem[]>([]);
+  
+  // Track Deletion
+  const [masterlistDeleteTarget, setMasterlistDeleteTarget] = useState<string | null>(null);
+
+  // Track Editing
+  const [editingRowId, setEditingRowId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<Partial<MasterlistItem>>({});
+
+  // Fetch Masterlist items from Supabase when the modal is opened
+  useEffect(() => {
+    if (isMasterlistOpen) {
+      const fetchMasterlist = async () => {
+        const { data, error } = await supabase
+          .from('gift_masterlist')
+          .select('*')
+          .order('created_at', { ascending: true });
+          
+        if (!error && data) {
+          setMasterlistItems(data);
+        } else {
+          console.error("Error fetching masterlist:", error);
+        }
+      };
+      fetchMasterlist();
+    } else {
+      // Clean up states when modal closes
+      setEditingRowId(null);
+      setEditForm({});
+    }
+  }, [isMasterlistOpen]);
+
+  // Sort Masterlist so checked items go to the bottom
+  const sortedMasterlist = useMemo(() => {
+    return [...masterlistItems].sort((a, b) => {
+      if (a.checked === b.checked) return 0;
+      return a.checked ? 1 : -1;
+    });
+  }, [masterlistItems]);
+
+  // Insert to DB and state
+  const addMasterlistItem = async () => {
+    const newItem = {
+      event: '',
+      item: '',
+      quantity: '',
+      price: '',
+      checked: false
+    };
+    
+    const { data, error } = await supabase
+      .from('gift_masterlist')
+      .insert([newItem])
+      .select()
+      .single();
+
+    if (!error && data) {
+      setMasterlistItems([...masterlistItems, data]);
+      // Open the new row in edit mode automatically
+      startEditingRow(data);
+      // Scroll to bottom
+      setTimeout(() => {
+        const container = document.getElementById("masterlist-scroll-container");
+        if (container) container.scrollTop = container.scrollHeight;
+      }, 50);
+    } else {
+      console.error("Error adding item:", error);
+    }
+  };
+
+  // ------------------ EXPLICIT EDITING LOGIC ------------------
+
+  const startEditingRow = (item: MasterlistItem) => {
+    setEditingRowId(item.id);
+    setEditForm(item);
+  };
+
+  const cancelEditingRow = () => {
+    setEditingRowId(null);
+    setEditForm({});
+  };
+
+  const saveEditingRow = async () => {
+    if (!editingRowId) return;
+
+    // Update Local State
+    setMasterlistItems(prev => prev.map(item => 
+      item.id === editingRowId ? { ...item, ...editForm } : item
+    ));
+
+    // Update Remote State
+    const { error } = await supabase
+      .from('gift_masterlist')
+      .update({
+        event: editForm.event,
+        item: editForm.item,
+        quantity: editForm.quantity,
+        price: editForm.price
+      })
+      .eq('id', editingRowId);
+
+    if (error) console.error("Error saving edit:", error);
+
+    // Reset Edit State
+    setEditingRowId(null);
+    setEditForm({});
+  };
+
+  const updateEditForm = (field: keyof MasterlistItem, value: string) => {
+    setEditForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  // -------------------------------------------------------------
+
+  // Confirm and Execute Deletion from DB and state
+  const confirmMasterlistDelete = async () => {
+    if (!masterlistDeleteTarget) return;
+    setMasterlistItems(prev => prev.filter(item => item.id !== masterlistDeleteTarget));
+    await supabase.from('gift_masterlist').delete().eq('id', masterlistDeleteTarget);
+    setMasterlistDeleteTarget(null);
+    if (editingRowId === masterlistDeleteTarget) {
+      setEditingRowId(null);
+    }
+  };
+
+  // Instantly toggles checkmark locally and remotely
+  const toggleMasterlistCheck = async (id: string, currentStatus: boolean) => {
+    const newStatus = !currentStatus;
+    // Local
+    setMasterlistItems(prev => prev.map(item => 
+      item.id === id ? { ...item, checked: newStatus } : item
+    ));
+    // Remote
+    await supabase.from('gift_masterlist').update({ checked: newStatus }).eq('id', id);
+  };
+
   useEffect(() => {
     if (gifts) {
       const sorted = [...gifts].sort((a, b) => {
         const aPinned = Boolean(a.is_pinned);
         const bPinned = Boolean(b.is_pinned);
-        
-        if (aPinned !== bPinned) {
-          return aPinned ? -1 : 1;
-        }
-        
+        if (aPinned !== bPinned) return aPinned ? -1 : 1;
         const dateA = new Date(a.created_at || 0).getTime();
         const dateB = new Date(b.created_at || 0).getTime();
         return dateB - dateA;
@@ -543,31 +679,19 @@ export default function GiftsPage() {
 
   const handleUpdate = async (id: string, updates: any) => {
     setLocalGifts(prev => {
-        const updated = prev.map(g =>
-        g.id === id ? { ...g, ...updates } : g
-        );
-
+        const updated = prev.map(g => g.id === id ? { ...g, ...updates } : g);
         return updated.sort((a, b) => {
-        const aPinned = Boolean(a.is_pinned);
-        const bPinned = Boolean(b.is_pinned);
-
-        if (aPinned !== bPinned) return aPinned ? -1 : 1;
-
-        return (
-            new Date(b.created_at || 0).getTime() -
-            new Date(a.created_at || 0).getTime()
-        );
+          const aPinned = Boolean(a.is_pinned);
+          const bPinned = Boolean(b.is_pinned);
+          if (aPinned !== bPinned) return aPinned ? -1 : 1;
+          return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
         });
     });
 
-    const { error } = await supabase
-        .from("gifts")
-        .update(updates)
-        .eq("id", id);
-
+    const { error } = await supabase.from("gifts").update(updates).eq("id", id);
     if (error) {
         alert(error.message);
-        fetchData(); // only on error if you want to restore
+        fetchData();
     }
   };
 
@@ -575,10 +699,8 @@ export default function GiftsPage() {
 
   return (
     <div className="p-6 md:p-12 max-w-4xl mx-auto min-h-screen space-y-8">
-      {/* Global Floating Toolbar for Rich Text Formatting */}
       <FloatingToolbar />
 
-      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-serif font-bold text-emerald-900 flex items-center gap-3">
@@ -589,12 +711,16 @@ export default function GiftsPage() {
           </p>
         </div>
                     
-        <Button onClick={handleAddGift} className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm">
-          <Plus className="w-5 h-5 mr-2" /> Add Gift
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button variant="outline" onClick={() => setIsMasterlistOpen(true)} className="border-emerald-200 text-emerald-800 hover:bg-emerald-50 shadow-sm transition-colors">
+            <ClipboardList className="w-4 h-4 mr-2" /> Masterlist
+          </Button>
+          <Button onClick={handleAddGift} className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm transition-colors">
+            <Plus className="w-5 h-5 mr-2" /> Add Gift
+          </Button>
+        </div>
       </div>
 
-      {/* Gifts List */}
       <div className="space-y-6">
         {localGifts.length === 0 ? (
            <div className="text-center py-12 text-slate-400 italic">No gifts tracked yet. Click "Add Gift" to get started!</div>
@@ -611,7 +737,208 @@ export default function GiftsPage() {
         )}
       </div>
 
-      {/* Full Screen Media Lightbox */}
+      {/* Masterlist Modal - max-h-[90vh] makes it shrink-wrap exactly to the rows height until it gets too big! */}
+      <Dialog open={isMasterlistOpen} onOpenChange={setIsMasterlistOpen}>
+        <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] flex flex-col p-6 overflow-hidden">
+          <DialogHeader className="shrink-0">
+            <DialogTitle className="text-2xl font-serif text-emerald-900 flex items-center gap-2">
+              <ClipboardList className="w-6 h-6 text-emerald-700" /> Gift Masterlist
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div id="masterlist-scroll-container" className="flex-1 overflow-auto mt-4 pr-2">
+            <table className="w-full min-w-[600px] border-collapse">
+              <thead className="sticky top-0 bg-white z-10 shadow-sm">
+                <tr className="border-b-2 border-slate-200 text-left text-sm text-slate-500 font-semibold tracking-wide">
+                  <th className="pb-3 pt-2 w-12 text-center">Done</th>
+                  <th className="pb-3 pt-2 px-3">Event</th>
+                  <th className="pb-3 pt-2 px-3">Item</th>
+                  <th className="pb-3 pt-2 px-3 w-28">Quantity</th>
+                  <th className="pb-3 pt-2 px-3 w-32">Price</th>
+                  <th className="pb-3 pt-2 w-20 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedMasterlist.map((item) => {
+                  const isEditing = editingRowId === item.id;
+                  
+                  return (
+                    <tr 
+                      key={item.id} 
+                      className={`border-b border-slate-100 group transition-all duration-300 ${
+                        item.checked ? 'bg-slate-50/70 opacity-60' : 'hover:bg-slate-50/50'
+                      }`}
+                    >
+                      <td className="p-3 text-center align-top">
+                        <input 
+                          type="checkbox" 
+                          checked={item.checked}
+                          onChange={() => toggleMasterlistCheck(item.id, item.checked)}
+                          className="w-4 h-4 mt-2 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer transition-all"
+                        />
+                      </td>
+
+                      {/* --- EVENT COLUMN --- */}
+                      <td className="p-2 align-top">
+                        {isEditing ? (
+                          <AutoResizeTextarea 
+                            value={editForm.event || ''} 
+                            onChange={(val: string) => updateEditForm('event', val)}
+                            placeholder="Event name..."
+                          />
+                        ) : (
+                          <div className={`mt-1.5 px-1.5 ${item.checked ? 'line-through text-slate-500' : 'text-slate-800'}`}>
+                            {item.event || <span className="text-slate-300 italic">Empty</span>}
+                          </div>
+                        )}
+                      </td>
+
+                      {/* --- ITEM COLUMN --- */}
+                      <td className="p-2 align-top">
+                        {isEditing ? (
+                          <AutoResizeTextarea 
+                            value={editForm.item || ''} 
+                            onChange={(val: string) => updateEditForm('item', val)}
+                            placeholder="Item description..."
+                          />
+                        ) : (
+                          <div className={`mt-1.5 px-1.5 whitespace-pre-wrap ${item.checked ? 'line-through text-slate-500' : 'text-slate-800'}`}>
+                            {item.item || <span className="text-slate-300 italic">Empty</span>}
+                          </div>
+                        )}
+                      </td>
+
+                      {/* --- QUANTITY COLUMN --- */}
+                      <td className="p-2 align-top">
+                        {isEditing ? (
+                          <input 
+                            type="number" 
+                            value={editForm.quantity || ''} 
+                            onChange={(e) => updateEditForm('quantity', e.target.value)}
+                            placeholder="Qty"
+                            className="w-full bg-white border border-emerald-300 rounded-md outline-none p-1.5 focus:ring-2 focus:ring-emerald-200 transition-all"
+                          />
+                        ) : (
+                          <div className={`mt-1.5 px-1.5 ${item.checked ? 'line-through text-slate-500' : 'text-slate-800'}`}>
+                            {item.quantity || '-'}
+                          </div>
+                        )}
+                      </td>
+
+                      {/* --- PRICE COLUMN --- */}
+                      <td className="p-2 align-top">
+                        {isEditing ? (
+                          <div className="flex items-center">
+                            <span className="text-slate-400 mr-2">₹</span>
+                            <input 
+                              type="number" 
+                              value={editForm.price || ''} 
+                              onChange={(e) => updateEditForm('price', e.target.value)}
+                              placeholder="Price"
+                              className="w-full bg-white border border-emerald-300 rounded-md outline-none p-1.5 focus:ring-2 focus:ring-emerald-200 transition-all"
+                            />
+                          </div>
+                        ) : (
+                          <div className={`mt-1.5 px-1.5 flex items-center ${item.checked ? 'line-through text-slate-500' : 'text-slate-800'}`}>
+                            {item.price ? (
+                              <>
+                                <span className={`mr-1 ${item.checked ? 'text-slate-400' : 'text-slate-500'}`}>₹</span>
+                                {item.price}
+                              </>
+                            ) : '-'}
+                          </div>
+                        )}
+                      </td>
+
+                      {/* --- ACTIONS COLUMN --- */}
+                      <td className="p-2 text-center align-top">
+                        <div className="flex items-center justify-center gap-1 mt-1 opacity-75 group-hover:opacity-100 transition-opacity">
+                          {isEditing ? (
+                            <>
+                              <button 
+                                onClick={saveEditingRow}
+                                className="p-1.5 text-emerald-600 hover:bg-emerald-100 rounded transition-colors"
+                                title="Save"
+                              >
+                                <Check className="w-4 h-4" />
+                              </button>
+                              <button 
+                                onClick={cancelEditingRow}
+                                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded transition-colors"
+                                title="Cancel"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button 
+                                onClick={() => startEditingRow(item)}
+                                className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
+                                title="Edit Item"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button 
+                                onClick={() => setMasterlistDeleteTarget(item.id)}
+                                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                                title="Delete Item"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {sortedMasterlist.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="text-center py-8 text-slate-400 italic">
+                      No items in masterlist yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          
+          <div className="shrink-0 mt-4 flex justify-start pt-2 border-t border-slate-100">
+            <Button 
+              variant="ghost" 
+              onClick={addMasterlistItem}
+              className="text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 text-sm font-medium transition-colors"
+            >
+              <Plus className="w-4 h-4 mr-1" /> Add New Item
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmation Dialog for Masterlist Item Deletion */}
+      <Dialog open={!!masterlistDeleteTarget} onOpenChange={(open) => !open && setMasterlistDeleteTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold text-slate-900">Confirm Deletion</DialogTitle>
+          </DialogHeader>
+          <div className="py-2 text-slate-600">
+            Are you sure you want to delete this item from the masterlist? This action cannot be undone.
+          </div>
+          <div className="flex justify-end gap-3 mt-4">
+            <Button variant="outline" onClick={() => setMasterlistDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button 
+              className="bg-red-600 hover:bg-red-700 text-white" 
+              onClick={confirmMasterlistDelete}
+            >
+              Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!fullScreenMedia} onOpenChange={(open) => !open && setFullScreenMedia(null)}>
         <DialogContent className="max-w-4xl p-1 bg-transparent border-none shadow-none [&>button]:text-white [&>button]:bg-black/50 [&>button]:rounded-full [&>button]:hover:bg-black/80">
           <DialogHeader className="sr-only">
