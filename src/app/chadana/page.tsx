@@ -2,14 +2,14 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, Image as ImageIcon, X, Pin, Gem, Bold, Italic, Strikethrough, Film, Music } from "lucide-react";
+import { Plus, Trash2, Image as ImageIcon, X, Pin, Gem, Bold, Italic, Strikethrough, Film, Music, CheckSquare, Square } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
 import { useChadana } from "@/hooks/useChadana"; 
 
 // --- FLOATING TEXT FORMATTING TOOLBAR ---
 function FloatingToolbar() {
- const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
 
   useEffect(() => {
     const handleSelection = () => {
@@ -22,7 +22,6 @@ function FloatingToolbar() {
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       
-      // Ensure selection is inside an editable cell to avoid showing it everywhere
       let node = selection.anchorNode as Node | null;
       let isEditable = false;
       while (node && node !== document.body) {
@@ -35,7 +34,7 @@ function FloatingToolbar() {
 
       if (isEditable && rect.width > 0) {
         setPosition({
-          top: rect.top - 44, // Position above the selection
+          top: rect.top - 44,
           left: rect.left + rect.width / 2,
         });
       } else {
@@ -64,7 +63,7 @@ function FloatingToolbar() {
     <div 
       className="fixed z-[9999] flex items-center bg-slate-900 text-white rounded-md shadow-lg p-1 gap-1 -translate-x-1/2 transition-all animate-in fade-in zoom-in-95"
       style={{ top: position.top, left: position.left }}
-      onMouseDown={(e) => e.preventDefault()} // Important: prevents losing text selection when clicking a button
+      onMouseDown={(e) => e.preventDefault()}
     >
       <button onClick={() => applyFormat('bold')} className="p-1.5 hover:bg-slate-700 rounded text-white transition-colors" title="Bold">
         <Bold className="w-4 h-4" />
@@ -98,7 +97,6 @@ function EditableCell({
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Only update innerHTML if it changed externally (and isn't the active element to prevent cursor jumping)
     if (ref.current && value !== ref.current.innerHTML && document.activeElement !== ref.current) {
       ref.current.innerHTML = value || "";
     }
@@ -144,15 +142,13 @@ function ChadanaCard({
   const [content, setContent] = useState(gift.content || "");
   const [isEditing, setIsEditing] = useState(false);
   
-  // Custom Cursor-Following Tooltip State
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
 
-  // Custom Delete Confirmation State
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'item' } | { type: 'media', index: number } | null>(null);
 
-  // Safely treat null/undefined as false for older entries
   const isPinned = Boolean(gift.is_pinned);
+  const isCompleted = Boolean(gift.is_completed);
 
   const handleTooltipMove = (e: React.MouseEvent, text: string) => {
     setMousePos({ x: e.clientX, y: e.clientY });
@@ -163,7 +159,6 @@ function ChadanaCard({
     setActiveTooltip(null);
   };
 
-  // Safely auto-links URLs inside HTML strings without breaking HTML tags
   const linkifyHtml = (htmlText: string) => {
     if (!htmlText) return "";
     const urlRegex = /(?<!href="|src=")(https?:\/\/[^\s<]+)/g;
@@ -178,7 +173,6 @@ function ChadanaCard({
     setIsEditing(true);
   };
 
-  // MULTIPLE MEDIA UPLOAD HANDLER
   const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     const files = Array.from(e.target.files);
@@ -186,19 +180,16 @@ function ChadanaCard({
     try {
       const uploadedMedia = await Promise.all(
         files.map(async (file) => {
-          // Create a unique filename
           const fileExt = file.name.split('.').pop();
           const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
           const filePath = `uploads/${fileName}`;
 
-          // 1. Upload file directly to Supabase Storage Bucket
           const { error: uploadError } = await supabase.storage
-            .from('chadana-media') // replace with your bucket name
+            .from('chadana-media')
             .upload(filePath, file);
 
           if (uploadError) throw uploadError;
 
-          // 2. Get the Public URL of the uploaded file
           const { data } = supabase.storage
             .from('chadana-media')
             .getPublicUrl(filePath);
@@ -214,7 +205,6 @@ function ChadanaCard({
       const currentMedia = gift.images || gift.image_urls || [];
       const updatedMedia = [...currentMedia, ...uploadedMedia];
 
-      // Save only the clean URLs and metadata into your DB table
       onUpdate(gift.id, { 
         images: updatedMedia,
         image_urls: updatedMedia 
@@ -256,8 +246,10 @@ function ChadanaCard({
   const mediaList = gift.images || gift.image_urls || [];
 
   return (
-    <div className={`relative bg-white w-full rounded-xl shadow-md border overflow-hidden group transition-all duration-300 ${
+    <div className={`relative w-full rounded-xl shadow-md border overflow-hidden group transition-all duration-500 ${
         isPinned ? 'border-emerald-800 ring-1 ring-emerald-800/20' : 'border-slate-100'
+    } ${
+        isCompleted ? 'bg-slate-50 opacity-60 grayscale-[30%]' : 'bg-white'
     }`}>
       
       {/* Top Right Action Buttons */}
@@ -300,21 +292,38 @@ function ChadanaCard({
       </div>
 
       <div className="pt-6 pb-4 pl-6 md:pl-10 pr-32">
-        {/* DATE DISPLAY */}
-        <div className="text-[10px] text-slate-400 font-bold tracking-widest uppercase mb-1.5 ml-1">
-          {formattedDate}
-        </div>
+        <div className="flex items-start gap-4">
+          {/* CHECKBOX */}
+          <div className="pt-1.5 z-10">
+            <input
+              type="checkbox"
+              checked={isCompleted}
+              onChange={(e) => onUpdate(gift.id, { is_completed: e.target.checked })}
+              className="w-5 h-5 accent-emerald-600 cursor-pointer rounded border-slate-300 transition-all"
+              title={isCompleted ? "Mark as incomplete" : "Mark as complete"}
+            />
+          </div>
 
-        <EditableCell
-          value={title}
-          onChange={(val) => setTitle(val.toUpperCase())}
-          onBlur={() => onUpdate(gift.id, { title })}
-          placeholder="CHADANA TITLE..."
-          className="text-xl font-sans text-emerald-700 tracking-widest uppercase w-full bg-transparent border-b-2 border-transparent hover:border-emerald-200 focus:border-emerald-400 focus:outline-none transition-all block"
-        />
+          <div className="flex-1">
+            {/* DATE DISPLAY */}
+            <div className="text-[10px] text-slate-400 font-bold tracking-widest uppercase mb-1.5 ml-1">
+              {formattedDate}
+            </div>
+
+            <EditableCell
+              value={title}
+              onChange={(val) => setTitle(val.toUpperCase())}
+              onBlur={() => onUpdate(gift.id, { title })}
+              placeholder="CHADANA TITLE..."
+              className={`text-xl font-sans tracking-widest uppercase w-full bg-transparent border-b-2 border-transparent hover:border-emerald-200 focus:border-emerald-400 focus:outline-none transition-all block ${
+                isCompleted ? 'text-slate-400 line-through' : 'text-emerald-700'
+              }`}
+            />
+          </div>
+        </div>
       </div>
 
-      <div className="w-full px-4 md:px-10 pb-6">
+      <div className="w-full px-4 md:px-10 pb-6 pl-[4.5rem] md:pl-[5.5rem]">
         {isEditing ? (
           <EditableCell
             value={content}
@@ -325,12 +334,14 @@ function ChadanaCard({
             }}
             autoFocus
             placeholder="Click to add description/links..."
-            className="w-full border border-emerald-200 p-4 rounded-lg outline-none focus:ring-2 focus:ring-emerald-200 transition-shadow min-h-[80px] bg-slate-50/50 text-slate-700"
+            className="w-full border border-emerald-200 p-4 rounded-lg outline-none focus:ring-2 focus:ring-emerald-200 transition-shadow min-h-[80px] bg-white text-slate-700"
           />
         ) : (
           <div
             onClick={handleBodyClick}
-            className="border border-transparent hover:border-slate-100 rounded-lg p-4 whitespace-pre-wrap break-words cursor-text min-h-[80px] transition-colors text-slate-600 [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_strike]:line-through [&_s]:line-through [&_a]:text-blue-600 [&_a]:underline hover:[&_a]:text-blue-800"
+            className={`border border-transparent hover:border-slate-200 rounded-lg p-4 whitespace-pre-wrap break-words cursor-text min-h-[80px] transition-colors [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_strike]:line-through [&_s]:line-through [&_a]:text-blue-600 [&_a]:underline hover:[&_a]:text-blue-800 ${
+              isCompleted ? 'text-slate-400' : 'text-slate-600'
+            }`}
             dangerouslySetInnerHTML={
               content 
                 ? { __html: linkifyHtml(content) } 
@@ -341,7 +352,7 @@ function ChadanaCard({
 
         {/* --- Multi-Media Preview Section --- */}
         {mediaList.length > 0 && (
-          <div className="mt-4 flex flex-wrap gap-4 px-4 items-end">
+          <div className="mt-4 flex flex-wrap gap-4 items-end">
             {mediaList.map((media: any, idx: number) => {
               const url = typeof media === 'string' ? media : media.url;
               const caption = typeof media === 'string' ? '' : (media.caption || '');
@@ -357,7 +368,6 @@ function ChadanaCard({
                       controls
                       className="h-32 rounded-lg object-cover cursor-pointer bg-slate-900"
                       onClick={(e) => {
-                        // Only open modal if they click outside the controls
                         if (e.target === e.currentTarget) onMediaClick({ url, type });
                       }}
                     />
@@ -405,7 +415,7 @@ function ChadanaCard({
         )}
 
         {/* --- Toolbar --- */}
-        <div className="mt-6 flex items-center px-4">
+        <div className="mt-6 flex items-center">
           <input 
             type="file" 
             accept="image/*,video/*,audio/*" 
@@ -416,7 +426,9 @@ function ChadanaCard({
           />
           <label 
             htmlFor={`gift-media-${gift.id}`}
-            className="flex items-center gap-2 text-xs text-slate-500 hover:text-emerald-700 cursor-pointer transition-colors bg-slate-50 border border-slate-200 px-3 py-2 rounded-md hover:bg-slate-100"
+            className={`flex items-center gap-2 text-xs hover:text-emerald-700 cursor-pointer transition-colors bg-slate-50 border border-slate-200 px-3 py-2 rounded-md hover:bg-slate-100 ${
+              isCompleted ? 'text-slate-400' : 'text-slate-500'
+            }`}
           >
             <div className="flex gap-1">
               <ImageIcon className="w-4 h-4" />
@@ -471,10 +483,19 @@ export default function ChadanaPage() {
   
   const [fullScreenMedia, setFullScreenMedia] = useState<{url: string, type: string} | null>(null);
 
-  // Safely sort Chadana ensuring pinned items are on top
+  // Safely sort Chadana: Incomplete > Pinned > Newest > Completed
   useEffect(() => {
     if (chadana) {
       const sorted = [...chadana].sort((a, b) => {
+        const aCompleted = Boolean(a.is_completed);
+        const bCompleted = Boolean(b.is_completed);
+        
+        // Push completed items to the bottom
+        if (aCompleted !== bCompleted) {
+          return aCompleted ? 1 : -1;
+        }
+
+        // Pin logic for items with the same completion status
         const aPinned = Boolean(a.is_pinned);
         const bPinned = Boolean(b.is_pinned);
         
@@ -497,6 +518,7 @@ export default function ChadanaPage() {
       images: [],
       image_urls: [],
       is_pinned: false,
+      is_completed: false,
       created_at: new Date().toISOString()
     });
     
@@ -520,7 +542,13 @@ export default function ChadanaPage() {
         n.id === id ? { ...n, ...updates } : n
       );
 
+      // Re-apply sorting on local state immediately after update
       return updated.sort((a, b) => {
+        const aCompleted = Boolean(a.is_completed);
+        const bCompleted = Boolean(b.is_completed);
+        
+        if (aCompleted !== bCompleted) return aCompleted ? 1 : -1;
+
         const aPinned = Boolean(a.is_pinned);
         const bPinned = Boolean(b.is_pinned);
 
