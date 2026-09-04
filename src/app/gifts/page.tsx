@@ -808,15 +808,15 @@ export default function GiftsPage() {
                         )}
                       </td>
 
-                      {/* --- QUANTITY COLUMN --- */}
+                      {/* --- QUANTITY COLUMN (Changed to text) --- */}
                       <td className="p-2 align-top">
                         {isEditing ? (
                           <input 
-                            type="number" 
+                            type="text" 
                             value={editForm.quantity || ''} 
                             onChange={(e) => updateEditForm('quantity', e.target.value)}
-                            placeholder="Qty"
-                            className="w-full bg-white border border-emerald-300 rounded-md outline-none p-1.5 focus:ring-2 focus:ring-emerald-200 transition-all"
+                            placeholder="e.g. 50"
+                            className="w-full bg-white border border-emerald-300 rounded-md outline-none p-1.5 focus:ring-2 focus:ring-emerald-200 transition-all text-sm"
                           />
                         ) : (
                           <div className={`mt-1.5 px-1.5 ${item.checked ? 'line-through text-slate-500' : 'text-slate-800'}`}>
@@ -825,17 +825,17 @@ export default function GiftsPage() {
                         )}
                       </td>
 
-                      {/* --- PRICE COLUMN --- */}
+                      {/* --- PRICE COLUMN (Changed to text) --- */}
                       <td className="p-2 align-top">
                         {isEditing ? (
                           <div className="flex items-center">
                             <span className="text-slate-400 mr-2">₹</span>
                             <input 
-                              type="number" 
+                              type="text" 
                               value={editForm.price || ''} 
                               onChange={(e) => updateEditForm('price', e.target.value)}
-                              placeholder="Price"
-                              className="w-full bg-white border border-emerald-300 rounded-md outline-none p-1.5 focus:ring-2 focus:ring-emerald-200 transition-all"
+                              placeholder="e.g. 500-1000"
+                              className="w-full bg-white border border-emerald-300 rounded-md outline-none p-1.5 focus:ring-2 focus:ring-emerald-200 transition-all text-sm"
                             />
                           </div>
                         ) : (
@@ -852,7 +852,7 @@ export default function GiftsPage() {
 
                       {/* --- ACTIONS COLUMN --- */}
                       <td className="p-2 text-center align-top">
-                        <div className="flex items-center justify-center gap-1 mt-1 opacity-75 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center justify-center gap-1 mt-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
                           {isEditing ? (
                             <>
                               <button 
