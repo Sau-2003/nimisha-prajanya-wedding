@@ -50,6 +50,8 @@ const toTitleCase = (str: string) => {
 // --- SUB-COMPONENT: Renders a single Event/Shopping Section with Upload UI ---
 function EventOutfitsSection({ 
   eventName, 
+  displayTitle,
+  hideDelete,
   outfits, 
   activeGlobalTab,
   tabId,
@@ -61,6 +63,8 @@ function EventOutfitsSection({
   onDeleteSection
 }: { 
   eventName: string; 
+  displayTitle?: string;
+  hideDelete?: boolean;
   outfits: ParsedOutfit[]; 
   activeGlobalTab: string;
   tabId?: string;
@@ -80,6 +84,7 @@ function EventOutfitsSection({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isShoppingTab = activeGlobalTab === 'Shopping';
+  const finalTitle = displayTitle || eventName;
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -112,15 +117,17 @@ function EventOutfitsSection({
             {isShoppingTab ? <ShoppingBag className="w-6 h-6" /> : <Calendar className="w-6 h-6" />}
           </div>
           <h2 className="text-2xl font-serif font-bold text-slate-800 tracking-wide capitalize">
-            {eventName}
+            {finalTitle}
           </h2>
-          <button 
-            onClick={() => onDeleteSection(eventName, tabId)}
-            className="opacity-50 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-all p-1.5 ml-2"
-            title={`Delete ${eventName} section`}
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+          {!hideDelete && (
+            <button 
+              onClick={() => onDeleteSection(eventName, tabId)}
+              className="opacity-50 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-all p-1.5 ml-2"
+              title={`Delete ${eventName} section`}
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
         </div>
         <Badge variant="secondary" className="bg-slate-100 text-slate-500 hover:bg-slate-200 px-3 py-1 rounded-full text-sm font-medium">
           {outfits.length} {outfits.length === 1 ? 'Item' : 'Items'}
@@ -130,7 +137,7 @@ function EventOutfitsSection({
       {/* Cards Grid */}
       {outfits.length === 0 ? (
         <div className="text-center py-8 text-slate-400 text-sm border-2 border-dashed border-slate-200 rounded-xl bg-slate-50">
-          No items added to {eventName} yet. Click "New Option" below to add images or links!
+          No items added to {finalTitle} yet. Click "New Option" below to add images or links!
         </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pt-2">
@@ -234,7 +241,7 @@ function EventOutfitsSection({
             <X className="w-4 h-4" />
           </button>
           
-          <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4 pl-1">Insert New Option to {eventName}</h4>
+          <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4 pl-1">Insert New Option to {finalTitle}</h4>
           
           <div className="flex flex-col xl:flex-row gap-4 xl:items-center">
             {/* Add Image */}
@@ -271,10 +278,16 @@ export default function AllOutfitsPage() {
   
   // State to hold empty tabs created by the user before they add items
   const [customTabs, setCustomTabs] = useState<string[]>([]);
+  const [simpleTabs, setSimpleTabs] = useState<string[]>([]); // Track tabs with "no sections"
   
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState<ParsedOutfit | null>(null);
   const [activeTab, setActiveTab] = useState<string>("Ideas");
+
+  // Add Category Modal States
+  const [showAddTabModal, setShowAddTabModal] = useState(false);
+  const [newTabName, setNewTabName] = useState("");
+  const [newTabType, setNewTabType] = useState<'events' | 'simple'>('events');
 
   // Tab Rename States
   const [editingTabName, setEditingTabName] = useState<string | null>(null);
@@ -295,6 +308,14 @@ export default function AllOutfitsPage() {
   const [editPreviewUrl, setEditPreviewUrl] = useState<string | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const editFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load basic UI configs on mount
+  useEffect(() => {
+    const storedSimpleTabs = localStorage.getItem('simpleTabs');
+    if (storedSimpleTabs) {
+      try { setSimpleTabs(JSON.parse(storedSimpleTabs)); } catch (e) {}
+    }
+  }, []);
 
   const fetchAllData = useCallback(async () => {
     setLoading(true);
@@ -378,6 +399,22 @@ export default function AllOutfitsPage() {
         });
         
         setOutfits(mappedData);
+
+        // Detect tabs that only have 'General' events and persist them in simpleTabs
+        const cats = new Set(mappedData.map(d => d.category));
+        const detectedSimple: string[] = [];
+        cats.forEach(cat => {
+          if (cat === 'Shopping' || cat === 'Ideas') return;
+          const catItems = mappedData.filter(d => d.category === cat);
+          if (catItems.length > 0 && catItems.every(d => d.event_name.toLowerCase() === 'general')) {
+            detectedSimple.push(cat);
+          }
+        });
+        setSimpleTabs(prev => {
+          const merged = Array.from(new Set([...prev, ...detectedSimple]));
+          localStorage.setItem('simpleTabs', JSON.stringify(merged));
+          return merged;
+        });
       }
     } catch (err) {
       console.error("Unexpected error:", err);
@@ -390,13 +427,39 @@ export default function AllOutfitsPage() {
 
   // --- CRUD HANDLERS ---
 
-  const handleAddOutfitTab = () => {
-    const name = prompt("Enter new Outfit Category (e.g., Bride, Decor):");
-    if (name && name.trim()) {
-      const formatted = name.trim();
-      setCustomTabs(prev => [...prev, formatted]);
-      setActiveTab(formatted);
+  const handleAddOutfitTabClick = () => {
+    setShowAddTabModal(true);
+  };
+
+  const confirmAddTab = () => {
+    const formatted = newTabName.trim();
+    if (!formatted) return;
+
+    const allCurrentTabs = Array.from(new Set([...outfits.map(o => o.category), ...customTabs]));
+    if (allCurrentTabs.includes(formatted)) {
+      alert("A tab with this name already exists.");
+      return;
     }
+
+    setCustomTabs(prev => [...prev, formatted]);
+    setActiveTab(formatted);
+
+    // If "No Sections" (simple tab) was chosen, track it and auto-add 'General'
+    if (newTabType === 'simple') {
+      setSimpleTabs(prev => {
+        const updated = [...prev, formatted];
+        localStorage.setItem('simpleTabs', JSON.stringify(updated));
+        return updated;
+      });
+      setSelectedTabEvents(prev => ({
+        ...prev,
+        [formatted]: ['General']
+      }));
+    }
+
+    setNewTabName("");
+    setNewTabType('events');
+    setShowAddTabModal(false);
   };
 
   const handleRenameTab = async (oldName: string) => {
@@ -416,8 +479,15 @@ export default function AllOutfitsPage() {
     await supabase.from('event_items').update({ category: `outfit_link_${newName}` }).eq('category', `outfit_link_${oldName}`);
 
     setCustomTabs(prev => prev.map(t => t === oldName ? newName : t));
-    if (activeTab === oldName) setActiveTab(newName);
+    if (simpleTabs.includes(oldName)) {
+      setSimpleTabs(prev => {
+        const updated = [...prev.filter(t => t !== oldName), newName];
+        localStorage.setItem('simpleTabs', JSON.stringify(updated));
+        return updated;
+      });
+    }
     
+    if (activeTab === oldName) setActiveTab(newName);
     setEditingTabName(null);
     fetchAllData();
   };
@@ -434,8 +504,13 @@ export default function AllOutfitsPage() {
     await supabase.from('event_items').delete().in('category', [`outfit_${tabName}`, `outfit_link_${tabName}`]);
 
     setCustomTabs(prev => prev.filter(t => t !== tabName));
+    setSimpleTabs(prev => {
+      const updated = prev.filter(t => t !== tabName);
+      localStorage.setItem('simpleTabs', JSON.stringify(updated));
+      return updated;
+    });
+
     if (activeTab === tabName) setActiveTab('Ideas');
-    
     setTabToDelete(null);
     fetchAllData();
   };
@@ -600,10 +675,92 @@ export default function AllOutfitsPage() {
   allTabs.sort((a, b) => {
     if (a === "Ideas") return -1;
     if (b === "Ideas") return 1;
-    if (a === "Shopping") return 1;
-    if (b === "Shopping") return -1;
+
+    const aIsSimple = simpleTabs.includes(a);
+    const bIsSimple = simpleTabs.includes(b);
+    const aIsShopping = a === "Shopping";
+    const bIsShopping = b === "Shopping";
+
+    // Simple tabs come after Shopping
+    if (aIsSimple && !bIsSimple) return 1;
+    if (!aIsSimple && bIsSimple) return -1;
+
+    // Shopping comes after Events
+    if (aIsShopping && !bIsShopping) return 1;
+    if (!aIsShopping && bIsShopping) return -1;
+
     return a.localeCompare(b);
   });
+
+  // A helper function to render a single tab so we can control its exact placement
+  const renderTab = (tab: string) => {
+    const count = outfits.filter(o => o.category.toLowerCase() === tab.toLowerCase()).length;
+    const isActive = activeTab === tab;
+    const isCoreTab = tab === 'Ideas' || tab === 'Shopping';
+
+    return (
+      <div key={tab} className="relative flex items-center group shrink-0">
+        {editingTabName === tab ? (
+          <div className="flex items-center gap-1 bg-white border border-emerald-400 rounded-lg px-2 py-1 mb-2 z-10 shadow-sm">
+            <input
+              type="text"
+              value={editTabInput}
+              onChange={(e) => setEditTabInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleRenameTab(tab)}
+              className="text-sm outline-none w-24 bg-transparent text-slate-800"
+              autoFocus
+            />
+            <button onClick={() => handleRenameTab(tab)} className="text-emerald-600 hover:text-emerald-700 p-1 bg-emerald-50 rounded-md">
+              <CheckCircle2 className="w-4 h-4" />
+            </button>
+            <button onClick={() => setEditingTabName(null)} className="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-100 rounded-md">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <div className={`flex items-center pb-3 border-b-2 transition-colors ${isActive ? 'border-emerald-600' : 'border-transparent'}`} style={{ marginBottom: '-2px' }}>
+            <button
+              onClick={() => setActiveTab(tab)}
+              className={`whitespace-nowrap font-medium text-sm transition-colors flex items-center gap-2 outline-none ${
+                isActive ? 'text-emerald-700' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              {tab === 'Shopping' ? <ShoppingBag className="w-4 h-4 mb-0.5" /> : null}
+              {tab}
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'
+              }`}>
+                {count}
+              </span>
+            </button>
+
+            {!isCoreTab && (
+              <div className={`flex items-center gap-0.5 ml-2 transition-opacity ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setEditingTabName(tab); setEditTabInput(tab); }}
+                  className="p-1 rounded text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                  title="Rename Tab"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={(e) => handleDeleteTabRequest(tab, e)}
+                  className="p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                  title="Delete Tab"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const eventsTabs = allTabs.filter(tab => tab !== 'Shopping' && !simpleTabs.includes(tab));
+  const simpleTabsToRender = allTabs.filter(tab => simpleTabs.includes(tab) && tab !== 'Shopping');
+  const hasShopping = allTabs.includes('Shopping');
 
   return (
     <div className="min-h-screen p-6 md:p-12 max-w-7xl mx-auto space-y-8">
@@ -622,74 +779,17 @@ export default function AllOutfitsPage() {
       {/* Dynamic Tabs Section */}
       {!loading && (
         <div className="flex items-center overflow-x-auto hide-scrollbar border-b border-slate-200 gap-3 px-1 pt-2">
-          {allTabs.map((tab) => {
-            const count = outfits.filter(o => o.category.toLowerCase() === tab.toLowerCase()).length;
-            const isActive = activeTab === tab;
-            const isCoreTab = tab === 'Ideas' || tab === 'Shopping';
-
-            return (
-              <div key={tab} className="relative flex items-center group">
-                {editingTabName === tab ? (
-                  <div className="flex items-center gap-1 bg-white border border-emerald-400 rounded-lg px-2 py-1 mb-2 z-10 shadow-sm">
-                    <input
-                      type="text"
-                      value={editTabInput}
-                      onChange={(e) => setEditTabInput(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleRenameTab(tab)}
-                      className="text-sm outline-none w-24 bg-transparent text-slate-800"
-                      autoFocus
-                    />
-                    <button onClick={() => handleRenameTab(tab)} className="text-emerald-600 hover:text-emerald-700 p-1 bg-emerald-50 rounded-md">
-                      <CheckCircle2 className="w-4 h-4" />
-                    </button>
-                    <button onClick={() => setEditingTabName(null)} className="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-100 rounded-md">
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ) : (
-                  <div className={`flex items-center pb-3 border-b-2 transition-colors ${isActive ? 'border-emerald-600' : 'border-transparent'}`} style={{ marginBottom: '-2px' }}>
-                    <button
-                      onClick={() => setActiveTab(tab)}
-                      className={`whitespace-nowrap font-medium text-sm transition-colors flex items-center gap-2 outline-none ${
-                        isActive ? 'text-emerald-700' : 'text-slate-500 hover:text-slate-800'
-                      }`}
-                    >
-                      {tab === 'Shopping' ? <ShoppingBag className="w-4 h-4 mb-0.5" /> : null}
-                      {tab}
-                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                        isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'
-                      }`}>
-                        {count}
-                      </span>
-                    </button>
-
-                    {!isCoreTab && (
-                      <div className={`flex items-center gap-0.5 ml-2 transition-opacity ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setEditingTabName(tab); setEditTabInput(tab); }}
-                          className="p-1 rounded text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
-                          title="Rename Tab"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={(e) => handleDeleteTabRequest(tab, e)}
-                          className="p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                          title="Delete Tab"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          {eventsTabs.map(renderTab)}
           
-          <Button variant="ghost" size="sm" onClick={handleAddOutfitTab} className="mb-3 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 ml-2 shadow-sm border border-emerald-100">
-            <Plus className="w-4 h-4 mr-1"/> Add Category Tab
-          </Button>
+          {hasShopping && renderTab('Shopping')}
+
+          {simpleTabsToRender.map(renderTab)}
+
+          <div className="shrink-0 flex items-center">
+            <Button variant="ghost" size="sm" onClick={handleAddOutfitTabClick} className="mb-3 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 ml-1 mr-1 shadow-sm border border-emerald-100">
+              <Plus className="w-4 h-4 mr-1"/> Add Category
+            </Button>
+          </div>
         </div>
       )}
 
@@ -730,20 +830,26 @@ export default function AllOutfitsPage() {
         <div className="space-y-12">
           {(() => {
             const currentTabOutfits = outfits.filter(o => o.category.toLowerCase() === activeTab.toLowerCase());
+            const isSimpleTab = simpleTabs.includes(activeTab);
             
-            const eventsForThisTab = Array.from(new Set([
-              ...currentTabOutfits.map(o => o.event_name),
-              ...(selectedTabEvents[activeTab] || [])
-            ]));
+            // If it's a simple tab, enforce exactly one 'General' section regardless of state
+            let eventsForThisTab = isSimpleTab 
+              ? ['General'] 
+              : Array.from(new Set([
+                  ...currentTabOutfits.map(o => o.event_name),
+                  ...(selectedTabEvents[activeTab] || [])
+                ]));
 
-            eventsForThisTab.sort((a, b) => {
-              const indexA = PREDEFINED_EVENTS.indexOf(a);
-              const indexB = PREDEFINED_EVENTS.indexOf(b);
-              if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-              if (indexA !== -1) return -1;
-              if (indexB !== -1) return 1;
-              return a.localeCompare(b);
-            });
+            if (!isSimpleTab) {
+              eventsForThisTab.sort((a, b) => {
+                const indexA = PREDEFINED_EVENTS.indexOf(a);
+                const indexB = PREDEFINED_EVENTS.indexOf(b);
+                if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+                if (indexA !== -1) return -1;
+                if (indexB !== -1) return 1;
+                return a.localeCompare(b);
+              });
+            }
 
             const availableEvents = PREDEFINED_EVENTS.filter(e => !eventsForThisTab.includes(e));
 
@@ -758,8 +864,10 @@ export default function AllOutfitsPage() {
                   eventsForThisTab.map(ev => (
                     <EventOutfitsSection 
                       key={ev}
-                      eventName={ev}
-                      outfits={currentTabOutfits.filter(o => o.event_name.toLowerCase() === ev.toLowerCase())}
+                      eventName={isSimpleTab ? 'General' : ev}
+                      displayTitle={isSimpleTab ? `${activeTab} Items` : ev}
+                      hideDelete={isSimpleTab}
+                      outfits={currentTabOutfits.filter(o => o.event_name.toLowerCase() === (isSimpleTab ? 'general' : ev.toLowerCase()))}
                       activeGlobalTab={activeTab}
                       onImageClick={setSelectedImage}
                       onEdit={openEditModal}
@@ -771,43 +879,104 @@ export default function AllOutfitsPage() {
                   ))
                 )}
 
-                <div className="flex justify-center mt-6">
-                  {availableEvents.length > 0 ? (
-                    <div className="relative group shadow-sm rounded-lg hover:shadow transition-all">
-                      <select 
-                        className="appearance-none bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium py-2.5 pl-5 pr-10 rounded-lg outline-none cursor-pointer"
-                        onChange={(e) => {
-                          if (e.target.value) {
-                            const val = e.target.value;
-                            setSelectedTabEvents(prev => ({
-                              ...prev,
-                              [activeTab]: [...(prev[activeTab] || []), val]
-                            }));
-                            e.target.value = "";
-                          }
-                        }}
-                        defaultValue=""
-                      >
-                        <option value="" disabled>+ Add Predefined Event Section</option>
-                        {availableEvents.map(ev => (
-                          <option key={ev} value={ev} className="bg-white text-slate-800 font-medium">
-                            {ev}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-emerald-100">
-                        <ChevronDown className="w-4 h-4" />
+                {!isSimpleTab && (
+                  <div className="flex justify-center mt-6">
+                    {availableEvents.length > 0 ? (
+                      <div className="relative group shadow-sm rounded-lg hover:shadow transition-all">
+                        <select 
+                          className="appearance-none bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium py-2.5 pl-5 pr-10 rounded-lg outline-none cursor-pointer"
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              const val = e.target.value;
+                              setSelectedTabEvents(prev => ({
+                                ...prev,
+                                [activeTab]: [...(prev[activeTab] || []), val]
+                              }));
+                              e.target.value = "";
+                            }
+                          }}
+                          defaultValue=""
+                        >
+                          <option value="" disabled>+ Add Predefined Event Section</option>
+                          {availableEvents.map(ev => (
+                            <option key={ev} value={ev} className="bg-white text-slate-800 font-medium">
+                              {ev}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-emerald-100">
+                          <ChevronDown className="w-4 h-4" />
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-slate-400 italic">All standard event sections added.</p>
-                  )}
-                </div>
+                    ) : (
+                      <p className="text-sm text-slate-400 italic">All standard event sections added.</p>
+                    )}
+                  </div>
+                )}
               </>
             );
           })()}
         </div>
       )}
+
+      {/* --- ADD CATEGORY TAB MODAL --- */}
+      <Dialog open={showAddTabModal} onOpenChange={setShowAddTabModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add New Category Tab</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="text-sm font-semibold text-slate-600 block mb-1">Category Name</label>
+              <input
+                type="text"
+                value={newTabName}
+                onChange={(e) => setNewTabName(e.target.value)}
+                placeholder="e.g., Bride, Decor, Groom..."
+                className="w-full border p-2.5 rounded-lg outline-none text-sm focus:border-emerald-500"
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="text-sm font-semibold text-slate-600 block mb-2">Category Structure</label>
+              <div className="space-y-2">
+                <label className="flex items-start gap-3 cursor-pointer p-3 border rounded-lg hover:bg-slate-50 transition-colors">
+                  <input
+                    type="radio"
+                    name="tabType"
+                    checked={newTabType === 'events'}
+                    onChange={() => setNewTabType('events')}
+                    className="mt-1 accent-emerald-600"
+                  />
+                  <div>
+                    <div className="font-medium text-slate-800">Organize by Events</div>
+                    <div className="text-xs text-slate-500 mt-0.5">Includes predefined sections (Puja, Haldi, Reception, etc.)</div>
+                  </div>
+                </label>
+                <label className="flex items-start gap-3 cursor-pointer p-3 border rounded-lg hover:bg-slate-50 transition-colors">
+                  <input
+                    type="radio"
+                    name="tabType"
+                    checked={newTabType === 'simple'}
+                    onChange={() => setNewTabType('simple')}
+                    className="mt-1 accent-emerald-600"
+                  />
+                  <div>
+                    <div className="font-medium text-slate-800">Single Page (No Sections)</div>
+                    <div className="text-xs text-slate-500 mt-0.5">A unified board to drop all images and links directly without sections.</div>
+                  </div>
+                </label>
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="ghost" onClick={() => setShowAddTabModal(false)}>Cancel</Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={confirmAddTab}>
+              Create Tab
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* --- EDIT CAPTION & IMAGE MODAL --- */}
       <Dialog open={!!editingItem} onOpenChange={(open) => !open && setEditingItem(null)}>
