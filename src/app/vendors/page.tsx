@@ -1,15 +1,24 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, CheckCircle2, Trash2, Phone, Pencil, Handshake, X, Link as LinkIcon, ChevronUp, ChevronDown, Pin, Search, List } from "lucide-react";
+import { 
+  Plus, CheckCircle2, Trash2, Phone, Pencil, Handshake, 
+  X, Link as LinkIcon, ChevronUp, ChevronDown, Pin, 
+  Search, List, FileText, Upload, Loader2 
+} from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useVendors } from "@/hooks/useVendors";
 
 type BookingStatus = 'Not Started' | 'Enquired' | 'Negotiating' | 'Confirmed' | 'Recommendation';
+
+interface AttachedPdf {
+  name: string;
+  url: string;
+}
 
 interface VendorOption {
   id: string;
@@ -19,6 +28,7 @@ interface VendorOption {
   contactNumber?: string[];
   notes?: string;
   comments?: string;
+  attachedPdfs?: AttachedPdf[];
 }
 
 const initialCategories = [
@@ -156,6 +166,7 @@ function VendorsTracker() {
   const [newContactNumbers, setNewContactNumbers] = useState<string[]>([""]);
   const [newNotes, setNewNotes] = useState("");
   const [newComments, setNewComments] = useState("");
+  const [newAttachedPdfs, setNewAttachedPdfs] = useState<AttachedPdf[]>([]);
 
   const [editingOptionId, setEditingOptionId] = useState<string | null>(null);
   const [editOptionName, setEditOptionName] = useState("");
@@ -164,11 +175,13 @@ function VendorsTracker() {
   const [editNotes, setEditNotes] = useState("");
   const [editComments, setEditComments] = useState("");
   const [editOptionStatus, setEditOptionStatus] = useState<BookingStatus>("Not Started"); 
+  const [editAttachedPdfs, setEditAttachedPdfs] = useState<AttachedPdf[]>([]);
 
-  // Tabs State - Added 'all'
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [activeTab, setActiveTab] = useState<'in_progress' | 'completed' | 'all'>('in_progress');
 
-  // Delete Confirmation States
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [categoryToDelete, setCategoryToDelete] = useState<{ name: string; count: number } | null>(null);
 
@@ -234,6 +247,7 @@ function VendorsTracker() {
           contactNumber: v.contact_numbers ?? [],
           notes: v.notes || "",
           comments: v.comments || "",
+          attachedPdfs: v.attached_pdfs || [],
         })) || [];
         
       if (searchQuery.trim() !== "") {
@@ -288,6 +302,53 @@ function VendorsTracker() {
   }, [activeTab, displayCategories, inProgressCategories, completedCategories]);
 
   // --- ACTIONS ---
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean = false) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    setIsUploading(true);
+    const uploadedFiles: AttachedPdf[] = [];
+
+    for (const file of Array.from(files)) {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `pdfs/${fileName}`;
+
+      const { error } = await supabase.storage
+        .from('vendor_documents')
+        .upload(filePath, file);
+
+      if (error) {
+        console.error("Upload error: ", error);
+        alert(`Failed to upload ${file.name}`);
+        continue;
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('vendor_documents')
+        .getPublicUrl(filePath);
+
+      uploadedFiles.push({ name: file.name, url: publicUrl });
+    }
+
+    if (isEdit) {
+      setEditAttachedPdfs(prev => [...prev, ...uploadedFiles]);
+    } else {
+      setNewAttachedPdfs(prev => [...prev, ...uploadedFiles]);
+    }
+    
+    setIsUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removePdf = (index: number, isEdit: boolean) => {
+    if (isEdit) {
+      setEditAttachedPdfs(prev => prev.filter((_, i) => i !== index));
+    } else {
+      setNewAttachedPdfs(prev => prev.filter((_, i) => i !== index));
+    }
+  };
 
   const handleTogglePin = async (categoryName: string, currentPinnedState: boolean) => {
     const newPinnedState = !currentPinnedState;
@@ -421,6 +482,7 @@ function VendorsTracker() {
     setNewContactNumbers([""]);
     setNewNotes("");
     setNewComments("");
+    setNewAttachedPdfs([]);
     setEditingOptionId(null);
     setIsDialogOpen(true);
   };
@@ -435,7 +497,8 @@ function VendorsTracker() {
       estimated_cost: newEstimatedCost ? parseFloat(newEstimatedCost) : 0,
       contact_numbers: filteredPhones.length > 0 ? filteredPhones : null,
       notes: newNotes.trim() || null,
-      comments: newComments.trim() || null, 
+      comments: newComments.trim() || null,
+      attached_pdfs: newAttachedPdfs.length > 0 ? newAttachedPdfs : null,
       updated_at: new Date().toISOString(),
     });
 
@@ -447,6 +510,7 @@ function VendorsTracker() {
     setNewContactNumbers([""]);
     setNewNotes("");
     setNewComments("");
+    setNewAttachedPdfs([]);
     await fetchVendors();
   };
 
@@ -458,9 +522,9 @@ function VendorsTracker() {
     setEditNotes(opt.notes || "");
     setEditComments(opt.comments || ""); 
     setEditOptionStatus(opt.status);
+    setEditAttachedPdfs(opt.attachedPdfs || []);
   };
 
-  // ADDED MISSING cancelEditing FUNCTION HERE
   const cancelEditing = () => {
     setEditingOptionId(null);
   };
@@ -476,6 +540,7 @@ function VendorsTracker() {
       contact_numbers: filteredPhones.length > 0 ? filteredPhones : null,
       notes: editNotes.trim() || null,
       comments: editComments.trim() || null,
+      attached_pdfs: editAttachedPdfs.length > 0 ? editAttachedPdfs : null,
       status: editOptionStatus,
       updated_at: new Date().toISOString(),
     }).eq("id", optionId);
@@ -544,7 +609,6 @@ function VendorsTracker() {
     return <div className="p-12 text-center text-emerald-600 font-medium">Loading Vendors...</div>;
   }
 
-  // Text for empty states dynamically based on the active tab
   const activeTabText = activeTab === 'all' ? '' : activeTab === 'in_progress' ? 'in progress ' : 'completed ';
 
   return (
@@ -834,6 +898,24 @@ function VendorsTracker() {
                                    <strong>Comments:</strong> {renderTextWithLinks(vendor.comments)}
                                  </div>
                               )}
+
+                              {/* PDFs Display (Confirmed) */}
+                              {vendor.attachedPdfs && vendor.attachedPdfs.length > 0 && (
+                                <div className="mt-2 flex flex-col gap-1.5 ml-6 border-t border-emerald-200/50 pt-2">
+                                  {vendor.attachedPdfs.map((pdf, idx) => (
+                                    <a 
+                                      key={idx} 
+                                      href={pdf.url} 
+                                      target="_blank" 
+                                      rel="noreferrer" 
+                                      className="flex items-center gap-1.5 text-[11px] text-emerald-700 hover:text-emerald-900 transition-colors"
+                                    >
+                                      <FileText className="w-3.5 h-3.5 shrink-0" />
+                                      <span className="truncate">{pdf.name}</span>
+                                    </a>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -892,6 +974,24 @@ function VendorsTracker() {
                                   {opt.comments && (
                                     <div className="mt-1 pt-1.5 border-t border-slate-200/60 text-[11px] text-slate-500">
                                       <strong>Comments:</strong> {renderTextWithLinks(opt.comments)}
+                                    </div>
+                                  )}
+
+                                  {/* PDFs Display (Unconfirmed) */}
+                                  {opt.attachedPdfs && opt.attachedPdfs.length > 0 && (
+                                    <div className="mt-1 flex flex-col gap-1 pt-1.5 border-t border-slate-200/60">
+                                      {opt.attachedPdfs.map((pdf, idx) => (
+                                        <a 
+                                          key={idx} 
+                                          href={pdf.url} 
+                                          target="_blank" 
+                                          rel="noreferrer" 
+                                          className="flex items-center gap-1.5 text-[11px] text-emerald-600 hover:text-emerald-800 transition-colors"
+                                        >
+                                          <FileText className="w-3 h-3 shrink-0" />
+                                          <span className="truncate">{pdf.name}</span>
+                                        </a>
+                                      ))}
                                     </div>
                                   )}
                                 </div>
@@ -1035,9 +1135,46 @@ function VendorsTracker() {
                   onChange={(e) => setEditComments(e.target.value)}
                 />
 
+                {/* EDIT ATTACHED PDFS */}
+                <div className="space-y-2 border border-emerald-500 p-3 rounded-lg bg-emerald-50/30">
+                  <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center justify-between">
+                    Attached Documents
+                    <label className={`cursor-pointer flex items-center gap-1 text-emerald-600 hover:text-emerald-700 transition-colors ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                      {isUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                      {isUploading ? 'Uploading...' : 'Upload'}
+                      <input 
+                        type="file" 
+                        accept=".pdf" 
+                        multiple
+                        className="hidden" 
+                        ref={fileInputRef}
+                        onChange={(e) => handleFileUpload(e, true)}
+                        disabled={isUploading}
+                      />
+                    </label>
+                  </h4>
+                  {editAttachedPdfs.length > 0 ? (
+                    <div className="flex flex-col gap-1.5">
+                      {editAttachedPdfs.map((pdf, idx) => (
+                        <div key={idx} className="flex items-center justify-between bg-white border border-slate-200 p-2 rounded-md text-xs">
+                          <a href={pdf.url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-emerald-700 hover:underline truncate">
+                            <FileText className="w-3.5 h-3.5 shrink-0" />
+                            <span className="truncate">{pdf.name}</span>
+                          </a>
+                          <button onClick={() => removePdf(idx, true)} className="text-slate-400 hover:text-red-500 ml-2" title="Remove PDF">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400 italic">No PDFs attached.</p>
+                  )}
+                </div>
+
                 <div className="flex justify-end gap-2 mt-2">
                   <button onClick={cancelEditing} className="px-3 py-1.5 text-xs bg-slate-200 text-slate-700 font-medium rounded-md hover:bg-slate-300 transition-colors">Cancel</button>
-                  <button onClick={() => { saveEditedOption(editingOptionId); }} className="px-3 py-1.5 text-xs bg-emerald-600 text-white font-medium rounded-md hover:bg-emerald-700 transition-colors">Save Changes</button>
+                  <button onClick={() => { saveEditedOption(editingOptionId); }} disabled={isUploading} className="px-3 py-1.5 text-xs bg-emerald-600 text-white font-medium rounded-md hover:bg-emerald-700 transition-colors disabled:opacity-50">Save Changes</button>
                 </div>
               </div>
             </div>
@@ -1177,9 +1314,46 @@ function VendorsTracker() {
                     value={newComments}
                     onChange={(e) => setNewComments(e.target.value)}
                   />
+
+                  {/* ADD ATTACHED PDFS SECTION */}
+                  <div className="space-y-2 border border-slate-300 p-3 rounded-lg">
+                    <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center justify-between">
+                      Attach Documents
+                      <label className={`cursor-pointer flex items-center gap-1 text-emerald-600 hover:text-emerald-700 transition-colors ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                        {isUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                        {isUploading ? 'Uploading...' : 'Upload'}
+                        <input 
+                          type="file" 
+                          accept=".pdf" 
+                          multiple
+                          className="hidden" 
+                          ref={fileInputRef}
+                          onChange={(e) => handleFileUpload(e, false)}
+                          disabled={isUploading}
+                        />
+                      </label>
+                    </h4>
+                    {newAttachedPdfs.length > 0 ? (
+                      <div className="flex flex-col gap-1.5">
+                        {newAttachedPdfs.map((pdf, idx) => (
+                          <div key={idx} className="flex items-center justify-between bg-slate-50 border border-slate-200 p-2 rounded-md text-xs">
+                            <a href={pdf.url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-emerald-700 hover:underline truncate">
+                              <FileText className="w-3.5 h-3.5 shrink-0" />
+                              <span className="truncate">{pdf.name}</span>
+                            </a>
+                            <button onClick={() => removePdf(idx, false)} className="text-slate-400 hover:text-red-500 ml-2" title="Remove PDF">
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400 italic">No PDFs attached.</p>
+                    )}
+                  </div>
                 </div>
 
-                <Button onClick={handleAddOption} className="w-full bg-emerald-600 hover:bg-emerald-700 text-sm font-semibold transition-colors">
+                <Button onClick={handleAddOption} disabled={isUploading} className="w-full bg-emerald-600 hover:bg-emerald-700 text-sm font-semibold transition-colors disabled:opacity-50">
                   <Plus className="w-4 h-4 mr-1" /> Save Vendor Option
                 </Button>
               </div>
