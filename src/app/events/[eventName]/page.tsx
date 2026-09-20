@@ -6,21 +6,20 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { 
   ClipboardList, CheckCircle2, ShoppingBag, Flame, 
-  Gamepad2, Store, Lightbulb, Shirt, IndianRupee, 
-  ExternalLink, Plus, Trash2, Check, RotateCcw, 
-  Pencil, X, Calendar, Image as ImageIcon, User, ChevronDown,
-  Bold, Italic, Strikethrough, Loader2,
-  Film, Music, Play
+  Gamepad2, Store, Lightbulb, Shirt, ExternalLink, 
+  Plus, Trash2, Check, RotateCcw, Pencil, X, Calendar, 
+  Image as ImageIcon, User, ChevronDown, Bold, Italic, 
+  Strikethrough, Loader2, Film, Music, Play, Phone
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useEventItems, CategoryId, WorkspaceItem } from '@/hooks/useEventItems';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
+import { useVendors } from '@/hooks/useVendors';
 
 const BUCKET_NAME = "event-media";
 
 // --- HELPER: SMARTER MEDIA DETECTION ---
-// Automatically detects video/audio from the URL if the database forgets what type it is
 const guessMediaType = (url?: string, dbType?: string) => {
   if (dbType && dbType !== 'image') return dbType; 
   if (!url) return 'image';
@@ -182,15 +181,32 @@ const stripHtml = (html: string) => {
 export default function EventWorkspacePage() {
   const params = useParams();
   const rawEventName = (params?.eventName as string) || "Event";
-  const formattedEventName = rawEventName.charAt(0).toUpperCase() + rawEventName.slice(1);
+  // Format nicely (e.g. check-in -> Check In)
+  const formattedEventName = rawEventName.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
   const { items, loading, addItem, updateItem, deleteItem, moveItem } = useEventItems(rawEventName);
   const { teamMembers, addTeamMember } = useTeamMembers();
+  
+  // Fetch live global vendors
+  const { dbVendors } = useVendors();
+  
+  // Filter global vendors matching the current event loosely ignoring dashes
+  const assignedVendors = (dbVendors || []).filter(v => 
+    v.events?.some(e => e.replace(/-/g, ' ').toLowerCase() === formattedEventName.toLowerCase())
+  );
+
+  // Filter vendors that are NOT yet assigned to this event
+  const unassignedVendorsToImport = (dbVendors || []).filter(v => 
+    (v.status === 'Confirmed' || v.status === 'Negotiating') &&
+    !v.events?.some(e => e.replace(/-/g, ' ').toLowerCase() === formattedEventName.toLowerCase())
+  );
 
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
   const [activeModal, setActiveModal] = useState<CategoryId | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [isImportingVendors, setIsImportingVendors] = useState(false); 
+  
   const [newItemText, setNewItemText] = useState("");
   const [newItemDate, setNewItemDate] = useState("");
   const [newItemAssignedTo, setNewItemAssignedTo] = useState("");
@@ -357,6 +373,33 @@ export default function EventWorkspacePage() {
   };
 
   const renderCardPreview = (categoryId: CategoryId) => {
+    // --- VENDORS SPECIAL PREVIEW ---
+    if (categoryId === 'vendors') {
+      if (assignedVendors.length === 0) {
+        return <p className="text-sm text-slate-400 italic">No vendors assigned to this event yet.</p>;
+      }
+      return (
+        <ul className="text-slate-600 text-sm space-y-2">
+          {assignedVendors.slice(0, 3).map(vendor => (
+            <li key={vendor.id} className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 truncate">
+                <span className="text-emerald-500">•</span>
+                <span className="font-medium text-slate-800 truncate">{vendor.assigned_vendor || "Unnamed"}</span>
+                <span className="text-[10px] text-slate-400">({vendor.category})</span>
+              </div>
+              <span className="text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-semibold shrink-0">
+                {vendor.status}
+              </span>
+            </li>
+          ))}
+          {assignedVendors.length > 3 && (
+            <li className="text-xs text-slate-400 font-medium">+{assignedVendors.length - 3} more</li>
+          )}
+        </ul>
+      );
+    }
+
+    // --- DEFAULT PREVIEW ---
     const list = items?.[categoryId] || [];
     if (list.length === 0) return <p className="text-sm text-slate-400 italic">Empty</p>;
 
@@ -465,6 +508,7 @@ export default function EventWorkspacePage() {
                 setActiveModal(card.id as CategoryId); 
                 setEditingItemId(null); 
                 setShowAddForm(false);
+                setIsImportingVendors(false);
               }}
               className="bg-white border border-slate-100 p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow text-left h-full flex flex-col group"
             >
@@ -489,6 +533,7 @@ export default function EventWorkspacePage() {
             setActiveModal(null);
             setShowAddForm(false);
             setOpenDropdownId(null);
+            setIsImportingVendors(false);
           }
         }}
       >
@@ -503,15 +548,89 @@ export default function EventWorkspacePage() {
           </DialogHeader>
           
           <div className="flex-1 overflow-y-auto pr-2 min-h-0">
-            {!showAddForm ? (
-              <div 
-                onClick={() => setShowAddForm(true)}
-                className="w-full mt-2 border border-slate-200 bg-slate-50 hover:bg-white hover:border-emerald-400 text-slate-400 mb-4 p-3 rounded-lg flex items-center text-sm cursor-text transition-all shadow-sm"
-              >
-                <Plus className="w-4 h-4 mr-2 text-emerald-500 shrink-0" />
-                Type new entry here...
+            
+            {/* ADD/IMPORT BUTTONS */}
+            {!showAddForm && !isImportingVendors ? (
+              <div className="flex flex-col gap-2 w-full mt-2 mb-4">
+                
+                {activeModal !== 'vendors' && (
+                  <div 
+                    onClick={() => setShowAddForm(true)}
+                    className="w-full border border-slate-200 bg-slate-50 hover:bg-white hover:border-emerald-400 text-slate-400 p-3 rounded-lg flex items-center text-sm cursor-text transition-all shadow-sm"
+                  >
+                    <Plus className="w-4 h-4 mr-2 text-emerald-500 shrink-0" />
+                    Type new entry here...
+                  </div>
+                )}
+
+                {activeModal === 'vendors' && (
+                  <div 
+                    onClick={() => setIsImportingVendors(true)}
+                    className="w-full border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-50 hover:border-emerald-400 text-emerald-700 p-3 rounded-lg flex items-center text-sm cursor-pointer transition-all shadow-sm"
+                  >
+                    <Store className="w-4 h-4 mr-2 shrink-0" />
+                    Import from Vendor Tracker
+                  </div>
+                )}
               </div>
+            ) : isImportingVendors ? (
+              
+              /* VENDOR IMPORT UI */
+              <div className="bg-slate-50 p-4 rounded-xl border border-emerald-200 space-y-3 mt-2 mb-4 shadow-sm">
+                <div className="flex justify-between items-center mb-1">
+                  <h3 className="font-semibold text-slate-800 text-sm flex items-center gap-2">
+                    <Store className="w-4 h-4 text-emerald-600" />
+                    Import Tracked Vendors
+                  </h3>
+                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setIsImportingVendors(false)}>
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+                
+                <div className="max-h-[300px] overflow-y-auto space-y-2 pr-1">
+                  {unassignedVendorsToImport.length === 0 ? (
+                    <p className="text-xs text-slate-400 italic text-center py-4">No available Confirmed or Negotiating vendors left to import.</p>
+                  ) : (
+                    unassignedVendorsToImport.map(vendor => (
+                      <div key={vendor.id} className="flex items-center justify-between p-2.5 bg-white rounded-lg border border-slate-200 hover:border-emerald-200 transition-colors">
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-sm text-slate-800">
+                            {vendor.assigned_vendor || 'Unnamed Vendor'} 
+                          </span>
+                          <span className="text-[11px] font-medium text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded w-fit mt-0.5">
+                            {vendor.category} • {vendor.status}
+                          </span>
+                        </div>
+                        <Button 
+                          size="sm" 
+                          className="bg-emerald-600 hover:bg-emerald-700 text-xs h-8"
+                          onClick={async () => {
+                            // DIRECTLY LINK VENDOR TO EVENT IN DB
+                            const currentEvents = vendor.events || [];
+                            const newEvents = [...currentEvents, formattedEventName];
+                            
+                            const { error } = await supabase
+                              .from('vendors')
+                              .update({ events: newEvents, updated_at: new Date().toISOString() })
+                              .eq('id', vendor.id);
+                              
+                            if (error) {
+                              alert("Failed to assign vendor");
+                            } else {
+                              setIsImportingVendors(false);
+                            }
+                          }}
+                        >
+                          Import
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
             ) : (
+              /* STANDARD ADD FORM */
               <div className="bg-slate-50 p-4 rounded-xl border border-emerald-200 space-y-3 mt-2 mb-4 shadow-sm">
                 <EditableCell
                   value={newItemText}
@@ -584,7 +703,6 @@ export default function EventWorkspacePage() {
                     </div>
                   )}
 
-                  {/* Add File / Media Upload Section */}
                   {newItemMedia ? renderMediaPreview(newItemMedia, () => setNewItemMedia(null)) : (
                     <div className="relative h-[42px] sm:h-full">
                       <input 
@@ -637,223 +755,297 @@ export default function EventWorkspacePage() {
               </div>
             )}
 
-            <div className="mt-4 space-y-3 pb-4">
-              {activeModal && [...(items?.[activeModal] || [])].sort((a: any, b: any) => 
-                new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime()
-              ).map((item: any) => {
-                const overdue = activeModal === 'tasks' && isOverdue(item.dueDate || null);
-                
-                // --- FIX: Use our new smarter media detector! ---
-                const itemMediaType = guessMediaType(item.imageUrl, item.mediaType);
-
-                return (
-                  <div 
-                    key={item.id} 
-                    className={`flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 border p-3.5 rounded-xl bg-white shadow-sm transition-colors ${overdue ? 'border-red-300 bg-red-50/30' : 'border-slate-200'}`}
+            {/* LIVE ASSIGNED VENDORS FROM TRACKER */}
+            {activeModal === 'vendors' && (
+              <div className="mb-6 space-y-2.5">
+                <div className="flex items-center justify-between border-b pb-2">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Assigned Vendors from Tracker ({assignedVendors.length})
+                  </h3>
+                  <Link 
+                    href="/vendors" 
+                    className="text-xs text-emerald-600 hover:underline flex items-center gap-1 font-medium"
                   >
-                    {/* --- EDIT MODE --- */}
-                    {editingItemId === item.id ? (
-                      <div className="flex-1 flex flex-col gap-2 w-full">
-                        <EditableCell 
-                          value={editingTaskText}
-                          onChange={(val) => setEditingTaskText(val)}
-                          placeholder="Edit item..."
-                          className="border border-emerald-500 rounded-md outline-none px-3 py-2 text-slate-700 text-sm w-full min-h-[40px] bg-white"
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey && window.innerWidth > 768) {
-                              e.preventDefault();
-                              saveEditedItem(activeModal, item.id);
-                            }
-                          }}
-                        />
+                    Manage / Edit Vendors <ExternalLink className="w-3 h-3" />
+                  </Link>
+                </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm mt-1">
-                          {activeModal === 'tasks' && (
-                            <input 
-                              type={editingTaskDate ? "date" : "text"}
-                              onFocus={(e) => (e.target.type = "date")}
-                              onBlur={(e) => { if (!e.target.value) e.target.type = "text"; }}
-                              placeholder="Due Date"
-                              value={editingTaskDate}
-                              onChange={(e) => setEditingTaskDate(e.target.value)}
-                              className="border rounded px-2 h-9 outline-none text-slate-600 bg-white w-full"
-                            />
-                          )}
-
-                          {activeModal === 'tasks' && (
-                            <div className="relative w-full">
-                              <div 
-                                onClick={() => setOpenDropdownId(openDropdownId === item.id ? null : item.id)}
-                                className="text-sm border rounded px-2 h-9 text-slate-600 bg-white flex items-center justify-between cursor-pointer select-none"
+                {assignedVendors.length === 0 ? (
+                  <div className="p-4 rounded-lg bg-slate-50 border border-dashed border-slate-200 text-center text-xs text-slate-400">
+                    No vendors linked to <strong>{formattedEventName}</strong>. Click "Import from Vendor Tracker" to assign one.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {assignedVendors.map((vendor) => (
+                      <div 
+                        key={vendor.id} 
+                        className="p-3 bg-emerald-50/40 border border-emerald-200/80 rounded-xl flex flex-col justify-between gap-2 shadow-sm relative group"
+                      >
+                        <div>
+                          <div className="flex items-start justify-between gap-1">
+                            <span className="font-semibold text-sm text-slate-800 truncate pr-2">
+                              {vendor.assigned_vendor || "Unnamed"}
+                            </span>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                                {vendor.status}
+                              </span>
+                              {/* Quick Unassign Button */}
+                              <button 
+                                onClick={async () => {
+                                  const newEvents = (vendor.events || []).filter(e => e.replace(/-/g, ' ').toLowerCase() !== formattedEventName.toLowerCase());
+                                  await supabase.from('vendors').update({ events: newEvents }).eq('id', vendor.id);
+                                }}
+                                className="text-slate-400 hover:text-red-500 transition-colors"
+                                title="Remove from this event"
                               >
-                                <span className="truncate">{editingAssignedTo || "Assign to..."}</span>
-                                <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1" />
-                              </div>
-
-                              {openDropdownId === item.id && (
-                                <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-md shadow-xl z-50 max-h-48 overflow-y-auto">
-                                  <div className="p-1 border-b bg-slate-50 sticky top-0">
-                                    <input
-                                      type="text"
-                                      autoFocus
-                                      value={editingAssignedTo}
-                                      onChange={(e) => setEditingAssignedTo(e.target.value)}
-                                      placeholder="Type custom name..."
-                                      className="w-full text-xs px-2 py-1 border rounded bg-white outline-none focus:border-emerald-500 text-slate-700"
-                                    />
-                                  </div>
-                                  <div
-                                    onClick={() => { setEditingAssignedTo(""); setOpenDropdownId(null); }}
-                                    className="px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-100 cursor-pointer italic"
-                                  >
-                                    Unassigned
-                                  </div>
-                                  {teamMembers.map((member) => (
-                                    <div
-                                      key={member}
-                                      onClick={() => { setEditingAssignedTo(member); setOpenDropdownId(null); }}
-                                      className="px-3 py-1.5 text-xs text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 cursor-pointer truncate"
-                                    >
-                                      {member}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
+                                <X className="w-3.5 h-3.5" />
+                              </button>
                             </div>
-                          )}
-                          
-                          {/* Media Preview for Edit Form */}
-                          {editingTaskMedia ? renderMediaPreview(editingTaskMedia, () => setEditingTaskMedia(null)) : (
-                            <div className="relative h-9">
-                              <input 
-                                type="file"
-                                accept="image/*,video/*,audio/*"
-                                id={`edit-media-${item.id}`}
-                                className="hidden"
-                                onChange={(e) => handleMediaUpload(e, true)}
-                                disabled={isUploading}
-                              />
-                              <label 
-                                htmlFor={`edit-media-${item.id}`} 
-                                className={`flex items-center justify-center w-full h-full border border-dashed rounded cursor-pointer text-slate-500 hover:bg-slate-50 text-xs ${isUploading ? 'opacity-50' : ''}`}
-                              >
-                                {isUploading ? (
-                                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                                ) : (
-                                  <div className="flex gap-0.5 mr-1 items-center text-slate-400">
-                                    <ImageIcon className="w-3 h-3" />
-                                    <Film className="w-3 h-3" />
-                                    <Music className="w-3 h-3" />
-                                  </div>
-                                )}
-                                Media
-                              </label>
-                            </div>
-                          )}
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-0.5">{vendor.category}</p>
                         </div>
-                        
-                        <div className="flex justify-end gap-2 mt-2">
-                          <button onClick={cancelEditing} disabled={isUploading} className="px-3 py-1 text-xs bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200">Cancel</button>
-                          <button onClick={() => saveEditedItem(activeModal, item.id)} disabled={isUploading} className="px-3 py-1 text-xs bg-emerald-600 text-white rounded-md hover:bg-emerald-700">Save</button>
+
+                        <div className="text-xs space-y-1 pt-1 border-t border-emerald-100 mt-2">
+                          {vendor.estimated_cost ? (
+                            <p className="font-medium text-slate-700">
+                              ₹{vendor.estimated_cost.toLocaleString("en-IN")}
+                            </p>
+                          ) : null}
+                          {vendor.contact_numbers && vendor.contact_numbers.length > 0 && (
+                            <a 
+                              href={`tel:${vendor.contact_numbers[0]}`}
+                              className="flex items-center gap-1 text-emerald-700 hover:underline"
+                            >
+                              <Phone className="w-3 h-3" /> {vendor.contact_numbers[0]}
+                            </a>
+                          )}
                         </div>
                       </div>
-                    ) : (
-                      /* --- DISPLAY MODE --- */
-                      <>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-center mb-1.5">
-                            <span className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">
-                              {item.created_at || item.createdAt ? formatDate(item.created_at || item.createdAt) : formatDate(new Date().toISOString())}
-                            </span>
-                            {item.assignedTo && (
-                              <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1">
-                                <User className="w-3 h-3 text-emerald-600" /> {item.assignedTo}
-                              </span>
-                            )}
-                          </div>
-                          
-                          <div 
-                            className={`text-sm whitespace-pre-wrap break-words [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_strike]:line-through [&_s]:line-through [&_a]:text-blue-600 [&_a]:underline hover:[&_a]:text-blue-800 ${activeModal === 'taskDone' ? 'line-through text-slate-400' : 'text-slate-800'}`}
-                            dangerouslySetInnerHTML={{ __html: linkifyHtml(item.content) }}
-                            onClick={(e) => {
-                              if ((e.target as HTMLElement).tagName.toLowerCase() === 'a') {
-                                e.stopPropagation();
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* MANUAL WORKSPACE ITEMS */}
+            {activeModal !== 'vendors' && (
+              <div className="space-y-3 pb-4">
+                {activeModal && [...(items?.[activeModal] || [])].sort((a: any, b: any) => 
+                  new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime()
+                ).map((item: any) => {
+                  const overdue = activeModal === 'tasks' && isOverdue(item.dueDate || null);
+                  const itemMediaType = guessMediaType(item.imageUrl, item.mediaType);
+
+                  return (
+                    <div 
+                      key={item.id} 
+                      className={`flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 border p-3.5 rounded-xl bg-white shadow-sm transition-colors ${overdue ? 'border-red-300 bg-red-50/30' : 'border-slate-200'}`}
+                    >
+                      {/* --- EDIT MODE --- */}
+                      {editingItemId === item.id ? (
+                        <div className="flex-1 flex flex-col gap-2 w-full">
+                          <EditableCell 
+                            value={editingTaskText}
+                            onChange={(val) => setEditingTaskText(val)}
+                            placeholder="Edit item..."
+                            className="border border-emerald-500 rounded-md outline-none px-3 py-2 text-slate-700 text-sm w-full min-h-[40px] bg-white"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !e.shiftKey && window.innerWidth > 768) {
+                                e.preventDefault();
+                                saveEditedItem(activeModal, item.id);
                               }
                             }}
                           />
-                          
-                          {item.dueDate && (
-                            <p className={`text-xs font-medium flex items-center gap-1 mt-1.5 ${overdue ? 'text-red-600' : 'text-emerald-600'}`}>
-                              <Calendar className={`w-3 h-3 ${overdue ? 'text-red-500' : 'text-emerald-600'}`} /> 
-                              {overdue ? "Overdue: " : "Due by "} {formatDate(item.dueDate)}
-                            </p>
-                          )}
 
-                          {item.imageUrl && (
-                            <div 
-                              className="mt-3 overflow-hidden w-full max-w-[240px] rounded-lg border border-slate-200 shadow-sm relative cursor-pointer group hover:opacity-90 transition-opacity bg-slate-50 flex items-center justify-center"
-                              onClick={() => setExpandedMedia({ url: item.imageUrl, type: itemMediaType })}
-                            >
-                              {itemMediaType === 'image' && (
-                                <>
-                                  <img src={item.imageUrl} alt="attached media" className="w-full h-auto object-cover max-h-[150px]" />
-                                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center transition-colors">
-                                    <ImageIcon className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 drop-shadow-md" />
-                                  </div>
-                                </>
-                              )}
-                              
-                              {itemMediaType === 'video' && (
-                                <>
-                                  <video src={`${item.imageUrl}#t=0.1`} className="w-full h-auto max-h-[150px] object-cover bg-black" muted />
-                                  <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 flex items-center justify-center transition-colors">
-                                    <Play className="w-8 h-8 text-white drop-shadow-md" />
-                                  </div>
-                                </>
-                              )}
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm mt-1">
+                            {activeModal === 'tasks' && (
+                              <input 
+                                type={editingTaskDate ? "date" : "text"}
+                                onFocus={(e) => (e.target.type = "date")}
+                                onBlur={(e) => { if (!e.target.value) e.target.type = "text"; }}
+                                placeholder="Due Date"
+                                value={editingTaskDate}
+                                onChange={(e) => setEditingTaskDate(e.target.value)}
+                                className="border rounded px-2 h-9 outline-none text-slate-600 bg-white w-full"
+                              />
+                            )}
 
-                              {itemMediaType === 'audio' && (
-                                <div className="w-full h-24 flex items-center justify-center">
-                                  <Play className="w-8 h-8 text-slate-400 group-hover:scale-110 transition-transform" />
-                                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors" />
+                            {activeModal === 'tasks' && (
+                              <div className="relative w-full">
+                                <div 
+                                  onClick={() => setOpenDropdownId(openDropdownId === item.id ? null : item.id)}
+                                  className="text-sm border rounded px-2 h-9 text-slate-600 bg-white flex items-center justify-between cursor-pointer select-none"
+                                >
+                                  <span className="truncate">{editingAssignedTo || "Assign to..."}</span>
+                                  <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1" />
                                 </div>
+
+                                {openDropdownId === item.id && (
+                                  <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-md shadow-xl z-50 max-h-48 overflow-y-auto">
+                                    <div className="p-1 border-b bg-slate-50 sticky top-0">
+                                      <input
+                                        type="text"
+                                        autoFocus
+                                        value={editingAssignedTo}
+                                        onChange={(e) => setEditingAssignedTo(e.target.value)}
+                                        placeholder="Type custom name..."
+                                        className="w-full text-xs px-2 py-1 border rounded bg-white outline-none focus:border-emerald-500 text-slate-700"
+                                      />
+                                    </div>
+                                    <div
+                                      onClick={() => { setEditingAssignedTo(""); setOpenDropdownId(null); }}
+                                      className="px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-100 cursor-pointer italic"
+                                    >
+                                      Unassigned
+                                    </div>
+                                    {teamMembers.map((member) => (
+                                      <div
+                                        key={member}
+                                        onClick={() => { setEditingAssignedTo(member); setOpenDropdownId(null); }}
+                                        className="px-3 py-1.5 text-xs text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 cursor-pointer truncate"
+                                      >
+                                        {member}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            
+                            {editingTaskMedia ? renderMediaPreview(editingTaskMedia, () => setEditingTaskMedia(null)) : (
+                              <div className="relative h-9">
+                                <input 
+                                  type="file"
+                                  accept="image/*,video/*,audio/*"
+                                  id={`edit-media-${item.id}`}
+                                  className="hidden"
+                                  onChange={(e) => handleMediaUpload(e, true)}
+                                  disabled={isUploading}
+                                />
+                                <label 
+                                  htmlFor={`edit-media-${item.id}`} 
+                                  className={`flex items-center justify-center w-full h-full border border-dashed rounded cursor-pointer text-slate-500 hover:bg-slate-50 text-xs ${isUploading ? 'opacity-50' : ''}`}
+                                >
+                                  {isUploading ? (
+                                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                  ) : (
+                                    <div className="flex gap-0.5 mr-1 items-center text-slate-400">
+                                      <ImageIcon className="w-3 h-3" />
+                                      <Film className="w-3 h-3" />
+                                      <Music className="w-3 h-3" />
+                                    </div>
+                                  )}
+                                  Media
+                                </label>
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="flex justify-end gap-2 mt-2">
+                            <button onClick={cancelEditing} disabled={isUploading} className="px-3 py-1 text-xs bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200">Cancel</button>
+                            <button onClick={() => saveEditedItem(activeModal, item.id)} disabled={isUploading} className="px-3 py-1 text-xs bg-emerald-600 text-white rounded-md hover:bg-emerald-700">Save</button>
+                          </div>
+                        </div>
+                      ) : (
+                        /* --- DISPLAY MODE --- */
+                        <>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex justify-between items-center mb-1.5">
+                              <span className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">
+                                {item.created_at || item.createdAt ? formatDate(item.created_at || item.createdAt) : formatDate(new Date().toISOString())}
+                              </span>
+                              {item.assignedTo && (
+                                <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1">
+                                  <User className="w-3 h-3 text-emerald-600" /> {item.assignedTo}
+                                </span>
                               )}
                             </div>
-                          )}
-                        </div>
+                            
+                            <div 
+                              className={`text-sm whitespace-pre-wrap break-words [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_strike]:line-through [&_s]:line-through [&_a]:text-blue-600 [&_a]:underline hover:[&_a]:text-blue-800 ${activeModal === 'taskDone' ? 'line-through text-slate-400' : 'text-slate-800'}`}
+                              dangerouslySetInnerHTML={{ __html: linkifyHtml(item.content) }}
+                              onClick={(e) => {
+                                if ((e.target as HTMLElement).tagName.toLowerCase() === 'a') {
+                                  e.stopPropagation();
+                                }
+                              }}
+                            />
+                            
+                            {item.dueDate && (
+                              <p className={`text-xs font-medium flex items-center gap-1 mt-1.5 ${overdue ? 'text-red-600' : 'text-emerald-600'}`}>
+                                <Calendar className={`w-3 h-3 ${overdue ? 'text-red-500' : 'text-emerald-600'}`} /> 
+                                {overdue ? "Overdue: " : "Due by "} {formatDate(item.dueDate)}
+                              </p>
+                            )}
 
-                        <div className="flex gap-1.5 shrink-0">
-                          <button onClick={() => startEditing(item)} className="p-1.5 border border-slate-100 text-slate-400 bg-slate-50 rounded-md hover:bg-slate-100 hover:text-slate-600" title="Edit">
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          
-                          {activeModal === 'tasks' && (
-                            <button onClick={() => handleMoveTask(item.id, 'taskDone')} className="p-1.5 border border-emerald-100 text-emerald-500 bg-white rounded-md hover:bg-emerald-50" title="Mark Done">
-                              <Check className="w-4 h-4" />
+                            {item.imageUrl && (
+                              <div 
+                                className="mt-3 overflow-hidden w-full max-w-[240px] rounded-lg border border-slate-200 shadow-sm relative cursor-pointer group hover:opacity-90 transition-opacity bg-slate-50 flex items-center justify-center"
+                                onClick={() => setExpandedMedia({ url: item.imageUrl, type: itemMediaType })}
+                              >
+                                {itemMediaType === 'image' && (
+                                  <>
+                                    <img src={item.imageUrl} alt="attached media" className="w-full h-auto object-cover max-h-[150px]" />
+                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center transition-colors">
+                                      <ImageIcon className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 drop-shadow-md" />
+                                    </div>
+                                  </>
+                                )}
+                                
+                                {itemMediaType === 'video' && (
+                                  <>
+                                    <video src={`${item.imageUrl}#t=0.1`} className="w-full h-auto max-h-[150px] object-cover bg-black" muted />
+                                    <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 flex items-center justify-center transition-colors">
+                                      <Play className="w-8 h-8 text-white drop-shadow-md" />
+                                    </div>
+                                  </>
+                                )}
+
+                                {itemMediaType === 'audio' && (
+                                  <div className="w-full h-24 flex items-center justify-center">
+                                    <Play className="w-8 h-8 text-slate-400 group-hover:scale-110 transition-transform" />
+                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors" />
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex gap-1.5 shrink-0">
+                            <button onClick={() => startEditing(item)} className="p-1.5 border border-slate-100 text-slate-400 bg-slate-50 rounded-md hover:bg-slate-100 hover:text-slate-600" title="Edit">
+                              <Pencil className="w-4 h-4" />
                             </button>
-                          )}
+                            
+                            {activeModal === 'tasks' && (
+                              <button onClick={() => handleMoveTask(item.id, 'taskDone')} className="p-1.5 border border-emerald-100 text-emerald-500 bg-white rounded-md hover:bg-emerald-50" title="Mark Done">
+                                <Check className="w-4 h-4" />
+                              </button>
+                            )}
 
-                          {activeModal === 'taskDone' && (
-                            <button onClick={() => handleMoveTask(item.id, 'tasks')} className="p-1.5 border border-amber-100 text-amber-500 bg-white rounded-md hover:bg-amber-50" title="Restore to Tasks">
-                              <RotateCcw className="w-4 h-4" />
+                            {activeModal === 'taskDone' && (
+                              <button onClick={() => handleMoveTask(item.id, 'tasks')} className="p-1.5 border border-amber-100 text-amber-500 bg-white rounded-md hover:bg-amber-50" title="Restore to Tasks">
+                                <RotateCcw className="w-4 h-4" />
+                              </button>
+                            )}
+
+                            <button onClick={() => handleDeleteRequest(activeModal, item.id)} className="p-1.5 border border-red-100 text-red-400 bg-white rounded-md hover:bg-red-50" title="Delete">
+                              <Trash2 className="w-4 h-4" />
                             </button>
-                          )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+                
+                {activeModal && (!items?.[activeModal] || items[activeModal].length === 0) && (
+                  <p className="text-center text-slate-400 text-sm py-8 border-2 border-dashed border-slate-100 rounded-xl">No manual entries yet.</p>
+                )}
+              </div>
+            )}
 
-                          <button onClick={() => handleDeleteRequest(activeModal, item.id)} className="p-1.5 border border-red-100 text-red-400 bg-white rounded-md hover:bg-red-50" title="Delete">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                );
-              })}
-              
-              {activeModal && (!items?.[activeModal] || items[activeModal].length === 0) && (
-                <p className="text-center text-slate-400 text-sm py-8 border-2 border-dashed border-slate-100 rounded-xl">No entries yet.</p>
-              )}
-            </div>
           </div>
         </DialogContent>
       </Dialog>

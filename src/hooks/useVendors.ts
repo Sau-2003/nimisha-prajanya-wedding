@@ -6,9 +6,13 @@ export interface VendorEntry {
   category: string;
   assigned_vendor?: string | null;
   status: string;
-  estimated_cost?: number | null;   // <-- Add this
-  contact_number?: string[] | null;   // <-- Add this
-  notes?: string | null;            // <-- Add this
+  estimated_cost?: number | null;
+  contact_numbers?: string[] | null;
+  contact_names?: string[] | null;
+  notes?: string | null;
+  comments?: string | null;
+  attached_pdfs?: { name: string; url: string }[] | null;
+  events?: string[] | null; // <-- Add this
   created_at?: string;
   updated_at?: string;
 }

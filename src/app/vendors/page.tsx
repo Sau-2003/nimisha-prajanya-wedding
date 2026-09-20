@@ -20,15 +20,21 @@ interface AttachedPdf {
   url: string;
 }
 
+interface ContactPerson {
+  name: string;
+  phone: string;
+}
+
 interface VendorOption {
   id: string;
   name: string;
   status: BookingStatus;
   estimatedCost?: number;
-  contactNumber?: string[];
+  contacts?: ContactPerson[];
   notes?: string;
   comments?: string;
   attachedPdfs?: AttachedPdf[];
+  events?: string[]; // <-- Added events array
 }
 
 const initialCategories = [
@@ -44,6 +50,20 @@ const statusOrder: Record<BookingStatus, number> = {
   'Recommendation': 4,
   'Not Started': 5,
 };
+
+// --- Default Events Source ---
+const defaultEvents = [
+  { name: "Puja", date: "2027-01-27", link: "/events/puja", color: "bg-orange-500" },
+  { name: "Mehendi", date: "2027-01-29", link: "/events/mehendi", color: "bg-emerald-500" },
+  { name: "Check In", date: "2027-01-30", link: "/events/check-in", color: "bg-fuchsia-900" },
+  { name: "Tilak", date: "2027-01-30", link: "/events/tilak", color: "bg-yellow-900" },
+  { name: "Sangeet", date: "2027-01-30", link: "/events/sangeet", color: "bg-indigo-500" },
+  { name: "Haldi", date: "2027-01-31", link: "/events/haldi", color: "bg-amber-400" },
+  { name: "Phere", date: "2027-01-31", link: "/events/phere", color: "bg-red-500" },
+  { name: "Reception", date: "2027-01-31", link: "/events/reception", color: "bg-fuchsia-600" },
+  { name: "Pagphere", date: "2027-02-01", link: "/events/pagphere", color: "bg-cyan-500" },
+  { name: "Vidai", date: "2027-02-01", link: "/events/vidai", color: "bg-pink-400" },
+];
 
 // --- Component: Link Preview ---
 const LinkPreview = ({ url }: { url: string }) => {
@@ -163,19 +183,21 @@ function VendorsTracker() {
   const [newOptionName, setNewOptionName] = useState("");
   const [newOptionStatus, setNewOptionStatus] = useState<BookingStatus>("Not Started");
   const [newEstimatedCost, setNewEstimatedCost] = useState<string>("");
-  const [newContactNumbers, setNewContactNumbers] = useState<string[]>([""]);
+  const [newContacts, setNewContacts] = useState<ContactPerson[]>([{ name: "", phone: "" }]);
   const [newNotes, setNewNotes] = useState("");
   const [newComments, setNewComments] = useState("");
   const [newAttachedPdfs, setNewAttachedPdfs] = useState<AttachedPdf[]>([]);
+  const [newSelectedEvents, setNewSelectedEvents] = useState<string[]>([]); // <-- Multi-event state
 
   const [editingOptionId, setEditingOptionId] = useState<string | null>(null);
   const [editOptionName, setEditOptionName] = useState("");
   const [editEstimatedCost, setEditEstimatedCost] = useState<string>("");
-  const [editContactNumbers, setEditContactNumbers] = useState<string[]>([""]);
+  const [editContacts, setEditContacts] = useState<ContactPerson[]>([{ name: "", phone: "" }]);
   const [editNotes, setEditNotes] = useState("");
   const [editComments, setEditComments] = useState("");
   const [editOptionStatus, setEditOptionStatus] = useState<BookingStatus>("Not Started"); 
   const [editAttachedPdfs, setEditAttachedPdfs] = useState<AttachedPdf[]>([]);
+  const [editSelectedEvents, setEditSelectedEvents] = useState<string[]>([]); // <-- Multi-event state
 
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -239,16 +261,26 @@ function VendorsTracker() {
     return orderedCategories.map((categoryName) => {
       let matches: VendorOption[] = dbVendors
         ?.filter((v) => v.category === categoryName)
-        .map((v: any) => ({
-          id: v.id,
-          name: v.assigned_vendor || "Unnamed Vendor",
-          status: v.status as BookingStatus,
-          estimatedCost: v.estimated_cost || 0,
-          contactNumber: v.contact_numbers ?? [],
-          notes: v.notes || "",
-          comments: v.comments || "",
-          attachedPdfs: v.attached_pdfs || [],
-        })) || [];
+        .map((v: any) => {
+          
+          // Merge numbers and names from separate columns for UI state
+          const processedContacts = (v.contact_numbers || []).map((phone: string, idx: number) => {
+            const name = (v.contact_names && v.contact_names[idx]) ? v.contact_names[idx] : "";
+            return { phone, name };
+          });
+
+          return {
+            id: v.id,
+            name: v.assigned_vendor || "Unnamed Vendor",
+            status: v.status as BookingStatus,
+            estimatedCost: v.estimated_cost || 0,
+            contacts: processedContacts,
+            notes: v.notes || "",
+            comments: v.comments || "",
+            attachedPdfs: v.attached_pdfs || [],
+            events: v.events || [], // <-- Added events array mapping
+          };
+        }) || [];
         
       if (searchQuery.trim() !== "") {
         const query = searchQuery.toLowerCase();
@@ -259,7 +291,7 @@ function VendorsTracker() {
             opt.status.toLowerCase().includes(query) ||
             opt.notes?.toLowerCase().includes(query) ||
             opt.comments?.toLowerCase().includes(query) ||
-            opt.contactNumber?.some(phone => phone.toLowerCase().includes(query))
+            opt.contacts?.some(c => c.name.toLowerCase().includes(query) || c.phone.toLowerCase().includes(query))
           );
         }
       }
@@ -479,26 +511,34 @@ function VendorsTracker() {
     setNewOptionName("");
     setNewOptionStatus("Not Started");
     setNewEstimatedCost("");
-    setNewContactNumbers([""]);
+    setNewContacts([{ name: "", phone: "" }]);
     setNewNotes("");
     setNewComments("");
     setNewAttachedPdfs([]);
+    setNewSelectedEvents([]); // Reset events state
     setEditingOptionId(null);
     setIsDialogOpen(true);
   };
 
   const handleAddOption = async () => {
     if (!newOptionName.trim() || !editingCategory) return;
-    const filteredPhones = newContactNumbers.filter(phone => phone.trim() !== "");
+    
+    // Split the object array back into two separate string arrays for DB
+    const validContacts = newContacts.filter(c => c.phone.trim() !== "");
+    const phones = validContacts.map(c => c.phone.trim());
+    const names = validContacts.map(c => c.name.trim());
+    
     const { error } = await supabase.from("vendors").insert({
       category: editingCategory,
       assigned_vendor: newOptionName.trim(),
       status: newOptionStatus,
       estimated_cost: newEstimatedCost ? parseFloat(newEstimatedCost) : 0,
-      contact_numbers: filteredPhones.length > 0 ? filteredPhones : null,
+      contact_numbers: phones.length > 0 ? phones : null,
+      contact_names: names.length > 0 ? names : null,
       notes: newNotes.trim() || null,
       comments: newComments.trim() || null,
       attached_pdfs: newAttachedPdfs.length > 0 ? newAttachedPdfs : null,
+      events: newSelectedEvents, // Map to DB
       updated_at: new Date().toISOString(),
     });
 
@@ -507,10 +547,11 @@ function VendorsTracker() {
     setNewOptionName("");
     setNewOptionStatus("Not Started");
     setNewEstimatedCost("");
-    setNewContactNumbers([""]);
+    setNewContacts([{ name: "", phone: "" }]);
     setNewNotes("");
     setNewComments("");
     setNewAttachedPdfs([]);
+    setNewSelectedEvents([]);
     await fetchVendors();
   };
 
@@ -518,11 +559,12 @@ function VendorsTracker() {
     setEditingOptionId(opt.id);
     setEditOptionName(opt.name);
     setEditEstimatedCost(opt.estimatedCost ? opt.estimatedCost.toString() : "");
-    setEditContactNumbers(opt.contactNumber && opt.contactNumber.length > 0 ? opt.contactNumber : [""]);
+    setEditContacts(opt.contacts && opt.contacts.length > 0 ? opt.contacts : [{ name: "", phone: "" }]);
     setEditNotes(opt.notes || "");
     setEditComments(opt.comments || ""); 
     setEditOptionStatus(opt.status);
     setEditAttachedPdfs(opt.attachedPdfs || []);
+    setEditSelectedEvents(opt.events || []); // Set events state
   };
 
   const cancelEditing = () => {
@@ -531,17 +573,23 @@ function VendorsTracker() {
 
   const saveEditedOption = async (optionId: string) => {
     if (!editOptionName.trim()) return;
-    const filteredPhones = editContactNumbers.filter(phone => phone.trim() !== "");
+    
+    const validContacts = editContacts.filter(c => c.phone.trim() !== "");
+    const phones = validContacts.map(c => c.phone.trim());
+    const names = validContacts.map(c => c.name.trim());
+    
     const targetVendor = dbVendors?.find((v: any) => v.id === optionId);
 
     const { error } = await supabase.from("vendors").update({
       assigned_vendor: editOptionName.trim(),
       estimated_cost: editEstimatedCost ? parseFloat(editEstimatedCost) : 0,
-      contact_numbers: filteredPhones.length > 0 ? filteredPhones : null,
+      contact_numbers: phones.length > 0 ? phones : null,
+      contact_names: names.length > 0 ? names : null,
       notes: editNotes.trim() || null,
       comments: editComments.trim() || null,
       attached_pdfs: editAttachedPdfs.length > 0 ? editAttachedPdfs : null,
       status: editOptionStatus,
+      events: editSelectedEvents, // Map to DB
       updated_at: new Date().toISOString(),
     }).eq("id", optionId);
 
@@ -874,16 +922,32 @@ function VendorsTracker() {
                                 </div>
                               </div>
 
-                              <div className="flex flex-wrap gap-3 text-xs text-emerald-800 ml-6 pt-1">
-                                {vendor.contactNumber?.map((phone, i) => (
-                                  <a
-                                    key={i}
-                                    href={`tel:${phone}`}
-                                    className="flex items-center gap-1 hover:underline"
-                                  >
-                                    <Phone className="w-3 h-3" />
-                                    {phone}
-                                  </a>
+                              {/* Display events on Confirmed Vendors */}
+                              {vendor.events && vendor.events.length > 0 && (
+                                <div className="flex flex-wrap gap-1 ml-6 mt-1">
+                                  {vendor.events.map(eName => {
+                                    const ev = defaultEvents.find(e => e.name === eName);
+                                    return (
+                                      <span key={eName} className={`text-[9px] px-1.5 py-0.5 rounded text-white ${ev?.color || 'bg-slate-500'}`}>
+                                        {eName}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              )}
+
+                              <div className="flex flex-col gap-1.5 text-xs text-emerald-800 ml-6 pt-1">
+                                {vendor.contacts?.map((contact, i) => (
+                                  <div key={i} className="flex items-center gap-1.5">
+                                    {contact.name && <span className="font-semibold">{contact.name}:</span>}
+                                    <a
+                                      href={`tel:${contact.phone}`}
+                                      className="flex items-center gap-1 hover:underline"
+                                    >
+                                      <Phone className="w-3 h-3" />
+                                      {contact.phone}
+                                    </a>
+                                  </div>
                                 ))}
                               </div>
                               
@@ -935,6 +999,20 @@ function VendorsTracker() {
                                           ₹{opt.estimatedCost.toLocaleString("en-IN")}
                                         </span>
                                       ) : null}
+
+                                      {/* Display events on Unconfirmed Vendors */}
+                                      {opt.events && opt.events.length > 0 && (
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                          {opt.events.map(eName => {
+                                            const ev = defaultEvents.find(e => e.name === eName);
+                                            return (
+                                              <span key={eName} className={`text-[9px] px-1.5 py-0.5 rounded text-white ${ev?.color || 'bg-slate-500'}`}>
+                                                {eName}
+                                              </span>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
                                     </div>
 
                                     <div className="flex items-center gap-2 flex-shrink-0">
@@ -950,17 +1028,19 @@ function VendorsTracker() {
                                     </div>
                                   </div>
                                   
-                                  {opt.contactNumber && opt.contactNumber.length > 0 && (
-                                    <div className="flex flex-wrap gap-3 pt-1">
-                                      {opt.contactNumber.map((phone, i) => (
-                                        <a
-                                          key={i}
-                                          href={`tel:${phone}`}
-                                          className="flex items-center gap-1 text-[11px] hover:text-emerald-600 transition-colors"
-                                        >
-                                          <Phone className="w-3 h-3" />
-                                          {phone}
-                                        </a>
+                                  {opt.contacts && opt.contacts.length > 0 && (
+                                    <div className="flex flex-col gap-1 pt-1">
+                                      {opt.contacts.map((contact, i) => (
+                                        <div key={i} className="flex items-center gap-1.5 text-[11px]">
+                                          {contact.name && <span className="font-semibold text-slate-700">{contact.name}:</span>}
+                                          <a
+                                            href={`tel:${contact.phone}`}
+                                            className="flex items-center gap-1 text-slate-500 hover:text-emerald-600 transition-colors"
+                                          >
+                                            <Phone className="w-3 h-3" />
+                                            {contact.phone}
+                                          </a>
+                                        </div>
                                       ))}
                                     </div>
                                   )}
@@ -1078,28 +1158,72 @@ function VendorsTracker() {
                   />
                 </div>
 
-                <div className="space-y-2">
-                  {editContactNumbers.map((phone, index) => (
+                {/* MULTI-EVENT SELECTOR (EDIT) */}
+                <div className="space-y-1.5 border border-slate-200 p-3 rounded-lg bg-slate-50/60">
+                  <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                    Assign to Events
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {defaultEvents.map((evt) => {
+                      const isSelected = editSelectedEvents.includes(evt.name);
+                      return (
+                        <button
+                          key={evt.name}
+                          type="button"
+                          onClick={() => {
+                            setEditSelectedEvents(prev => 
+                              isSelected ? prev.filter(e => e !== evt.name) : [...prev, evt.name]
+                            );
+                          }}
+                          className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
+                            isSelected 
+                              ? `${evt.color} text-white shadow-sm` 
+                              : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
+                          }`}
+                        >
+                          {isSelected ? "✓ " : "+ "}{evt.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* EDIT CONTACT INFO */}
+                <div className="space-y-2 border border-slate-100 p-3 rounded-lg bg-slate-50/50">
+                  <h4 className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Contact Details</h4>
+                  
+                  {editContacts.map((contact, index) => (
                     <div key={index} className="flex gap-2">
                       <input
                         type="text"
-                        placeholder={`Phone ${index + 1}`}
-                        className="flex-1 border border-slate-300 p-2 rounded-lg text-sm"
-                        value={phone}
+                        placeholder="Name (Optional)"
+                        className="w-1/3 border border-slate-300 p-2 rounded-lg text-sm focus:outline-none focus:border-emerald-500"
+                        value={contact.name}
                         onChange={(e) => {
-                          const updated = [...editContactNumbers];
-                          updated[index] = e.target.value;
-                          setEditContactNumbers(updated);
+                          const updated = [...editContacts];
+                          updated[index].name = e.target.value;
+                          setEditContacts(updated);
                         }}
                       />
-                      {editContactNumbers.length > 1 && (
+                      <input
+                        type="text"
+                        placeholder={`Phone ${index + 1}`}
+                        className="flex-1 border border-slate-300 p-2 rounded-lg text-sm focus:outline-none focus:border-emerald-500"
+                        value={contact.phone}
+                        onChange={(e) => {
+                          const updated = [...editContacts];
+                          updated[index].phone = e.target.value;
+                          setEditContacts(updated);
+                        }}
+                      />
+                      {editContacts.length > 1 && (
                         <Button
                           type="button"
                           variant="outline"
                           size="icon"
                           onClick={() =>
-                            setEditContactNumbers(
-                              editContactNumbers.filter((_, i) => i !== index)
+                            setEditContacts(
+                              editContacts.filter((_, i) => i !== index)
                             )
                           }
                         >
@@ -1111,11 +1235,11 @@ function VendorsTracker() {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() =>
-                      setEditContactNumbers([...editContactNumbers, ""])
-                    }
+                    size="sm"
+                    className="mt-1"
+                    onClick={() => setEditContacts([...editContacts, { name: "", phone: "" }])}
                   >
-                    + Add Phone
+                    + Add Another Contact
                   </Button>
                 </div>
 
@@ -1194,8 +1318,22 @@ function VendorsTracker() {
                           {opt.estimatedCost ? (
                             <span className="text-xs text-slate-500">₹{opt.estimatedCost.toLocaleString("en-IN")}</span>
                           ) : null}
+                          
+                          {/* Display assigned events inline for quick view */}
+                          {opt.events && opt.events.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {opt.events.map(eName => {
+                                const ev = defaultEvents.find(e => e.name === eName);
+                                return (
+                                  <span key={eName} className={`text-[9px] px-1.5 py-0.5 rounded text-white ${ev?.color || 'bg-slate-500'}`}>
+                                    {eName}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 shrink-0 ml-4">
                           <select
                             value={opt.status}
                             onChange={(e) => handleStatusChange(opt.id, e.target.value as BookingStatus)}
@@ -1258,29 +1396,73 @@ function VendorsTracker() {
                     onChange={(e) => setNewEstimatedCost(e.target.value)}
                   />
 
-                  <div className="space-y-2">
-                    {newContactNumbers.map((phone, index) => (
+                  {/* MULTI-EVENT SELECTOR (ADD) */}
+                  <div className="space-y-1.5 border border-slate-200 p-3 rounded-lg bg-slate-50/60">
+                    <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                      Assign to Events
+                    </label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {defaultEvents.map((evt) => {
+                        const isSelected = newSelectedEvents.includes(evt.name);
+                        return (
+                          <button
+                            key={evt.name}
+                            type="button"
+                            onClick={() => {
+                              setNewSelectedEvents(prev => 
+                                isSelected ? prev.filter(e => e !== evt.name) : [...prev, evt.name]
+                              );
+                            }}
+                            className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
+                              isSelected 
+                                ? `${evt.color} text-white shadow-sm` 
+                                : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
+                            }`}
+                          >
+                            {isSelected ? "✓ " : "+ "}{evt.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* NEW CONTACT INFO FIELD SET */}
+                  <div className="space-y-2 border border-slate-100 p-3 rounded-lg bg-slate-50/50">
+                    <h4 className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Contact Details</h4>
+                    
+                    {newContacts.map((contact, index) => (
                       <div key={index} className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="Name (Optional)"
+                          className="w-1/3 border border-slate-300 p-2 rounded-lg text-sm focus:outline-none focus:border-emerald-500"
+                          value={contact.name}
+                          onChange={(e) => {
+                            const updated = [...newContacts];
+                            updated[index].name = e.target.value;
+                            setNewContacts(updated);
+                          }}
+                        />
                         <input
                           type="text"
                           placeholder={`Phone ${index + 1}`}
                           className="flex-1 border border-slate-300 p-2 rounded-lg text-sm focus:outline-none focus:border-emerald-500"
-                          value={phone}
+                          value={contact.phone}
                           onChange={(e) => {
-                            const updated = [...newContactNumbers];
-                            updated[index] = e.target.value;
-                            setNewContactNumbers(updated);
+                            const updated = [...newContacts];
+                            updated[index].phone = e.target.value;
+                            setNewContacts(updated);
                           }}
                         />
 
-                        {newContactNumbers.length > 1 && (
+                        {newContacts.length > 1 && (
                           <Button
                             type="button"
                             variant="outline"
                             size="icon"
                             onClick={() =>
-                              setNewContactNumbers(
-                                newContactNumbers.filter((_, i) => i !== index)
+                              setNewContacts(
+                                newContacts.filter((_, i) => i !== index)
                               )
                             }
                           >
@@ -1293,9 +1475,11 @@ function VendorsTracker() {
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() => setNewContactNumbers([...newContactNumbers, ""])}
+                      size="sm"
+                      className="mt-1"
+                      onClick={() => setNewContacts([...newContacts, { name: "", phone: "" }])}
                     >
-                      + Add Phone
+                      + Add Another Contact
                     </Button>
                   </div>
 
