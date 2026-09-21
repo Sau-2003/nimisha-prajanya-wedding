@@ -314,7 +314,12 @@ function VendorsTracker() {
   }, [orderedCategories, dbVendors, pinnedCategoriesList, searchQuery]);
 
   const pinnedGroup = useMemo(() => rawDisplayCategories.filter(c => c.isPinned), [rawDisplayCategories]);
-  const unpinnedGroup = useMemo(() => rawDisplayCategories.filter(c => !c.isPinned), [rawDisplayCategories]);
+  const unpinnedGroup = useMemo(() => {
+    const unpinned = rawDisplayCategories.filter(c => !c.isPinned);
+    const withOptions = unpinned.filter(c => c.options.length > 0);
+    const withoutOptions = unpinned.filter(c => c.options.length === 0);
+    return [...withOptions, ...withoutOptions];
+  }, [rawDisplayCategories]);
   const displayCategories = useMemo(() => [...pinnedGroup, ...unpinnedGroup], [pinnedGroup, unpinnedGroup]);
   const currentCategoryData = useMemo(() => displayCategories.find((c) => c.name === editingCategory), [displayCategories, editingCategory]);
 
@@ -1068,7 +1073,7 @@ function VendorsTracker() {
       </Card>
 
       <Dialog open={isAddCategoryOpen} onOpenChange={setIsAddCategoryOpen}>
-        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md overflow-x-hidden">
+        <DialogContent className="w-[95vw] sm:max-w-md max-h-[85dvh] overflow-y-auto overflow-x-hidden p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Add Vendor Category</DialogTitle>
           </DialogHeader>
@@ -1090,7 +1095,7 @@ function VendorsTracker() {
       </Dialog>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
+        <DialogContent className="w-[95vw] sm:max-w-xl p-4 sm:p-6 flex flex-col top-[5dvh] translate-y-0 sm:top-[50%] sm:-translate-y-1/2 max-h-[90dvh] overflow-y-auto overflow-x-hidden">
           <button type="button" aria-hidden="true" className="opacity-0 absolute w-0 h-0 pointer-events-none" />
 
           <DialogHeader>
@@ -1343,7 +1348,7 @@ function VendorsTracker() {
                       onChange={(e) => setNewOptionName(e.target.value)}
                     />
                     <select
-                      className="border border-slate-300 p-2 rounded-lg text-sm bg-white focus:outline-none focus:border-emerald-500"
+                      className=" shrink-0 w-[110px] border border-slate-300 p-2 rounded-lg text-sm bg-white focus:outline-none focus:border-emerald-500"
                       value={newOptionStatus}
                       onChange={(e) => setNewOptionStatus(e.target.value as BookingStatus)}
                     >
@@ -1512,7 +1517,7 @@ function VendorsTracker() {
       </Dialog>
 
       <Dialog open={!!itemToDelete} onOpenChange={(open) => !open && setItemToDelete(null)}>
-        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md overflow-x-hidden">
+        <DialogContent className="w-[95vw] sm:max-w-md max-h-[85dvh] overflow-y-auto overflow-x-hidden p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Confirm Deletion</DialogTitle>
           </DialogHeader>
@@ -1529,7 +1534,7 @@ function VendorsTracker() {
       </Dialog>
 
       <Dialog open={!!categoryToDelete} onOpenChange={(open) => !open && setCategoryToDelete(null)}>
-        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md overflow-x-hidden">
+        <DialogContent className="w-[95vw] sm:max-w-md max-h-[85dvh] overflow-y-auto overflow-x-hidden p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Confirm Deletion</DialogTitle>
           </DialogHeader>
