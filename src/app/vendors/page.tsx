@@ -8,16 +8,17 @@ import { Badge } from "@/components/ui/badge";
 import { 
   Plus, CheckCircle2, Trash2, Phone, Pencil, Handshake, 
   X, Link as LinkIcon, ChevronUp, ChevronDown, Pin, 
-  Search, List, FileText, Upload, Loader2 
+  Search, List, FileText, Image as ImageIcon, Upload, Loader2 
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useVendors } from "@/hooks/useVendors";
 
 type BookingStatus = 'Not Started' | 'Enquired' | 'Negotiating' | 'Confirmed' | 'Recommendation';
 
-interface AttachedPdf {
+interface AttachedFile {
   name: string;
   url: string;
+  type?: 'pdf' | 'image';
 }
 
 interface ContactPerson {
@@ -31,10 +32,10 @@ interface VendorOption {
   status: BookingStatus;
   estimatedCost?: number;
   contacts?: ContactPerson[];
-  notes?: string;
+  links?: string;
   comments?: string;
-  attachedPdfs?: AttachedPdf[];
-  events?: string[]; // <-- Added events array
+  attachedPdfs?: AttachedFile[]; 
+  events?: string[];
 }
 
 const initialCategories = [
@@ -51,7 +52,6 @@ const statusOrder: Record<BookingStatus, number> = {
   'Not Started': 5,
 };
 
-// --- Default Events Source ---
 const defaultEvents = [
   { name: "Puja", date: "2027-01-27", link: "/events/puja", color: "bg-orange-500" },
   { name: "Mehendi", date: "2027-01-29", link: "/events/mehendi", color: "bg-emerald-500" },
@@ -65,7 +65,6 @@ const defaultEvents = [
   { name: "Vidai", date: "2027-02-01", link: "/events/vidai", color: "bg-pink-400" },
 ];
 
-// --- Component: Link Preview ---
 const LinkPreview = ({ url }: { url: string }) => {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -120,7 +119,6 @@ const LinkPreview = ({ url }: { url: string }) => {
   );
 };
 
-// --- Helper: Render Text with Clickable Links and Previews ---
 const renderTextWithLinks = (text: string) => {
   if (!text) return null;
   const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -184,20 +182,20 @@ function VendorsTracker() {
   const [newOptionStatus, setNewOptionStatus] = useState<BookingStatus>("Not Started");
   const [newEstimatedCost, setNewEstimatedCost] = useState<string>("");
   const [newContacts, setNewContacts] = useState<ContactPerson[]>([{ name: "", phone: "" }]);
-  const [newNotes, setNewNotes] = useState("");
+  const [newLinks, setNewLinks] = useState("");
   const [newComments, setNewComments] = useState("");
-  const [newAttachedPdfs, setNewAttachedPdfs] = useState<AttachedPdf[]>([]);
-  const [newSelectedEvents, setNewSelectedEvents] = useState<string[]>([]); // <-- Multi-event state
+  const [newAttachedPdfs, setNewAttachedPdfs] = useState<AttachedFile[]>([]);
+  const [newSelectedEvents, setNewSelectedEvents] = useState<string[]>([]);
 
   const [editingOptionId, setEditingOptionId] = useState<string | null>(null);
   const [editOptionName, setEditOptionName] = useState("");
   const [editEstimatedCost, setEditEstimatedCost] = useState<string>("");
   const [editContacts, setEditContacts] = useState<ContactPerson[]>([{ name: "", phone: "" }]);
-  const [editNotes, setEditNotes] = useState("");
+  const [editLinks, setEditLinks] = useState("");
   const [editComments, setEditComments] = useState("");
   const [editOptionStatus, setEditOptionStatus] = useState<BookingStatus>("Not Started"); 
-  const [editAttachedPdfs, setEditAttachedPdfs] = useState<AttachedPdf[]>([]);
-  const [editSelectedEvents, setEditSelectedEvents] = useState<string[]>([]); // <-- Multi-event state
+  const [editAttachedPdfs, setEditAttachedPdfs] = useState<AttachedFile[]>([]);
+  const [editSelectedEvents, setEditSelectedEvents] = useState<string[]>([]);
 
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -235,8 +233,6 @@ function VendorsTracker() {
     fetchCategories();
   }, []);
 
-  // --- MEMOIZED DERIVED STATES ---
-
   const allCategories = useMemo(() => {
     return Array.from(new Set([
       ...initialCategories,
@@ -262,8 +258,6 @@ function VendorsTracker() {
       let matches: VendorOption[] = dbVendors
         ?.filter((v) => v.category === categoryName)
         .map((v: any) => {
-          
-          // Merge numbers and names from separate columns for UI state
           const processedContacts = (v.contact_numbers || []).map((phone: string, idx: number) => {
             const name = (v.contact_names && v.contact_names[idx]) ? v.contact_names[idx] : "";
             return { phone, name };
@@ -275,10 +269,10 @@ function VendorsTracker() {
             status: v.status as BookingStatus,
             estimatedCost: v.estimated_cost || 0,
             contacts: processedContacts,
-            notes: v.notes || "",
+            links: v.notes || "", // Mapping DB 'notes' column to UI 'links'
             comments: v.comments || "",
             attachedPdfs: v.attached_pdfs || [],
-            events: v.events || [], // <-- Added events array mapping
+            events: v.events || [],
           };
         }) || [];
         
@@ -289,7 +283,7 @@ function VendorsTracker() {
           matches = matches.filter((opt) => 
             opt.name.toLowerCase().includes(query) ||
             opt.status.toLowerCase().includes(query) ||
-            opt.notes?.toLowerCase().includes(query) ||
+            opt.links?.toLowerCase().includes(query) ||
             opt.comments?.toLowerCase().includes(query) ||
             opt.contacts?.some(c => c.name.toLowerCase().includes(query) || c.phone.toLowerCase().includes(query))
           );
@@ -333,19 +327,18 @@ function VendorsTracker() {
     return completedCategories;
   }, [activeTab, displayCategories, inProgressCategories, completedCategories]);
 
-  // --- ACTIONS ---
-
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean = false) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
     
     setIsUploading(true);
-    const uploadedFiles: AttachedPdf[] = [];
+    const uploadedFiles: AttachedFile[] = [];
 
     for (const file of Array.from(files)) {
-      const fileExt = file.name.split('.').pop();
+      const fileExt = file.name.split('.').pop()?.toLowerCase();
+      const isImage = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic'].includes(fileExt || '');
       const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-      const filePath = `pdfs/${fileName}`;
+      const filePath = `files/${fileName}`;
 
       const { error } = await supabase.storage
         .from('vendor_documents')
@@ -361,7 +354,7 @@ function VendorsTracker() {
         .from('vendor_documents')
         .getPublicUrl(filePath);
 
-      uploadedFiles.push({ name: file.name, url: publicUrl });
+      uploadedFiles.push({ name: file.name, url: publicUrl, type: isImage ? 'image' : 'pdf' });
     }
 
     if (isEdit) {
@@ -512,10 +505,10 @@ function VendorsTracker() {
     setNewOptionStatus("Not Started");
     setNewEstimatedCost("");
     setNewContacts([{ name: "", phone: "" }]);
-    setNewNotes("");
+    setNewLinks("");
     setNewComments("");
     setNewAttachedPdfs([]);
-    setNewSelectedEvents([]); // Reset events state
+    setNewSelectedEvents([]);
     setEditingOptionId(null);
     setIsDialogOpen(true);
   };
@@ -523,7 +516,6 @@ function VendorsTracker() {
   const handleAddOption = async () => {
     if (!newOptionName.trim() || !editingCategory) return;
     
-    // Split the object array back into two separate string arrays for DB
     const validContacts = newContacts.filter(c => c.phone.trim() !== "");
     const phones = validContacts.map(c => c.phone.trim());
     const names = validContacts.map(c => c.name.trim());
@@ -535,20 +527,23 @@ function VendorsTracker() {
       estimated_cost: newEstimatedCost ? parseFloat(newEstimatedCost) : 0,
       contact_numbers: phones.length > 0 ? phones : null,
       contact_names: names.length > 0 ? names : null,
-      notes: newNotes.trim() || null,
+      notes: newLinks.trim() || null, // Map UI Links to DB 'notes' column
       comments: newComments.trim() || null,
       attached_pdfs: newAttachedPdfs.length > 0 ? newAttachedPdfs : null,
-      events: newSelectedEvents, // Map to DB
+      events: newSelectedEvents,
       updated_at: new Date().toISOString(),
     });
 
-    if (error) return alert("Failed to add vendor. Check console for details.");
+    if (error) {
+      console.error(error);
+      return alert(`Failed to add vendor: ${error.message}`);
+    }
     
     setNewOptionName("");
     setNewOptionStatus("Not Started");
     setNewEstimatedCost("");
     setNewContacts([{ name: "", phone: "" }]);
-    setNewNotes("");
+    setNewLinks("");
     setNewComments("");
     setNewAttachedPdfs([]);
     setNewSelectedEvents([]);
@@ -560,11 +555,11 @@ function VendorsTracker() {
     setEditOptionName(opt.name);
     setEditEstimatedCost(opt.estimatedCost ? opt.estimatedCost.toString() : "");
     setEditContacts(opt.contacts && opt.contacts.length > 0 ? opt.contacts : [{ name: "", phone: "" }]);
-    setEditNotes(opt.notes || "");
+    setEditLinks(opt.links || "");
     setEditComments(opt.comments || ""); 
     setEditOptionStatus(opt.status);
     setEditAttachedPdfs(opt.attachedPdfs || []);
-    setEditSelectedEvents(opt.events || []); // Set events state
+    setEditSelectedEvents(opt.events || []);
   };
 
   const cancelEditing = () => {
@@ -585,15 +580,18 @@ function VendorsTracker() {
       estimated_cost: editEstimatedCost ? parseFloat(editEstimatedCost) : 0,
       contact_numbers: phones.length > 0 ? phones : null,
       contact_names: names.length > 0 ? names : null,
-      notes: editNotes.trim() || null,
+      notes: editLinks.trim() || null, // Map UI Links to DB 'notes' column
       comments: editComments.trim() || null,
       attached_pdfs: editAttachedPdfs.length > 0 ? editAttachedPdfs : null,
       status: editOptionStatus,
-      events: editSelectedEvents, // Map to DB
+      events: editSelectedEvents,
       updated_at: new Date().toISOString(),
     }).eq("id", optionId);
 
-    if (error) return alert("Failed to update vendor.");
+    if (error) {
+      console.error(error);
+      return alert(`Failed to update vendor: ${error.message}`);
+    }
 
     if (targetVendor && targetVendor.status === 'Confirmed' && editOptionStatus !== 'Confirmed') {
       const catName = targetVendor.category;
@@ -719,7 +717,6 @@ function VendorsTracker() {
 
       <Card className="col-span-full border-slate-200 shadow-sm">
         <CardContent className="pt-6">
-          {/* TABS NAVIGATION */}
           <div className="flex items-center gap-6 border-b border-slate-200 mb-6 px-1">
             <button
               onClick={() => setActiveTab('in_progress')}
@@ -759,8 +756,6 @@ function VendorsTracker() {
                       hasConfirmed ? "border-emerald-200 bg-emerald-50/30" : "border-slate-100 bg-white hover:border-slate-300"
                     }`}
                   >
-                    
-                    {/* CATEGORY HEADER ROW */}
                     {editingCategoryTitle === item.name ? (
                       <div className="flex items-center gap-1.5 w-full mb-3">
                         <input 
@@ -785,7 +780,6 @@ function VendorsTracker() {
                       <div className="flex flex-col gap-2 mb-3 w-full border-b border-slate-100 pb-2">
                         <div className="flex justify-between items-center w-full">
                           <div className="flex items-center gap-1.5 min-w-0">
-                            {/* PIN/UNPIN TOGGLE */}
                             <button
                               onClick={() => !item.hasConfirmed && handleTogglePin(item.name, item.isManuallyPinned)}
                               disabled={item.hasConfirmed}
@@ -806,7 +800,6 @@ function VendorsTracker() {
                             >
                               <Pin className={`w-3.5 h-3.5 ${item.isPinned ? "fill-emerald-600/20" : ""}`} />
                             </button>
-                            
                             <h3 className="font-semibold text-slate-800 text-base truncate">{item.name}</h3>
                           </div>
 
@@ -827,7 +820,6 @@ function VendorsTracker() {
                           </Badge>
                         </div>
 
-                        {/* FORMATTED ACTION BAR */}
                         <div className="flex items-center justify-between text-xs pt-1">
                           <button
                             onClick={() => openDialog(item.name)}
@@ -857,8 +849,6 @@ function VendorsTracker() {
                               <Trash2 className="w-3.5 h-3.5 inline" />
                             </button>
                             <span>•</span>
-                            
-                            {/* MOVE CONTROLS (Group Constrained) */}
                             <div className="flex items-center gap-1">
                               <button
                                 onClick={() => handleMoveCategory(item.name, 'up', item.isPinned)}
@@ -868,7 +858,6 @@ function VendorsTracker() {
                                     : unpinnedGroup.findIndex(c => c.name === item.name) === 0
                                 }
                                 className="hover:text-emerald-600 disabled:opacity-30"
-                                title="Move Up"
                               >
                                 <ChevronUp className="w-3.5 h-3.5" />
                               </button>
@@ -876,11 +865,10 @@ function VendorsTracker() {
                                 onClick={() => handleMoveCategory(item.name, 'down', item.isPinned)}
                                 disabled={
                                   item.isPinned 
-                                    ? pinnedGroup.findIndex(c => c.name === item.name) === pinnedGroup.length - 1 
-                                    : unpinnedGroup.findIndex(c => c.name === item.name) === unpinnedGroup.length - 1
+                                  ? pinnedGroup.findIndex(c => c.name === item.name) === pinnedGroup.length - 1 
+                                  : unpinnedGroup.findIndex(c => c.name === item.name) === unpinnedGroup.length - 1
                                 }
                                 className="hover:text-emerald-600 disabled:opacity-30"
-                                title="Move Down"
                               >
                                 <ChevronDown className="w-3.5 h-3.5" />
                               </button>
@@ -891,7 +879,6 @@ function VendorsTracker() {
                     )}
 
                     <div className="mt-1 space-y-2">
-                      {/* CONFIRMED STATE */}
                       {hasConfirmed ? (
                         <div className="space-y-2">
                           {item.confirmedOptions.map((vendor) => (
@@ -922,7 +909,6 @@ function VendorsTracker() {
                                 </div>
                               </div>
 
-                              {/* Display events on Confirmed Vendors */}
                               {vendor.events && vendor.events.length > 0 && (
                                 <div className="flex flex-wrap gap-1 ml-6 mt-1">
                                   {vendor.events.map(eName => {
@@ -940,10 +926,7 @@ function VendorsTracker() {
                                 {vendor.contacts?.map((contact, i) => (
                                   <div key={i} className="flex items-center gap-1.5">
                                     {contact.name && <span className="font-semibold">{contact.name}:</span>}
-                                    <a
-                                      href={`tel:${contact.phone}`}
-                                      className="flex items-center gap-1 hover:underline"
-                                    >
+                                    <a href={`tel:${contact.phone}`} className="flex items-center gap-1 hover:underline">
                                       <Phone className="w-3 h-3" />
                                       {contact.phone}
                                     </a>
@@ -951,9 +934,9 @@ function VendorsTracker() {
                                 ))}
                               </div>
                               
-                              {vendor.notes && (
+                              {vendor.links && (
                                  <div className="mt-2 text-[11px] text-emerald-800/80 bg-white/60 p-2 rounded border border-emerald-100/50">
-                                   <strong>Notes:</strong> {renderTextWithLinks(vendor.notes)}
+                                   <strong>Links:</strong> {renderTextWithLinks(vendor.links)}
                                  </div>
                               )}
 
@@ -963,19 +946,19 @@ function VendorsTracker() {
                                  </div>
                               )}
 
-                              {/* PDFs Display (Confirmed) */}
+                              {/* Attached Files / Images Display */}
                               {vendor.attachedPdfs && vendor.attachedPdfs.length > 0 && (
                                 <div className="mt-2 flex flex-col gap-1.5 ml-6 border-t border-emerald-200/50 pt-2">
-                                  {vendor.attachedPdfs.map((pdf, idx) => (
+                                  {vendor.attachedPdfs.map((file, idx) => (
                                     <a 
                                       key={idx} 
-                                      href={pdf.url} 
+                                      href={file.url} 
                                       target="_blank" 
                                       rel="noreferrer" 
                                       className="flex items-center gap-1.5 text-[11px] text-emerald-700 hover:text-emerald-900 transition-colors"
                                     >
-                                      <FileText className="w-3.5 h-3.5 shrink-0" />
-                                      <span className="truncate">{pdf.name}</span>
+                                      {file.type === 'image' ? <ImageIcon className="w-3.5 h-3.5 shrink-0" /> : <FileText className="w-3.5 h-3.5 shrink-0" />}
+                                      <span className="truncate">{file.name}</span>
                                     </a>
                                   ))}
                                 </div>
@@ -984,8 +967,6 @@ function VendorsTracker() {
                           ))}
                         </div>
                       ) : (
-                        
-                        /* UNCONFIRMED MULTI-OPTION STATE */
                         <div>
                           {item.options.length > 0 ? (
                             <div className="space-y-2">
@@ -1000,7 +981,6 @@ function VendorsTracker() {
                                         </span>
                                       ) : null}
 
-                                      {/* Display events on Unconfirmed Vendors */}
                                       {opt.events && opt.events.length > 0 && (
                                         <div className="flex flex-wrap gap-1 mt-1">
                                           {opt.events.map(eName => {
@@ -1033,10 +1013,7 @@ function VendorsTracker() {
                                       {opt.contacts.map((contact, i) => (
                                         <div key={i} className="flex items-center gap-1.5 text-[11px]">
                                           {contact.name && <span className="font-semibold text-slate-700">{contact.name}:</span>}
-                                          <a
-                                            href={`tel:${contact.phone}`}
-                                            className="flex items-center gap-1 text-slate-500 hover:text-emerald-600 transition-colors"
-                                          >
+                                          <a href={`tel:${contact.phone}`} className="flex items-center gap-1 text-slate-500 hover:text-emerald-600 transition-colors">
                                             <Phone className="w-3 h-3" />
                                             {contact.phone}
                                           </a>
@@ -1045,9 +1022,9 @@ function VendorsTracker() {
                                     </div>
                                   )}
 
-                                  {opt.notes && (
+                                  {opt.links && (
                                     <div className="mt-1 pt-1.5 border-t border-slate-200/60 text-[11px] text-slate-500">
-                                      <strong>Notes:</strong> {renderTextWithLinks(opt.notes)}
+                                      <strong>Links:</strong> {renderTextWithLinks(opt.links)}
                                     </div>
                                   )}
                                   
@@ -1057,19 +1034,18 @@ function VendorsTracker() {
                                     </div>
                                   )}
 
-                                  {/* PDFs Display (Unconfirmed) */}
                                   {opt.attachedPdfs && opt.attachedPdfs.length > 0 && (
                                     <div className="mt-1 flex flex-col gap-1 pt-1.5 border-t border-slate-200/60">
-                                      {opt.attachedPdfs.map((pdf, idx) => (
+                                      {opt.attachedPdfs.map((file, idx) => (
                                         <a 
                                           key={idx} 
-                                          href={pdf.url} 
+                                          href={file.url} 
                                           target="_blank" 
                                           rel="noreferrer" 
                                           className="flex items-center gap-1.5 text-[11px] text-emerald-600 hover:text-emerald-800 transition-colors"
                                         >
-                                          <FileText className="w-3 h-3 shrink-0" />
-                                          <span className="truncate">{pdf.name}</span>
+                                          {file.type === 'image' ? <ImageIcon className="w-3 h-3 shrink-0" /> : <FileText className="w-3 h-3 shrink-0" />}
+                                          <span className="truncate">{file.name}</span>
                                         </a>
                                       ))}
                                     </div>
@@ -1091,7 +1067,6 @@ function VendorsTracker() {
         </CardContent>
       </Card>
 
-      {/* ADD CUSTOM CATEGORY MODAL */}
       <Dialog open={isAddCategoryOpen} onOpenChange={setIsAddCategoryOpen}>
         <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md overflow-x-hidden">
           <DialogHeader>
@@ -1114,10 +1089,8 @@ function VendorsTracker() {
         </DialogContent>
       </Dialog>
 
-      {/* MANAGE OPTIONS MODAL */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
-          
           <button type="button" aria-hidden="true" className="opacity-0 absolute w-0 h-0 pointer-events-none" />
 
           <DialogHeader>
@@ -1125,7 +1098,6 @@ function VendorsTracker() {
           </DialogHeader>
 
           {editingOptionId ? (
-            /* EDIT SINGLE VENDOR MODE WHEN PENCIL CLICKED */
             <div className="space-y-3 mt-2">
               <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Edit Vendor</h4>
               <div className="space-y-2">
@@ -1158,7 +1130,6 @@ function VendorsTracker() {
                   />
                 </div>
 
-                {/* MULTI-EVENT SELECTOR (EDIT) */}
                 <div className="space-y-1.5 border border-slate-200 p-3 rounded-lg bg-slate-50/60">
                   <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
                     Assign to Events
@@ -1188,7 +1159,6 @@ function VendorsTracker() {
                   </div>
                 </div>
 
-                {/* EDIT CONTACT INFO */}
                 <div className="space-y-2 border border-slate-100 p-3 rounded-lg bg-slate-50/50">
                   <h4 className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Contact Details</h4>
                   
@@ -1244,11 +1214,11 @@ function VendorsTracker() {
                 </div>
 
                 <textarea
-                  placeholder="Notes"
+                  placeholder="Links (Package details, portfolios, etc.)"
                   className="w-full border border-emerald-500 p-2 rounded-lg text-sm focus:outline-none resize-none"
                   rows={2}
-                  value={editNotes}
-                  onChange={(e) => setEditNotes(e.target.value)}
+                  value={editLinks}
+                  onChange={(e) => setEditLinks(e.target.value)}
                 />
                 
                 <textarea
@@ -1259,16 +1229,16 @@ function VendorsTracker() {
                   onChange={(e) => setEditComments(e.target.value)}
                 />
 
-                {/* EDIT ATTACHED PDFS */}
+                {/* EDIT ATTACHED DOCUMENTS & PHOTOS */}
                 <div className="space-y-2 border border-emerald-500 p-3 rounded-lg bg-emerald-50/30">
                   <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center justify-between">
-                    Attached Documents
+                    Attached Documents & Photos
                     <label className={`cursor-pointer flex items-center gap-1 text-emerald-600 hover:text-emerald-700 transition-colors ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
                       {isUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
                       {isUploading ? 'Uploading...' : 'Upload'}
                       <input 
                         type="file" 
-                        accept=".pdf" 
+                        accept=".pdf,image/*" 
                         multiple
                         className="hidden" 
                         ref={fileInputRef}
@@ -1279,20 +1249,20 @@ function VendorsTracker() {
                   </h4>
                   {editAttachedPdfs.length > 0 ? (
                     <div className="flex flex-col gap-1.5">
-                      {editAttachedPdfs.map((pdf, idx) => (
+                      {editAttachedPdfs.map((file, idx) => (
                         <div key={idx} className="flex items-center justify-between bg-white border border-slate-200 p-2 rounded-md text-xs">
-                          <a href={pdf.url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-emerald-700 hover:underline truncate">
-                            <FileText className="w-3.5 h-3.5 shrink-0" />
-                            <span className="truncate">{pdf.name}</span>
+                          <a href={file.url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-emerald-700 hover:underline truncate">
+                            {file.type === 'image' ? <ImageIcon className="w-3.5 h-3.5 shrink-0" /> : <FileText className="w-3.5 h-3.5 shrink-0" />}
+                            <span className="truncate">{file.name}</span>
                           </a>
-                          <button onClick={() => removePdf(idx, true)} className="text-slate-400 hover:text-red-500 ml-2" title="Remove PDF">
+                          <button onClick={() => removePdf(idx, true)} className="text-slate-400 hover:text-red-500 ml-2" title="Remove File">
                             <X className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-slate-400 italic">No PDFs attached.</p>
+                    <p className="text-xs text-slate-400 italic">No files attached.</p>
                   )}
                 </div>
 
@@ -1303,7 +1273,6 @@ function VendorsTracker() {
               </div>
             </div>
           ) : (
-            /* DEFAULT MODAL VIEW: CURRENT OPTIONS & ADD NEW */
             <>
               <div className="space-y-3 mt-2">
                 <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Current Options</h4>
@@ -1319,7 +1288,6 @@ function VendorsTracker() {
                             <span className="text-xs text-slate-500">₹{opt.estimatedCost.toLocaleString("en-IN")}</span>
                           ) : null}
                           
-                          {/* Display assigned events inline for quick view */}
                           {opt.events && opt.events.length > 0 && (
                             <div className="flex flex-wrap gap-1 mt-1">
                               {opt.events.map(eName => {
@@ -1362,7 +1330,6 @@ function VendorsTracker() {
 
               <hr className="my-3 border-slate-100" />
 
-              {/* ADD NEW OPTION FORM */}
               <div className="space-y-3">
                 <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Add New Option</h4>
                 
@@ -1396,7 +1363,6 @@ function VendorsTracker() {
                     onChange={(e) => setNewEstimatedCost(e.target.value)}
                   />
 
-                  {/* MULTI-EVENT SELECTOR (ADD) */}
                   <div className="space-y-1.5 border border-slate-200 p-3 rounded-lg bg-slate-50/60">
                     <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
                       Assign to Events
@@ -1426,7 +1392,6 @@ function VendorsTracker() {
                     </div>
                   </div>
 
-                  {/* NEW CONTACT INFO FIELD SET */}
                   <div className="space-y-2 border border-slate-100 p-3 rounded-lg bg-slate-50/50">
                     <h4 className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Contact Details</h4>
                     
@@ -1484,11 +1449,11 @@ function VendorsTracker() {
                   </div>
 
                   <textarea
-                    placeholder="Notes / Links (Package details, inclusions, etc.)"
+                    placeholder="Links (Package details, portfolios, etc.)"
                     className="w-full border border-slate-300 p-2 rounded-lg text-sm focus:outline-none focus:border-emerald-500 resize-none"
                     rows={2}
-                    value={newNotes}
-                    onChange={(e) => setNewNotes(e.target.value)}
+                    value={newLinks}
+                    onChange={(e) => setNewLinks(e.target.value)}
                   />
 
                   <textarea
@@ -1499,16 +1464,16 @@ function VendorsTracker() {
                     onChange={(e) => setNewComments(e.target.value)}
                   />
 
-                  {/* ADD ATTACHED PDFS SECTION */}
+                  {/* ATTACH DOCUMENTS & PHOTOS SECTION */}
                   <div className="space-y-2 border border-slate-300 p-3 rounded-lg">
                     <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center justify-between">
-                      Attach Documents
+                      Attach Documents & Photos
                       <label className={`cursor-pointer flex items-center gap-1 text-emerald-600 hover:text-emerald-700 transition-colors ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
                         {isUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
                         {isUploading ? 'Uploading...' : 'Upload'}
                         <input 
                           type="file" 
-                          accept=".pdf" 
+                          accept=".pdf,image/*" 
                           multiple
                           className="hidden" 
                           ref={fileInputRef}
@@ -1519,20 +1484,20 @@ function VendorsTracker() {
                     </h4>
                     {newAttachedPdfs.length > 0 ? (
                       <div className="flex flex-col gap-1.5">
-                        {newAttachedPdfs.map((pdf, idx) => (
+                        {newAttachedPdfs.map((file, idx) => (
                           <div key={idx} className="flex items-center justify-between bg-slate-50 border border-slate-200 p-2 rounded-md text-xs">
-                            <a href={pdf.url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-emerald-700 hover:underline truncate">
-                              <FileText className="w-3.5 h-3.5 shrink-0" />
-                              <span className="truncate">{pdf.name}</span>
+                            <a href={file.url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-emerald-700 hover:underline truncate">
+                              {file.type === 'image' ? <ImageIcon className="w-3.5 h-3.5 shrink-0" /> : <FileText className="w-3.5 h-3.5 shrink-0" />}
+                              <span className="truncate">{file.name}</span>
                             </a>
-                            <button onClick={() => removePdf(idx, false)} className="text-slate-400 hover:text-red-500 ml-2" title="Remove PDF">
+                            <button onClick={() => removePdf(idx, false)} className="text-slate-400 hover:text-red-500 ml-2" title="Remove File">
                               <X className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <p className="text-xs text-slate-400 italic">No PDFs attached.</p>
+                      <p className="text-xs text-slate-400 italic">No files attached.</p>
                     )}
                   </div>
                 </div>
@@ -1546,7 +1511,6 @@ function VendorsTracker() {
         </DialogContent>
       </Dialog>
 
-      {/* --- CONFIRM ITEM DELETE MODAL --- */}
       <Dialog open={!!itemToDelete} onOpenChange={(open) => !open && setItemToDelete(null)}>
         <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md overflow-x-hidden">
           <DialogHeader>
@@ -1564,7 +1528,6 @@ function VendorsTracker() {
         </DialogContent>
       </Dialog>
 
-      {/* --- CONFIRM CATEGORY DELETE MODAL --- */}
       <Dialog open={!!categoryToDelete} onOpenChange={(open) => !open && setCategoryToDelete(null)}>
         <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md overflow-x-hidden">
           <DialogHeader>

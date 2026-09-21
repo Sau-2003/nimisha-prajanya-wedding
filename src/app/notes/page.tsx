@@ -20,6 +20,21 @@ import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/u
 import { supabase } from "@/lib/supabase";
 import { useNotes } from "@/hooks/useNotes";
 
+// --- UNIFIED SORTING HELPER ---
+const sortNotesArray = (notesArray: any[]) => {
+  return [...notesArray].sort((a, b) => {
+    const aPinned = a.is_pinned === true || String(a.is_pinned).toLowerCase() === 'true';
+    const bPinned = b.is_pinned === true || String(b.is_pinned).toLowerCase() === 'true';
+    
+    if (aPinned && !bPinned) return -1;
+    if (!aPinned && bPinned) return 1;
+    
+    const dateA = new Date(a.created_at || 0).getTime();
+    const dateB = new Date(b.created_at || 0).getTime();
+    return dateB - dateA;
+  });
+};
+
 // --- FLOATING TEXT FORMATTING TOOLBAR ---
 function FloatingToolbar() {
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
@@ -35,7 +50,6 @@ function FloatingToolbar() {
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       
-      // Ensure selection is inside an editable cell to avoid showing it everywhere
       let node = selection.anchorNode as Node | null;
       let isEditable = false;
       while (node && node !== document.body) {
@@ -48,7 +62,7 @@ function FloatingToolbar() {
 
       if (isEditable && rect.width > 0) {
         setPosition({
-          top: rect.top - 44, // Position above the selection
+          top: rect.top - 44,
           left: rect.left + rect.width / 2,
         });
       } else {
@@ -77,7 +91,7 @@ function FloatingToolbar() {
     <div 
       className="fixed z-[9999] flex items-center bg-slate-900 text-white rounded-md shadow-lg p-1 gap-1 -translate-x-1/2 transition-all animate-in fade-in zoom-in-95"
       style={{ top: position.top, left: position.left }}
-      onMouseDown={(e) => e.preventDefault()} // Important: prevents losing text selection when clicking a button
+      onMouseDown={(e) => e.preventDefault()}
     >
       <button onClick={() => applyFormat('bold')} className="p-1.5 hover:bg-slate-700 rounded text-white transition-colors" title="Bold">
         <Bold className="w-4 h-4" />
@@ -111,7 +125,6 @@ function EditableCell({
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Only update innerHTML if it changed externally (and isn't the active element to prevent cursor jumping)
     if (ref.current && value !== ref.current.innerHTML && document.activeElement !== ref.current) {
       ref.current.innerHTML = value || "";
     }
@@ -194,7 +207,6 @@ function ExcelTableEditor({
 
   return (
     <div className="mt-4 space-y-3">
-      {/* Excel Table Action Toolbar */}
       <div className="flex items-center justify-between bg-slate-100 p-2 rounded-lg text-xs border border-slate-200">
         <span className="font-semibold text-slate-700 flex items-center gap-1.5">
           <Grid className="w-4 h-4 text-emerald-700" /> Spreadsheet
@@ -217,14 +229,19 @@ function ExcelTableEditor({
         </div>
       </div>
 
-      {/* Spreadsheet Grid View */}
       <div className="overflow-x-auto rounded-lg border border-slate-300 shadow-sm bg-white">
         <table className="w-full border-collapse text-xs text-left">
           <thead>
             <tr className="bg-emerald-800 text-white">
-              <th className="w-8 border border-emerald-900 px-2 py-1.5 text-center bg-emerald-900 font-mono text-[10px]">#</th>
+              {/* Frozen Index Header */}
+              <th className="w-8 sticky left-0 z-30 border border-emerald-900 px-2 py-1.5 text-center bg-emerald-900 font-mono text-[10px]">#</th>
               {grid[0].map((headerVal, cIdx) => (
-                <th key={cIdx} className={`border border-emerald-700 py-1.5 pl-2 ${colCount > 1 ? 'pr-7' : 'pr-2'} min-w-[120px] relative group`}>
+                <th 
+                  key={cIdx} 
+                  className={`border border-emerald-700 py-1.5 pl-2 ${colCount > 1 ? 'pr-7' : 'pr-2'} min-w-[120px] relative group ${
+                    cIdx === 0 ? 'sticky left-8 z-30 bg-emerald-800 shadow-[4px_0_4px_-2px_rgba(0,0,0,0.1)]' : ''
+                  }`}
+                >
                   <EditableCell
                     value={headerVal || ""}
                     onChange={(newVal) => handleCellChange(0, cIdx, newVal)}
@@ -251,12 +268,18 @@ function ExcelTableEditor({
             {grid.slice(1).map((row, rIdx) => {
               const actualRowIndex = rIdx + 1;
               return (
-                <tr key={actualRowIndex} className="hover:bg-emerald-50/50 transition-colors">
-                  <td className="border border-slate-200 px-2 py-1.5 text-center font-mono text-slate-400 bg-slate-50 text-[10px]">
+                <tr key={actualRowIndex} className="hover:bg-emerald-50/50 transition-colors group/row">
+                  {/* Frozen Index Body */}
+                  <td className="w-8 sticky left-0 z-20 border border-slate-200 px-2 py-1.5 text-center font-mono text-slate-400 bg-slate-50 text-[10px]">
                     {actualRowIndex}
                   </td>
                   {row.map((cellVal: any, cIdx: number) => (
-                    <td key={cIdx} className="border border-slate-200 px-1 py-1 align-top">
+                    <td 
+                      key={cIdx} 
+                      className={`border border-slate-200 px-1 py-1 align-top ${
+                        cIdx === 0 ? 'sticky left-8 z-20 bg-white group-hover/row:bg-emerald-50/50 shadow-[4px_0_4px_-2px_rgba(0,0,0,0.1)]' : ''
+                      }`}
+                    >
                       <EditableCell
                         value={cellVal || ""}
                         onChange={(newVal) => handleCellChange(actualRowIndex, cIdx, newVal)}
@@ -291,16 +314,13 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick }: any) {
   const [content, setContent] = useState(gift.content || "");
   const [isEditing, setIsEditing] = useState(false);
 
-  // Strictly controlled by user clicking the "Add Spreadsheet Note" button or if table_data explicitly has saved rows
   const [showTable, setShowTable] = useState(
     Boolean(gift.table_data && Array.isArray(gift.table_data) && gift.table_data.length > 0)
   );
 
-  // Custom Cursor Tooltip State
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
 
-  // Delete Confirmation State
   const [deleteTarget, setDeleteTarget] = useState<{ type: "item" } | { type: "image"; index: number } | null>(null);
 
   const isPinned = Boolean(gift.is_pinned);
@@ -314,14 +334,12 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick }: any) {
     setActiveTooltip(null);
   };
 
-  // Safely auto-links URLs inside HTML strings without breaking existing HTML tags
   const linkifyHtml = (htmlText: string) => {
     if (!htmlText) return "";
     const urlRegex = /(?<!href="|src=")(https?:\/\/[^\s<]+)/g;
     return htmlText.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline hover:text-blue-800">$1</a>');
   };
 
-  // Prevent entering edit mode if the user is just clicking an embedded link
   const handleBodyClick = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).tagName.toLowerCase() === 'a') {
       e.stopPropagation();
@@ -330,7 +348,6 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick }: any) {
     setIsEditing(true);
   };
 
-  // Image Upload Handler
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     const files = Array.from(e.target.files);
@@ -414,7 +431,6 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick }: any) {
         isPinned ? "border-emerald-800 ring-1 ring-emerald-800/20" : "border-slate-200"
       }`}
     >
-      {/* Top Right Actions */}
       <div className="absolute top-6 right-6 flex items-center gap-2 z-20">
         <button
           type="button"
@@ -450,7 +466,6 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick }: any) {
         </button>
       </div>
 
-      {/* Note Header */}
       <div className="pt-6 pb-2 pl-6 md:pl-10 pr-32">
         <div className="text-[10px] text-slate-400 font-bold tracking-widest uppercase mb-1.5 ml-1">
           {formattedDate}
@@ -464,9 +479,7 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick }: any) {
         />
       </div>
 
-      {/* Note Body */}
       <div className="w-full px-6 md:px-10 pb-6 space-y-4">
-        {/* Content Textarea / Display */}
         {isEditing ? (
           <EditableCell
             value={content}
@@ -494,7 +507,6 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick }: any) {
           </div>
         ) : null}
 
-        {/* --- SPREADSHEET TABLE & HIDE BUTTON --- */}
         {showTable && (
           <div>
             <ExcelTableEditor
@@ -516,7 +528,6 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick }: any) {
           </div>
         )}
 
-        {/* Multi-Image Preview Section */}
         {imagesList.length > 0 && (
           <div className="mt-4 flex flex-wrap gap-4">
             {imagesList.map((image: any, idx: number) => {
@@ -558,7 +569,6 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick }: any) {
           </div>
         )}
 
-        {/* Toolbar: Add Images & Inline Add Description */}
         <div className="pt-2 flex flex-wrap items-center gap-2">
           <input
             type="file"
@@ -576,7 +586,6 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick }: any) {
             Add Images
           </label>
 
-          {/* Show inline Add Description button for Spreadsheet Notes that don't have a description yet */}
           {showTable && !content && !isEditing && (
             <button
               type="button"
@@ -590,7 +599,6 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick }: any) {
         </div>
       </div>
 
-      {/* Tooltip */}
       {activeTooltip && (
         <div
           className="fixed z-[100] px-2 py-1 bg-slate-900 text-white text-[11px] font-medium rounded shadow-lg pointer-events-none whitespace-nowrap"
@@ -600,7 +608,6 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick }: any) {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
       <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -631,13 +638,7 @@ export default function NotePage() {
 
   useEffect(() => {
     if (notes) {
-      const sorted = [...notes].sort((a, b) => {
-        const aPinned = Boolean(a.is_pinned);
-        const bPinned = Boolean(b.is_pinned);
-        if (aPinned !== bPinned) return aPinned ? -1 : 1;
-        return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
-      });
-      setLocalNote(sorted);
+      setLocalNote(sortNotesArray(notes));
     }
   }, [notes]);
 
@@ -660,22 +661,12 @@ export default function NotePage() {
     }
 
     if (data) {
-      setLocalNote((prev) => {
-        const updated = [data, ...prev];
-        return updated.sort((a, b) => {
-          const aPinned = Boolean(a.is_pinned);
-          const bPinned = Boolean(b.is_pinned);
-          if (aPinned !== bPinned) return aPinned ? -1 : 1;
-          return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
-        });
-      });
+      setLocalNote((prev) => [data, ...prev]);
     }
 
     window.scrollTo({ top: 0, behavior: "smooth" });
-    fetchData();
   };
 
-  // --- HANDLER FOR CREATING A NOTE WITH A PRE-FILLED SPREADSHEET ---
   const handleAddSpreadsheetNote = async () => {
     const defaultTable = [
       ["Outfit", "Event", "Date"],
@@ -694,7 +685,7 @@ export default function NotePage() {
       images: [],
       image_urls: [],
       is_pinned: false,
-      table_data: defaultTable, // Initializes note with the spreadsheet visible automatically
+      table_data: defaultTable, 
       created_at: new Date().toISOString(),
     };
 
@@ -706,36 +697,25 @@ export default function NotePage() {
     }
 
     if (data) {
-      setLocalNote((prev) => {
-        const updated = [data, ...prev];
-        return updated.sort((a, b) => {
-          const aPinned = Boolean(a.is_pinned);
-          const bPinned = Boolean(b.is_pinned);
-          if (aPinned !== bPinned) return aPinned ? -1 : 1;
-          return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
-        });
-      });
+      setLocalNote((prev) => [data, ...prev]);
     }
 
     window.scrollTo({ top: 0, behavior: "smooth" });
-    fetchData();
   };
 
   const handleDelete = async (id: string) => {
     setLocalNote((prev) => prev.filter((n) => n.id !== id));
     await supabase.from("notes").delete().eq("id", id);
-    fetchData();
   };
 
   const handleUpdate = async (id: string, updates: any) => {
     setLocalNote((prev) => {
       const updated = prev.map((n) => (n.id === id ? { ...n, ...updates } : n));
-      return updated.sort((a, b) => {
-        const aPinned = Boolean(a.is_pinned);
-        const bPinned = Boolean(b.is_pinned);
-        if (aPinned !== bPinned) return aPinned ? -1 : 1;
-        return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
-      });
+      
+      if (updates.hasOwnProperty('is_pinned')) {
+        return sortNotesArray(updated);
+      }
+      return updated;
     });
 
     const { error } = await supabase.from("notes").update(updates).eq("id", id);
@@ -750,10 +730,8 @@ export default function NotePage() {
 
   return (
     <div className="p-6 md:p-12 max-w-4xl mx-auto min-h-screen space-y-8">
-      {/* Global Floating Toolbar for Rich Text Formatting */}
       <FloatingToolbar />
       
-      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-serif font-bold text-emerald-900 flex items-center gap-3">
@@ -764,7 +742,6 @@ export default function NotePage() {
           </p>
         </div>
 
-        {/* --- DUAL ACTION BUTTONS --- */}
         <div className="flex flex-col sm:flex-row gap-3">
           <Button 
             onClick={handleAddNote} 
@@ -782,7 +759,6 @@ export default function NotePage() {
         </div>
       </div>
 
-      {/* Note List */}
       <div className="space-y-6">
         {localNote.length === 0 ? (
           <div className="text-center py-12 text-slate-400 italic">
@@ -801,7 +777,6 @@ export default function NotePage() {
         )}
       </div>
 
-      {/* Full Screen Image Lightbox */}
       <Dialog open={!!fullScreenImage} onOpenChange={(open) => !open && setFullScreenImage(null)}>
         <DialogContent className="max-w-4xl p-1 bg-transparent border-none shadow-none [&>button]:text-white [&>button]:bg-black/50 [&>button]:rounded-full [&>button]:hover:bg-black/80">
           <DialogHeader className="sr-only">
