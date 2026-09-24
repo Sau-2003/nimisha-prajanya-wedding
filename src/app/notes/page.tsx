@@ -14,11 +14,31 @@ import {
   Grid,
   Bold,
   Italic,
-  Strikethrough
+  Strikethrough,
+  GripVertical
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
 import { useNotes } from "@/hooks/useNotes";
+
+// Import Dnd-Kit components
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  MouseSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 // --- UNIFIED SORTING HELPER ---
 const sortNotesArray = (notesArray: any[]) => {
@@ -233,7 +253,6 @@ function ExcelTableEditor({
         <table className="w-full border-collapse text-xs text-left">
           <thead>
             <tr className="bg-emerald-800 text-white">
-              {/* Frozen Index Header */}
               <th className="w-8 sticky left-0 z-30 border border-emerald-900 px-2 py-1.5 text-center bg-emerald-900 font-mono text-[10px]">#</th>
               {grid[0].map((headerVal, cIdx) => (
                 <th 
@@ -269,7 +288,6 @@ function ExcelTableEditor({
               const actualRowIndex = rIdx + 1;
               return (
                 <tr key={actualRowIndex} className="hover:bg-emerald-50/50 transition-colors group/row">
-                  {/* Frozen Index Body */}
                   <td className="w-8 sticky left-0 z-20 border border-slate-200 px-2 py-1.5 text-center font-mono text-slate-400 bg-slate-50 text-[10px]">
                     {actualRowIndex}
                   </td>
@@ -310,6 +328,22 @@ function ExcelTableEditor({
 
 // --- CARD COMPONENT FOR EACH INDIVIDUAL NOTE ---
 function NotesCard({ gift, onDelete, onUpdate, onImageClick }: any) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: gift.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : 1,
+    opacity: isDragging ? 0.7 : 1,
+  };
+
   const [title, setTitle] = useState(gift.title);
   const [content, setContent] = useState(gift.content || "");
   const [isEditing, setIsEditing] = useState(false);
@@ -320,7 +354,6 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick }: any) {
 
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
-
   const [deleteTarget, setDeleteTarget] = useState<{ type: "item" } | { type: "image"; index: number } | null>(null);
 
   const isPinned = Boolean(gift.is_pinned);
@@ -427,10 +460,25 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick }: any) {
 
   return (
     <div
+      ref={setNodeRef}
+      style={style}
       className={`relative bg-white w-full rounded-xl shadow-md border overflow-hidden group transition-all duration-300 ${
         isPinned ? "border-emerald-800 ring-1 ring-emerald-800/20" : "border-slate-200"
       }`}
     >
+      {/* Drag Handle Button */}
+      <div className="absolute top-6 left-3 flex items-center z-20">
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          className="p-1.5 text-slate-400 hover:text-slate-700 cursor-grab active:cursor-grabbing rounded-lg bg-slate-50 border border-slate-200 shadow-sm touch-none"
+          title="Drag to reorder"
+        >
+          <GripVertical className="w-4 h-4" />
+        </button>
+      </div>
+
       <div className="absolute top-6 right-6 flex items-center gap-2 z-20">
         <button
           type="button"
@@ -466,7 +514,7 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick }: any) {
         </button>
       </div>
 
-      <div className="pt-6 pb-2 pl-6 md:pl-10 pr-32">
+      <div className="pt-6 pb-2 pl-12 md:pl-16 pr-32">
         <div className="text-[10px] text-slate-400 font-bold tracking-widest uppercase mb-1.5 ml-1">
           {formattedDate}
         </div>
@@ -632,15 +680,57 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick }: any) {
 
 // --- MAIN PAGE ---
 export default function NotePage() {
-  const { notes, loading, fetchData } = useNotes();
+  const { notes, loading } = useNotes();
   const [localNote, setLocalNote] = useState<any[]>([]);
   const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
+
+  const sensors = useSensors(
+    useSensor(MouseSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 200,
+        tolerance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   useEffect(() => {
     if (notes) {
       setLocalNote(sortNotesArray(notes));
     }
   }, [notes]);
+
+  const handleDragEnd = (event: any) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    setLocalNote((items) => {
+      const oldIndex = items.findIndex((item) => item.id === active.id);
+      const newIndex = items.findIndex((item) => item.id === over.id);
+
+      if (oldIndex === -1 || newIndex === -1) return items;
+
+      const activeItem = items[oldIndex];
+      const overItem = items[newIndex];
+
+      const activePinned = Boolean(activeItem.is_pinned);
+      const overPinned = Boolean(overItem.is_pinned);
+
+      // Prevent dragging a pinned note into unpinned territory or vice versa
+      if (activePinned !== overPinned) {
+        return items;
+      }
+
+      return arrayMove(items, oldIndex, newIndex);
+    });
+  };
 
   const handleAddNote = async () => {
     const newNote = {
@@ -735,7 +825,7 @@ export default function NotePage() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-serif font-bold text-emerald-900 flex items-center gap-3">
-            <BookIcon className="w-8 h-8 text-emerald-700" /> Notes & Spreadsheets
+            <BookIcon className="w-8 h-8 text-emerald-700" /> Notes
           </h1>
           <p className="text-sm text-slate-500 mt-1">
             Organize notes with built-in Excel tables, images, and links.
@@ -759,23 +849,34 @@ export default function NotePage() {
         </div>
       </div>
 
-      <div className="space-y-6">
-        {localNote.length === 0 ? (
-          <div className="text-center py-12 text-slate-400 italic">
-            No Notes tracked yet. Click "Add Note Ideas" to get started!
+      <DndContext 
+        sensors={sensors} 
+        collisionDetection={closestCenter} 
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext 
+          items={localNote.map((n) => n.id)} 
+          strategy={verticalListSortingStrategy}
+        >
+          <div className="space-y-6">
+            {localNote.length === 0 ? (
+              <div className="text-center py-12 text-slate-400 italic">
+                No Notes tracked yet. Click "Add Note Ideas" to get started!
+              </div>
+            ) : (
+              localNote.map((gift: any) => (
+                <NotesCard
+                  key={gift.id}
+                  gift={gift}
+                  onDelete={handleDelete}
+                  onUpdate={handleUpdate}
+                  onImageClick={setFullScreenImage}
+                />
+              ))
+            )}
           </div>
-        ) : (
-          localNote.map((gift: any) => (
-            <NotesCard
-              key={gift.id}
-              gift={gift}
-              onDelete={handleDelete}
-              onUpdate={handleUpdate}
-              onImageClick={setFullScreenImage}
-            />
-          ))
-        )}
-      </div>
+        </SortableContext>
+      </DndContext>
 
       <Dialog open={!!fullScreenImage} onOpenChange={(open) => !open && setFullScreenImage(null)}>
         <DialogContent className="max-w-4xl p-1 bg-transparent border-none shadow-none [&>button]:text-white [&>button]:bg-black/50 [&>button]:rounded-full [&>button]:hover:bg-black/80">
