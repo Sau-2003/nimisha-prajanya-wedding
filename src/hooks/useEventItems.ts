@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 
-export type CategoryId = 'tasks' | 'taskDone' | 'itemsNeeded' | 'pujaItems' | 'games' | 'vendors' | 'ideas' | 'notes';
+export type CategoryId = 'tasks' | 'taskDone' | 'itemsNeeded' | 'itemsBrought' | 'pujaItems' | 'pujaItemsBrought' | 'games' | 'vendors' | 'ideas' | 'notes';
 
 export type WorkspaceItem = {
   id: string;
@@ -16,7 +16,7 @@ type GroupedItems = Record<CategoryId, WorkspaceItem[]>;
 
 export function useEventItems(eventName: string) {
   const [items, setItems] = useState<GroupedItems>({
-    tasks: [], taskDone: [], itemsNeeded: [], pujaItems: [], 
+    tasks: [], taskDone: [], itemsNeeded: [], itemsBrought: [], pujaItems: [], pujaItemsBrought: [],
     games: [], vendors: [], ideas: [], notes: []
   });
   const [loading, setLoading] = useState(true);
@@ -35,7 +35,7 @@ export function useEventItems(eventName: string) {
     }
 
     const grouped: GroupedItems = {
-      tasks: [], taskDone: [], itemsNeeded: [], pujaItems: [], 
+      tasks: [], taskDone: [], itemsNeeded: [], itemsBrought: [], pujaItems: [], pujaItemsBrought: [],
       games: [], vendors: [], ideas: [], notes: []
     };
 
