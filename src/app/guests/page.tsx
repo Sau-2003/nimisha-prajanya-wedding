@@ -43,6 +43,13 @@ const formatTime12hr = (timeStr: string | null) => {
   }
 };
 
+// Helper to extract up to 6 mobile numbers from a space/comma separated string
+const parseMobileNumbers = (mobileStr: string | null) => {
+  if (!mobileStr) return [];
+  // Split by spaces or commas and remove empty strings
+  return mobileStr.split(/[\s,]+/).filter(Boolean).slice(0, 6);
+};
+
 export default function GuestsPage() {
   const { guests: dbGuests, loading, fetchData } = useGuests();
   const [activeTab, setActiveTab] = useState(TABS[0].name);
@@ -60,28 +67,23 @@ export default function GuestsPage() {
   const currentTabObj = TABS.find(t => t.name === activeTab);
   const totalPeople = filteredGuests.reduce((acc, g) => acc + (Number(g.count) || 0), 0);
 
-  // Helper to check if a guest is already copied to a specific event
   const isInEvent = (guest: any, eventName: string) => {
     return dbGuests.some(g => g.tab_category === eventName && g.family === guest.family);
   };
 
-  // Automatically add/remove guest from events and auto-assign Side (N/P)
   const toggleEventPresence = async (guest: any, eventName: string) => {
     const existing = dbGuests.find(g => g.tab_category === eventName && g.family === guest.family);
     
     if (existing) {
-      // Remove them if they are already in the event
       const { error } = await supabase.from("guests").delete().eq("id", existing.id);
       if (error) console.error(`Error removing from ${eventName}:`, error);
     } else {
-      // Determine N or P based on which staying tab they came from
       let determinedSide = guest.side || null;
       if (!determinedSide) {
         if (guest.tab_category.includes("Nimisha")) determinedSide = "N";
         if (guest.tab_category.includes("Prajanya")) determinedSide = "P";
       }
 
-      // Copy them to the new event tab WITH all their data so it stays synced
       const { error } = await supabase.from("guests").insert([{
         tab_category: eventName,
         family: guest.family,
@@ -106,16 +108,17 @@ export default function GuestsPage() {
   };
 
   const saveEdit = async (id: string) => {
-    // Find original row to get the original family name
     const originalGuest = dbGuests.find(g => g.id === id);
     if (!originalGuest) return;
 
-    // UPDATE EVERYWHERE: We update by "family" instead of "id" so the edit syncs across Sangeet, Haldi, Reception, etc.
+    // Join the 6 inputs back into a single string separated by spaces
+    const joinedMobiles = (editForm.mobiles || []).filter(Boolean).join(" ");
+
     const { error } = await supabase.from("guests").update({
       room_no: editForm.room_no,
       family: editForm.family,
       count: editForm.count,
-      mobile_no: editForm.mobile_no || null,
+      mobile_no: joinedMobiles || null,
       arrival_time: editForm.arrival_time || null,
       departure_time: editForm.departure_time || null,
       arrival_date: editForm.arrival_date || null,
@@ -139,43 +142,20 @@ export default function GuestsPage() {
   };
 
   const toggleArrival = async (guest: any) => {
-    const { error } = await supabase
-      .from("guests")
-      .update({ arrived: !guest.arrived })
-      .eq("family", guest.family); // Syncs arrival across all tabs if needed
-
-    if (!error) {
-      fetchData();
-    } else {
-      console.error("Toggle Error:", error);
-    }
+    const { error } = await supabase.from("guests").update({ arrived: !guest.arrived }).eq("family", guest.family);
+    if (!error) fetchData();
   };
 
   const toggleJain = async (guest: any) => {
-    const { error } = await supabase
-      .from("guests")
-      .update({ jain: !guest.jain })
-      .eq("family", guest.family); // Syncs Jain status everywhere instantly
-
-    if (!error) {
-      fetchData();
-    } else {
-      console.error("Toggle Jain Error:", error);
-    }
+    const { error } = await supabase.from("guests").update({ jain: !guest.jain }).eq("family", guest.family);
+    if (!error) fetchData();
   };
 
   const confirmDelete = async () => {
     if (!guestToDelete) return;
-    
     const { error } = await supabase.from("guests").delete().eq("id", guestToDelete);
-    
-    if (error) {
-      console.error("Delete error:", error);
-      alert("Failed to delete guest.");
-    } else {
-      fetchData();
-    }
-    
+    if (error) alert("Failed to delete guest.");
+    else fetchData();
     setGuestToDelete(null);
   };
 
@@ -194,14 +174,11 @@ export default function GuestsPage() {
               "No. of People": g.count,
             };
 
-            // Add N/P if it's an event tab
-            if (!isStaying) {
-              baseRow["N/P"] = g.side || "-";
-            }
-
+            if (!isStaying) baseRow["N/P"] = g.side || "-";
             baseRow["Jain"] = g.jain ? "Yes" : "No";
 
             if (isStaying) {
+              const mobiles = parseMobileNumbers(g.mobile_no);
               return {
                 "Sr No": index + 1,
                 "Room No": g.room_no || "-",
@@ -209,7 +186,12 @@ export default function GuestsPage() {
                 "Name": g.family,
                 "No. of People": g.count,
                 "Jain": g.jain ? "Yes" : "No",
-                "Mobile No": g.mobile_no || "-",
+                "Mobile 1": mobiles[0] || "-",
+                "Mobile 2": mobiles[1] || "-",
+                "Mobile 3": mobiles[2] || "-",
+                "Mobile 4": mobiles[3] || "-",
+                "Mobile 5": mobiles[4] || "-",
+                "Mobile 6": mobiles[5] || "-",
                 "Arrival Date": g.arrival_date || "-",
                 "Arrival Time": formatTime12hr(g.arrival_time),
                 "Origin": g.origin_place || "-",
@@ -229,23 +211,26 @@ export default function GuestsPage() {
     try {
       const response = await fetch("/api/export-guests-sheets", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
-      const result = await response.text();
-
-      if (response.ok) {
-        alert("Google Sheet updated successfully!");
-      } else {
-        alert(result);
-      }
+      if (response.ok) alert("Google Sheet updated successfully!");
+      else alert(await response.text());
     } catch (err) {
       console.error(err);
       alert("Failed to update Google Sheet");
     }
+  };
+
+  const startEditing = (guest: any) => {
+    setEditingId(guest.id);
+    const existingMobiles = parseMobileNumbers(guest.mobile_no);
+    setEditForm({
+      ...guest,
+      // Create an array of exactly 6 slots for the edit form
+      mobiles: Array.from({ length: 6 }, (_, i) => existingMobiles[i] || "")
+    });
   };
 
   if (loading) return <div className="p-12 text-center text-emerald-600">Loading...</div>;
@@ -263,7 +248,6 @@ export default function GuestsPage() {
           </p>
         </div>
         
-        {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
           <a 
             href="https://docs.google.com/spreadsheets/d/1PnsOf0vpQs3I_S7ilQF7heiBwYvePVzsyz81I74czgA/edit?gid=1068383416#gid=1068383416" 
@@ -287,7 +271,6 @@ export default function GuestsPage() {
         </div>
       </div>
       
-      {/* Tabs */}
       <div className="flex gap-2 border-b mb-8 overflow-x-auto pb-2">
         {TABS.map((tab) => (
           <button key={tab.name} onClick={() => setActiveTab(tab.name)}
@@ -322,7 +305,6 @@ export default function GuestsPage() {
           </div>
         </div>
 
-        {/* Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -332,17 +314,14 @@ export default function GuestsPage() {
                 {activeTab.includes("Staying") && <th className="p-3 text-center">Arrived</th>}
                 <th className="p-3">Name</th>
                 <th className="p-3">No. of People</th>
-                
-                {/* New N/P Column in Event Tabs */}
                 {!activeTab.includes("Staying") && <th className="p-3 text-center">N/P</th>}
-                
                 <th className="p-3 text-center">Jain</th>
                 {activeTab.includes("Staying") && (
                   <>
                     <th className="p-3 text-center text-emerald-700">Sangeet</th>
                     <th className="p-3 text-center text-yellow-600">Haldi</th>
                     <th className="p-3 text-center text-rose-700">Reception</th>
-                    <th className="p-3">Mobile</th>
+                    <th className="p-3">Mobile(s)</th>
                     <th className="p-3">Date of Arrival</th>
                     <th className="p-3">Arrival Time</th>
                     <th className="p-3">Origin</th>
@@ -361,7 +340,7 @@ export default function GuestsPage() {
                 <tr key={g.id} className={`border-b hover:bg-slate-50 ${g.arrived ? "text-emerald-800 line-through bg-green-50 font-medium" : ""}`}>
                   {editingId === g.id ? (
                     <>
-                      {/* EDIT MODE ROW */}
+                      {/* EDIT MODE */}
                       <td className="p-3 text-slate-500">{idx + 1}</td>
                       {activeTab.includes("Staying") && (
                         <td className="p-2"><input className="border w-full p-1 rounded" placeholder="Room No" value={editForm.room_no || ''} onChange={e => setEditForm({...editForm, room_no: e.target.value})} /></td>
@@ -381,7 +360,6 @@ export default function GuestsPage() {
                       <td className="p-2"><input className="border w-full p-1 rounded" placeholder="Name" value={editForm.family || ''} onChange={e => setEditForm({...editForm, family: e.target.value})} /></td>
                       <td className="p-2"><input className="border w-full p-1 rounded" placeholder="Count" type="number" value={editForm.count || ''} onChange={e => setEditForm({...editForm, count: e.target.value})} /></td>
                       
-                      {/* Edit N/P Column */}
                       {!activeTab.includes("Staying") && (
                         <td className="p-2">
                           <select 
@@ -423,7 +401,24 @@ export default function GuestsPage() {
                               <Check className="w-4 h-4" />
                             </Button>
                           </td>
-                          <td className="p-2"><input className="border w-full p-1 rounded" placeholder="Mobile" value={editForm.mobile_no || ''} onChange={e => setEditForm({...editForm, mobile_no: e.target.value})} /></td>
+                          
+                          {/* 6 Phone Numbers Input Fields */}
+                          <td className="p-2 min-w-[140px] flex flex-col gap-1">
+                            {Array.from({ length: 6 }).map((_, i) => (
+                              <input
+                                key={i}
+                                className="border w-full p-1 rounded text-xs"
+                                placeholder={`Mobile ${i + 1}`}
+                                value={editForm.mobiles?.[i] || ''}
+                                onChange={e => {
+                                  const newMobiles = [...(editForm.mobiles || [])];
+                                  newMobiles[i] = e.target.value;
+                                  setEditForm({ ...editForm, mobiles: newMobiles });
+                                }}
+                              />
+                            ))}
+                          </td>
+
                           <td className="p-2">
                             <input type="date" className="border w-full p-1 rounded" value={editForm.arrival_date || ""} onChange={e => setEditForm({...editForm, arrival_date: e.target.value})} />
                           </td>
@@ -449,7 +444,7 @@ export default function GuestsPage() {
                     </>
                   ) : (
                     <>
-                      {/* VIEW MODE ROW */}
+                      {/* VIEW MODE */}
                       <td className="p-3 text-slate-500">{idx + 1}</td>
                       {activeTab.includes("Staying") && <td className="p-3">{g.room_no || '-'}</td>}
                       {activeTab.includes("Staying") && (
@@ -467,7 +462,6 @@ export default function GuestsPage() {
                       <td className="p-3 font-medium whitespace-nowrap">{g.family}</td>
                       <td className="p-3">{g.count}</td>
                       
-                      {/* View N/P Column */}
                       {!activeTab.includes("Staying") && (
                         <td className="p-3 text-center font-bold text-slate-700">
                           {g.side || '-'}
@@ -502,13 +496,21 @@ export default function GuestsPage() {
                             </Button>
                           </td>
 
+                          {/* Dynamic Mobile Display up to 6 numbers */}
                           <td className="p-3 whitespace-nowrap">
-                            {g.mobile_no ? (
-                              <a href={`tel:${g.mobile_no}`} className="text-emerald-700 hover:underline hover:text-emerald-900 font-medium">
-                                {g.mobile_no}
-                              </a>
-                            ) : '-'}
+                            <div className="flex flex-col gap-1">
+                              {(() => {
+                                const mobiles = parseMobileNumbers(g.mobile_no);
+                                if (mobiles.length === 0) return <span className="text-slate-400">-</span>;
+                                return mobiles.map((mobile, idx) => (
+                                  <a key={idx} href={`tel:${mobile}`} className="text-emerald-700 hover:underline hover:text-emerald-900 font-medium">
+                                    {mobile}
+                                  </a>
+                                ));
+                              })()}
+                            </div>
                           </td>
+
                           <td className="p-3 whitespace-nowrap">{g.arrival_date ? new Date(g.arrival_date).toLocaleDateString("en-GB", {day: "2-digit",month: "2-digit",year: "numeric"}).replace(/\//g, "-") : "-"}</td>
                           <td className="p-3 whitespace-nowrap">{formatTime12hr(g.arrival_time)}</td>
                           <td className="p-3">{g.origin_place || '-'}</td>
@@ -520,7 +522,7 @@ export default function GuestsPage() {
                         </>
                       )}
                       <td className="p-3 flex gap-1 justify-center">
-                        <Button variant="ghost" size="sm" onClick={() => { setEditingId(g.id); setEditForm(g); }}><Pencil className="w-4 h-4"/></Button>
+                        <Button variant="ghost" size="sm" onClick={() => startEditing(g)}><Pencil className="w-4 h-4"/></Button>
                         <Button variant="ghost" size="sm" onClick={() => setGuestToDelete(g.id)}>
                           <Trash2 className="w-4 h-4 text-red-500" />
                         </Button>
@@ -534,7 +536,6 @@ export default function GuestsPage() {
         </div>
       </div>
 
-      {/* --- CONFIRM DELETE MODAL --- */}
       <Dialog open={!!guestToDelete} onOpenChange={(open) => !open && setGuestToDelete(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
