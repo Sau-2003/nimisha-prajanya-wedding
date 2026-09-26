@@ -7,7 +7,6 @@ import {
   PaperBag, Check, RotateCcw, Trash2, Calendar, 
   User, Image as ImageIcon, Music, Play, 
   ShoppingCart, PackageCheck, Loader2,
-  ShoppingBag
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -148,7 +147,7 @@ export default function GlobalitemsPage() {
       <div className="mb-8">
         <div className="mb-8">
           <h1 className="font-serif text-3xl font-bold text-emerald-900 flex items-center gap-3">
-            <ShoppingBag className="w-8 h-8 text-emerald-600" />
+            <PaperBag className="w-8 h-8 text-emerald-600" />
             Master Items List
           </h1>
           <p className="text-slate-500 text-sm mt-1">
