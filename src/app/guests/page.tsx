@@ -402,17 +402,21 @@ export default function GuestsPage() {
                             </Button>
                           </td>
                           
-                          {/* 6 Phone Numbers Input Fields */}
+                          {/* 6 Phone Numbers Input Fields */}                          
                           <td className="p-2 min-w-[140px] flex flex-col gap-1">
                             {Array.from({ length: 6 }).map((_, i) => (
                               <input
                                 key={i}
+                                type="tel"
+                                maxLength={12} // Prevents chaining 20 digits together in one box!
                                 className="border w-full p-1 rounded text-xs"
                                 placeholder={`Mobile ${i + 1}`}
                                 value={editForm.mobiles?.[i] || ''}
                                 onChange={e => {
+                                  // Automatically remove accidental spaces or letters while typing
+                                  const sanitizedValue = e.target.value.replace(/[^0-9+]/g, '');
                                   const newMobiles = [...(editForm.mobiles || [])];
-                                  newMobiles[i] = e.target.value;
+                                  newMobiles[i] = sanitizedValue;
                                   setEditForm({ ...editForm, mobiles: newMobiles });
                                 }}
                               />

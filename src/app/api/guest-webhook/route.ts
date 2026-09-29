@@ -1,57 +1,51 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase"; 
 
-// Helper function to convert "DD/MM/YYYY" to "YYYY-MM-DD" for PostgreSQL
-function formatDateForPostgres(dateStr: string | null) {
-  if (!dateStr || typeof dateStr !== "string") return null;
-  const parts = dateStr.trim().split(/[\/\-]/);
-  if (parts.length === 3) {
-    let [day, month, year] = parts;
-    // If it's already in YYYY-MM-DD format
-    if (day.length === 4) return dateStr;
-    // Convert DD/MM/YYYY -> YYYY-MM-DD
-    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-  }
-  return null;
-}
-
-export async function POST(request: Request) {
+export async function POST(req: Request) {
   try {
-    const body = await request.json();
+    const payload = await req.json();
 
-    const { data, error } = await supabase.from("guests").insert([
-      {
-        tab_category: body.tab_category,
-        family: body.family,
-        count: body.count,
-        jain: body.jain === "Yes" || body.jain === true,
-        mobile_no: body.mobile_no || null,
-        side: body.side || null,
+    // Clean up the name (removes extra spaces at the beginning or end)
+    const cleanFamilyName = payload.family ? payload.family.trim() : "Unknown";
 
-        // Safely format dates to YYYY-MM-DD
-        arrival_date: formatDateForPostgres(body.arrival_date),
-        arrival_time: body.arrival_time || null,
-        origin_place: body.origin_place || null,
-        transportaion_name: body.transportaion_name || null,
+    // 1. Check if this guest already exists (using ilike for case-insensitive matching)
+    const { data: existingGuests, error: searchError } = await supabase
+      .from("guests")
+      .select("id")
+      .ilike("family", cleanFamilyName) // Ignores uppercase/lowercase differences
+      .eq("tab_category", payload.tab_category)
+      .limit(1); // Prevents crashing if there are accidental duplicates
 
-        departure_date: formatDateForPostgres(body.departure_date),
-        departure_time: body.departure_time || null,
-        transportation_departure: body.transportation_departure || null,
+    if (searchError) throw searchError;
 
-        room_no: null,
-        hotel_name: null,
-        arrived: false,
-      },
-    ]);
+    if (existingGuests && existingGuests.length > 0) {
+      // 2. IF THEY EXIST: Update their existing record
+      const { error: updateError } = await supabase
+        .from("guests")
+        .update({
+          ...payload,
+          family: cleanFamilyName // Save the clean version
+        })
+        .eq("id", existingGuests[0].id);
 
-    if (error) {
-      console.error("Supabase Error:", error);
-      throw error;
+      if (updateError) throw updateError;
+      return NextResponse.json({ message: "Guest updated successfully" }, { status: 200 });
+      
+    } else {
+      // 3. IF THEY ARE NEW: Insert a new record
+      const { error: insertError } = await supabase
+        .from("guests")
+        .insert([{
+          ...payload,
+          family: cleanFamilyName // Save the clean version
+        }]);
+
+      if (insertError) throw insertError;
+      return NextResponse.json({ message: "Guest added successfully" }, { status: 201 });
     }
 
-    return NextResponse.json({ success: true, data });
   } catch (error: any) {
-    console.error("Webhook Error:", error.message);
+    console.error("Webhook Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
