@@ -43,10 +43,8 @@ const formatTime12hr = (timeStr: string | null) => {
   }
 };
 
-// Helper to extract up to 6 mobile numbers from a space/comma separated string
 const parseMobileNumbers = (mobileStr: string | null) => {
   if (!mobileStr) return [];
-  // Split by spaces or commas and remove empty strings
   return mobileStr.split(/[\s,]+/).filter(Boolean).slice(0, 6);
 };
 
@@ -57,7 +55,6 @@ export default function GuestsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<any>({});
   
-  // Delete Confirmation State
   const [guestToDelete, setGuestToDelete] = useState<string | null>(null);
 
   const filteredGuests = useMemo(() => 
@@ -66,6 +63,25 @@ export default function GuestsPage() {
 
   const currentTabObj = TABS.find(t => t.name === activeTab);
   const totalPeople = filteredGuests.reduce((acc, g) => acc + (Number(g.count) || 0), 0);
+
+  // Bulletproof side detection to recover any guests whose N/P was wiped out
+  const getDerivedSide = (guest: any) => {
+    if (guest.side && guest.side !== "-") return guest.side;
+
+    if (guest.tab_category.includes("Nimisha")) return "N";
+    if (guest.tab_category.includes("Prajanya")) return "P";
+
+    const stayingMatch = dbGuests.find(g => 
+      g.family === guest.family && g.tab_category.includes("Staying")
+    );
+    
+    if (stayingMatch) {
+      if (stayingMatch.tab_category.includes("Nimisha")) return "N";
+      if (stayingMatch.tab_category.includes("Prajanya")) return "P";
+    }
+    
+    return "-";
+  };
 
   const isInEvent = (guest: any, eventName: string) => {
     return dbGuests.some(g => g.tab_category === eventName && g.family === guest.family);
@@ -111,8 +127,13 @@ export default function GuestsPage() {
     const originalGuest = dbGuests.find(g => g.id === id);
     if (!originalGuest) return;
 
-    // Join the 6 inputs back into a single string separated by spaces
     const joinedMobiles = (editForm.mobiles || []).filter(Boolean).join(" ");
+
+    // FIX: Forcefully protect and set the N/P side so it doesn't get wiped out to `null` 
+    // when you save from the Staying tabs (where the dropdown is hidden)
+    let sideToSave = editForm.side;
+    if (activeTab.includes("Nimisha")) sideToSave = "N";
+    if (activeTab.includes("Prajanya")) sideToSave = "P";
 
     const { error } = await supabase.from("guests").update({
       room_no: editForm.room_no,
@@ -128,7 +149,7 @@ export default function GuestsPage() {
       transportation_departure: editForm.transportation_departure,
       hotel_name: editForm.hotel_name,
       jain: editForm.jain !== undefined ? editForm.jain : false,
-      side: editForm.side || null
+      side: sideToSave || null
     }).eq("family", originalGuest.family);
 
     if (error) {
@@ -174,7 +195,7 @@ export default function GuestsPage() {
               "No. of People": g.count,
             };
 
-            if (!isStaying) baseRow["N/P"] = g.side || "-";
+            if (!isStaying) baseRow["N/P"] = getDerivedSide(g); 
             baseRow["Jain"] = g.jain ? "Yes" : "No";
 
             if (isStaying) {
@@ -226,9 +247,11 @@ export default function GuestsPage() {
   const startEditing = (guest: any) => {
     setEditingId(guest.id);
     const existingMobiles = parseMobileNumbers(guest.mobile_no);
+    const currentSide = getDerivedSide(guest);
+    
     setEditForm({
       ...guest,
-      // Create an array of exactly 6 slots for the edit form
+      side: currentSide === "-" ? "" : currentSide,
       mobiles: Array.from({ length: 6 }, (_, i) => existingMobiles[i] || "")
     });
   };
@@ -340,7 +363,6 @@ export default function GuestsPage() {
                 <tr key={g.id} className={`border-b hover:bg-slate-50 ${g.arrived ? "text-emerald-800 line-through bg-green-50 font-medium" : ""}`}>
                   {editingId === g.id ? (
                     <>
-                      {/* EDIT MODE */}
                       <td className="p-3 text-slate-500">{idx + 1}</td>
                       {activeTab.includes("Staying") && (
                         <td className="p-2"><input className="border w-full p-1 rounded" placeholder="Room No" value={editForm.room_no || ''} onChange={e => setEditForm({...editForm, room_no: e.target.value})} /></td>
@@ -402,18 +424,16 @@ export default function GuestsPage() {
                             </Button>
                           </td>
                           
-                          {/* 6 Phone Numbers Input Fields */}                          
                           <td className="p-2 min-w-[140px] flex flex-col gap-1">
                             {Array.from({ length: 6 }).map((_, i) => (
                               <input
                                 key={i}
                                 type="tel"
-                                maxLength={12} // Prevents chaining 20 digits together in one box!
+                                maxLength={12}
                                 className="border w-full p-1 rounded text-xs"
                                 placeholder={`Mobile ${i + 1}`}
                                 value={editForm.mobiles?.[i] || ''}
                                 onChange={e => {
-                                  // Automatically remove accidental spaces or letters while typing
                                   const sanitizedValue = e.target.value.replace(/[^0-9+]/g, '');
                                   const newMobiles = [...(editForm.mobiles || [])];
                                   newMobiles[i] = sanitizedValue;
@@ -448,7 +468,6 @@ export default function GuestsPage() {
                     </>
                   ) : (
                     <>
-                      {/* VIEW MODE */}
                       <td className="p-3 text-slate-500">{idx + 1}</td>
                       {activeTab.includes("Staying") && <td className="p-3">{g.room_no || '-'}</td>}
                       {activeTab.includes("Staying") && (
@@ -468,7 +487,7 @@ export default function GuestsPage() {
                       
                       {!activeTab.includes("Staying") && (
                         <td className="p-3 text-center font-bold text-slate-700">
-                          {g.side || '-'}
+                          {getDerivedSide(g)}
                         </td>
                       )}
 
@@ -500,7 +519,6 @@ export default function GuestsPage() {
                             </Button>
                           </td>
 
-                          {/* Dynamic Mobile Display up to 6 numbers */}
                           <td className="p-3 whitespace-nowrap">
                             <div className="flex flex-col gap-1">
                               {(() => {
