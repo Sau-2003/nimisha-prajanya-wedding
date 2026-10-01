@@ -606,7 +606,7 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick }: any) {
                   <button
                     type="button"
                     onClick={() => setDeleteTarget({ type: "image", index: idx })}
-                    className="absolute -top-2 -right-2 bg-red-100 text-red-600 rounded-full p-1 opacity-0 group-hover/image:opacity-100 transition shadow"
+                    className="absolute -top-2 -right-2 bg-red-100 text-red-600 rounded-full p-1 opacity-50 group-hover/image:opacity-100 transition shadow"
                     title="Remove Image"
                   >
                     <X className="w-3.5 h-3.5" />
