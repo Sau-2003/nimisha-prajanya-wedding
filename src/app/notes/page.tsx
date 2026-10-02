@@ -2,12 +2,27 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Lock, Unlock, Plus,  Trash2, Image as ImageIcon, X, Pin, BookIcon, 
-        PlusCircle, MinusCircle, Grid, Bold, Italic, Strikethrough, GripVertical} from "lucide-react";
+import { 
+  Lock, 
+  Unlock,
+  Plus, 
+  Trash2, 
+  Image as ImageIcon, 
+  X, 
+  Pin, 
+  BookIcon, 
+  PlusCircle, 
+  MinusCircle, 
+  Grid,
+  Bold,
+  Italic,
+  Strikethrough,
+  GripVertical
+} from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
 import { useNotes } from "@/hooks/useNotes";
-import { usePermissions } from "@/hooks/usePermissions"; 
+import { usePermissions } from "@/hooks/usePermissions";
 
 // Import Dnd-Kit components
 import {
@@ -159,6 +174,7 @@ function EditableCell({
     <div
       ref={ref}
       contentEditable
+      onPointerDown={(e) => e.stopPropagation()} // MOBILE FIX
       onInput={handleInput}
       onBlur={handleBlur}
       className={`outline-none cursor-text empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400/60 [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_strike]:line-through [&_s]:line-through ${className}`}
@@ -172,7 +188,7 @@ function EditableCell({
 function ExcelTableEditor({ 
   tableData, 
   onChange,
-  isAdmin // <-- Added isAdmin prop
+  isAdmin 
 }: { 
   tableData: any; 
   onChange: (newData: string[][]) => void; 
@@ -216,7 +232,7 @@ function ExcelTableEditor({
   };
 
   return (
-    <div className="mt-4 space-y-3">
+    <div className="mt-4 space-y-3" onPointerDown={(e) => e.stopPropagation()}>
       <div className="flex items-center justify-between bg-slate-100 p-2 rounded-lg text-xs border border-slate-200">
         <span className="font-semibold text-slate-700 flex items-center gap-1.5">
           <Grid className="w-4 h-4 text-emerald-700" /> Spreadsheet
@@ -321,7 +337,7 @@ function ExcelTableEditor({
 }
 
 // --- CARD COMPONENT FOR EACH INDIVIDUAL NOTE ---
-function NotesCard({ gift, onDelete, onUpdate, onImageClick, isAdmin }: any) {
+function NotesCard({ gift, onDelete, onUpdate, onImageClick, isAdmin, onOpenPrivacy }: any) {
   const {
     attributes,
     listeners,
@@ -478,6 +494,7 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick, isAdmin }: any) {
       <div className="absolute top-6 right-6 flex items-center gap-2 z-20">
         <button
           type="button"
+          onPointerDown={(e) => e.stopPropagation()} // MOBILE FIX
           onMouseMove={(e) => handleTooltipMove(e, isPinned ? "Unpin Note" : "Pin Note")}
           onMouseLeave={handleTooltipLeave}
           onClick={(e) => {
@@ -499,11 +516,13 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick, isAdmin }: any) {
           <>
             <button
               type="button"
-              onMouseMove={(e) => handleTooltipMove(e, gift.is_private ? "Make Public" : "Make Private")}
+              onPointerDown={(e) => e.stopPropagation()} // MOBILE FIX
+              onMouseMove={(e) => handleTooltipMove(e, "Privacy Settings")}
               onMouseLeave={handleTooltipLeave}
               onClick={(e) => {
+                e.preventDefault();
                 e.stopPropagation();
-                onUpdate(gift.id, { is_private: !gift.is_private });
+                onOpenPrivacy(gift);
                 setActiveTooltip(null);
               }}
               className={`p-2 rounded-lg transition-all shadow-sm ${
@@ -517,9 +536,11 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick, isAdmin }: any) {
             
             <button
               type="button"
+              onPointerDown={(e) => e.stopPropagation()} // MOBILE FIX
               onMouseMove={(e) => handleTooltipMove(e, "Delete Note")}
               onMouseLeave={handleTooltipLeave}
               onClick={(e) => {
+                e.preventDefault();
                 e.stopPropagation();
                 setDeleteTarget({ type: "item" });
                 setActiveTooltip(null);
@@ -539,7 +560,7 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick, isAdmin }: any) {
           </div>
           {gift.is_private && (
             <span className="bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1">
-              <Lock className="w-3 h-3" /> Hidden
+              <Lock className="w-3 h-3" /> Private
             </span>
           )}
         </div>
@@ -555,26 +576,30 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick, isAdmin }: any) {
 
       <div className="w-full px-6 md:px-10 pb-6 space-y-4">
         {isEditing ? (
-          <EditableCell
-            value={content}
-            onChange={(val) => setContent(val)}
-            onBlur={() => {
-              onUpdate(gift.id, { title, content });
-              setIsEditing(false);
-            }}
-            autoFocus
-            placeholder="Add description or links..."
-            className="w-full border border-emerald-300 p-3 rounded-lg outline-none focus:ring-2 focus:ring-emerald-600 transition-shadow min-h-[60px] bg-emerald-50/30 text-sm text-slate-700"
-          />
+          <div onPointerDown={(e) => e.stopPropagation()}>
+            <EditableCell
+              value={content}
+              onChange={(val) => setContent(val)}
+              onBlur={() => {
+                onUpdate(gift.id, { title, content });
+                setIsEditing(false);
+              }}
+              autoFocus
+              placeholder="Add description or links..."
+              className="w-full border border-emerald-300 p-3 rounded-lg outline-none focus:ring-2 focus:ring-emerald-600 transition-shadow min-h-[60px] bg-emerald-50/30 text-sm text-slate-700"
+            />
+          </div>
         ) : content ? (
           <div
             onClick={handleBodyClick}
+            onPointerDown={(e) => e.stopPropagation()} // MOBILE FIX
             className="border border-transparent hover:border-slate-200 rounded-lg p-2 whitespace-pre-wrap break-words cursor-text min-h-[50px] transition-colors text-slate-600 text-sm [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_strike]:line-through [&_s]:line-through [&_a]:text-blue-600 [&_a]:underline hover:[&_a]:text-blue-800"
             dangerouslySetInnerHTML={{ __html: linkifyHtml(content) }}
           />
         ) : !showTable ? (
           <div
             onClick={() => setIsEditing(true)}
+            onPointerDown={(e) => e.stopPropagation()} // MOBILE FIX
             className="border border-transparent hover:border-slate-200 rounded-lg p-2 whitespace-pre-wrap break-words cursor-text min-h-[50px] transition-colors text-slate-600 text-sm"
           >
             <span className="text-slate-400 italic">Click to add description/links...</span>
@@ -592,6 +617,7 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick, isAdmin }: any) {
               <div className="mt-2 flex justify-end">
                 <button
                   type="button"
+                  onPointerDown={(e) => e.stopPropagation()} // MOBILE FIX
                   onClick={() => {
                     setShowTable(false);
                     onUpdate(gift.id, { table_data: null });
@@ -611,7 +637,7 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick, isAdmin }: any) {
               const imgUrl = typeof image === "string" ? image : image.url;
               const imgCaption = typeof image === "string" ? "" : image.caption || "";
               return (
-                <div key={idx} className="relative inline-block group/image">
+                <div key={idx} className="relative inline-block group/image" onPointerDown={(e) => e.stopPropagation()}>
                   <img
                     src={imgUrl}
                     alt="Uploaded note graphic"
@@ -648,7 +674,7 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick, isAdmin }: any) {
           </div>
         )}
 
-        <div className="pt-2 flex flex-wrap items-center gap-2">
+        <div className="pt-2 flex flex-wrap items-center gap-2" onPointerDown={(e) => e.stopPropagation()}>
           <input
             type="file"
             accept="image/*"
@@ -687,6 +713,7 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick, isAdmin }: any) {
         </div>
       )}
 
+      {/* DELETE DIALOG AT CARD LEVEL */}
       <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -712,10 +739,20 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick, isAdmin }: any) {
 // --- MAIN PAGE ---
 export default function NotePage() {
   const { notes, loading } = useNotes();
-  const { isAdmin } = usePermissions(); // <-- Add permissions check
+  const { isAdmin } = usePermissions(); 
+  
   const [localNote, setLocalNote] = useState<any[]>([]);
   const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
+  
+  const [allEmails, setAllEmails] = useState<string[]>([]);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string>("");
 
+  // TOP LEVEL PRIVACY MODAL STATE (Fixes Mobile Freeze)
+  const [privacyModalNote, setPrivacyModalNote] = useState<any | null>(null);
+  const [tempIsPrivate, setTempIsPrivate] = useState(false);
+  const [tempAllowedUsers, setTempAllowedUsers] = useState<string[]>([]);
+
+  // DND Sensors optimized for mobile
   const sensors = useSensors(
     useSensor(MouseSensor, {
       activationConstraint: {
@@ -724,7 +761,7 @@ export default function NotePage() {
     }),
     useSensor(TouchSensor, {
       activationConstraint: {
-        delay: 200,
+        delay: 250, 
         tolerance: 5,
       },
     }),
@@ -738,6 +775,20 @@ export default function NotePage() {
       setLocalNote(sortNotesArray(notes));
     }
   }, [notes]);
+
+  // Fetch all user emails to populate the Privacy Checklist
+  useEffect(() => {
+    const fetchEmails = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.email) setCurrentUserEmail(user.email);
+
+      const { data } = await supabase.from('user_roles').select('email');
+      if (data) {
+        setAllEmails(data.map(d => d.email));
+      }
+    };
+    fetchEmails();
+  }, []);
 
   const handleDragEnd = (event: any) => {
     const { active, over } = event;
@@ -755,7 +806,6 @@ export default function NotePage() {
       const activePinned = Boolean(activeItem.is_pinned);
       const overPinned = Boolean(overItem.is_pinned);
 
-      // Prevent dragging a pinned note into unpinned territory or vice versa
       if (activePinned !== overPinned) {
         return items;
       }
@@ -772,6 +822,7 @@ export default function NotePage() {
       image_urls: [],
       is_pinned: false,
       is_private: false,
+      allowed_users: [], 
       table_data: null,
       created_at: new Date().toISOString(),
     };
@@ -809,6 +860,7 @@ export default function NotePage() {
       image_urls: [],
       is_pinned: false,
       is_private: false,
+      allowed_users: [],
       table_data: defaultTable, 
       created_at: new Date().toISOString(),
     };
@@ -848,12 +900,22 @@ export default function NotePage() {
     }
   };
 
+  const openPrivacyModal = (note: any) => {
+    setPrivacyModalNote(note);
+    setTempIsPrivate(note.is_private || false);
+    setTempAllowedUsers(note.allowed_users || []);
+  };
+
   if (loading) {
     return <div className="p-12 text-center text-emerald-600 font-bold">Loading Notes...</div>;
   }
 
-  // Filter notes so non-admins don't see private ones
-  const visibleNotes = localNote.filter((gift: any) => isAdmin || !gift.is_private);
+  // --- FILTER VISIBILITY ---
+  const visibleNotes = localNote.filter((gift: any) => 
+    isAdmin || 
+    !gift.is_private || 
+    (gift.allowed_users && gift.allowed_users.includes(currentUserEmail))
+  );
 
   return (
     <div className="p-6 md:p-12 max-w-4xl mx-auto min-h-screen space-y-8">
@@ -906,15 +968,95 @@ export default function NotePage() {
                   key={gift.id}
                   gift={gift}
                   isAdmin={isAdmin}
+                  allEmails={allEmails}
                   onDelete={handleDelete}
                   onUpdate={handleUpdate}
                   onImageClick={setFullScreenImage}
+                  onOpenPrivacy={openPrivacyModal}
                 />
               ))
             )}
           </div>
         </SortableContext>
       </DndContext>
+
+      {/* --- TOP-LEVEL PRIVACY MODAL DIALOG (Fixed for Mobile Touch) --- */}
+      <Dialog open={!!privacyModalNote} onOpenChange={(open) => !open && setPrivacyModalNote(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2">
+              <Lock className="w-5 h-5 text-amber-500" /> Note Privacy Settings
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-5">
+            <div 
+              onClick={() => setTempIsPrivate(!tempIsPrivate)}
+              className="flex items-center gap-3 cursor-pointer p-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors select-none"
+            >
+              <input
+                type="checkbox"
+                checked={tempIsPrivate}
+                readOnly
+                className="w-5 h-5 text-amber-500 rounded focus:ring-amber-500 border-slate-300 pointer-events-none"
+              />
+              <span className="font-semibold text-slate-800">Make this note private</span>
+            </div>
+
+            {tempIsPrivate && (
+              <div className="space-y-3 pl-2">
+                <p className="text-sm font-medium text-slate-600">Select who can view this note:</p>
+                <div className="max-h-48 overflow-y-auto space-y-2 border border-slate-100 p-3 rounded-lg bg-white shadow-inner">
+                  {allEmails.length === 0 ? (
+                    <p className="text-xs text-slate-400 italic">No users found. Go to Admin page to add users.</p>
+                  ) : (
+                    allEmails.map((email: string) => (
+                      <div 
+                        key={email}
+                        onClick={() => {
+                          if (tempAllowedUsers.includes(email)) {
+                            setTempAllowedUsers(tempAllowedUsers.filter((u: string) => u !== email));
+                          } else {
+                            setTempAllowedUsers([...tempAllowedUsers, email]);
+                          }
+                        }}
+                        className="flex items-center gap-2.5 cursor-pointer p-2 hover:bg-slate-50 rounded transition-colors select-none"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={tempAllowedUsers.includes(email)}
+                          readOnly
+                          className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500 pointer-events-none"
+                        />
+                        <span className="text-sm text-slate-700 truncate">{email}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
+            <Button variant="outline" onClick={() => setPrivacyModalNote(null)}>
+              Cancel
+            </Button>
+            <Button 
+              className="bg-emerald-600 hover:bg-emerald-700 text-white" 
+              onClick={() => {
+                if (privacyModalNote) {
+                  handleUpdate(privacyModalNote.id, { 
+                    is_private: tempIsPrivate, 
+                    allowed_users: tempIsPrivate ? tempAllowedUsers : [] 
+                  });
+                }
+                setPrivacyModalNote(null);
+              }}
+            >
+              Save Settings
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      {/* --- END PRIVACY MODAL --- */}
 
       <Dialog open={!!fullScreenImage} onOpenChange={(open) => !open && setFullScreenImage(null)}>
         <DialogContent className="max-w-4xl p-1 bg-transparent border-none shadow-none [&>button]:text-white [&>button]:bg-black/50 [&>button]:rounded-full [&>button]:hover:bg-black/80">

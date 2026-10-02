@@ -156,6 +156,7 @@ function EditableCell({
     <div
       ref={ref}
       contentEditable
+      onPointerDown={(e) => e.stopPropagation()} // MOBILE FIX
       onInput={handleInput}
       onBlur={handleBlur}
       onKeyDown={onKeyDown}
@@ -187,11 +188,8 @@ export default function EventWorkspacePage() {
   const { items, loading, addItem, updateItem, deleteItem, moveItem } = useEventItems(rawEventName);
   const { teamMembers, addTeamMember } = useTeamMembers();
   const { dbVendors } = useVendors();
-  
-  // PERMISSIONS (This is what was causing the error if missing!)
   const { isAdmin } = usePermissions(); 
   
-  // State for email lookup (used in privacy modal and filtering)
   const [allEmails, setAllEmails] = useState<string[]>([]);
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("");
 
@@ -227,7 +225,6 @@ export default function EventWorkspacePage() {
   const [expandedMedia, setExpandedMedia] = useState<{ url: string, type: string } | null>(null);
   const [itemToDelete, setItemToDelete] = useState<{ categoryId: CategoryId; itemId: string } | null>(null);
 
-  // PRIVACY MODAL STATE
   const [privacyModalItem, setPrivacyModalItem] = useState<any | null>(null);
   const [tempIsPrivate, setTempIsPrivate] = useState(false);
   const [tempAllowedUsers, setTempAllowedUsers] = useState<string[]>([]);
@@ -236,7 +233,6 @@ export default function EventWorkspacePage() {
   const completedTasks = items?.taskDone?.length || 0;
   const percentComplete = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
 
-  // Fetch all user emails to populate the Privacy Checklist
   useEffect(() => {
     const fetchEmails = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -266,9 +262,9 @@ export default function EventWorkspacePage() {
       imageUrl: newItemMedia?.url || undefined,
       mediaType: newItemMedia?.type || undefined, 
       is_private: false,
-      allowed_users: [], // Default empty allowed users
+      allowed_users: [], 
       created_at: new Date().toISOString() 
-    };
+    } as any; 
 
     await addItem(targetCategory as CategoryId, payload);
 
@@ -451,7 +447,6 @@ export default function EventWorkspacePage() {
 
     const list = items?.[categoryId] || [];
     
-    // FILTER: Only show item if user is Admin OR item is NOT private OR user's email is allowed
     const visibleList = list.filter((item: any) => 
       isAdmin || 
       !item.is_private || 
@@ -588,7 +583,7 @@ export default function EventWorkspacePage() {
         })}
       </div>
 
-      {/* --- PRIVACY MODAL DIALOG --- */}
+      {/* --- PRIVACY MODAL DIALOG (MOBILE FIXED) --- */}
       <Dialog open={!!privacyModalItem} onOpenChange={(open) => !open && setPrivacyModalItem(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -597,15 +592,19 @@ export default function EventWorkspacePage() {
             </DialogTitle>
           </DialogHeader>
           <div className="py-4 space-y-5">
-            <label className="flex items-center gap-3 cursor-pointer p-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors">
+            {/* MOBILE FIX: Entire row is clickable via onClick */}
+            <div 
+              onClick={() => setTempIsPrivate(!tempIsPrivate)}
+              className="flex items-center gap-3 cursor-pointer p-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors select-none"
+            >
               <input
                 type="checkbox"
                 checked={tempIsPrivate}
-                onChange={(e) => setTempIsPrivate(e.target.checked)}
-                className="w-5 h-5 text-amber-500 rounded focus:ring-amber-500 border-slate-300"
+                readOnly
+                className="w-5 h-5 text-amber-500 rounded focus:ring-amber-500 border-slate-300 pointer-events-none"
               />
               <span className="font-semibold text-slate-800">Make this item private</span>
-            </label>
+            </div>
 
             {tempIsPrivate && (
               <div className="space-y-3 pl-2">
@@ -615,21 +614,25 @@ export default function EventWorkspacePage() {
                     <p className="text-xs text-slate-400 italic">No users found. Go to Admin page to add users.</p>
                   ) : (
                     allEmails.map((email: string) => (
-                      <label key={email} className="flex items-center gap-2.5 cursor-pointer p-1.5 hover:bg-slate-50 rounded transition-colors">
+                      <div 
+                        key={email}
+                        onClick={() => {
+                          if (tempAllowedUsers.includes(email)) {
+                            setTempAllowedUsers(tempAllowedUsers.filter((u: string) => u !== email));
+                          } else {
+                            setTempAllowedUsers([...tempAllowedUsers, email]);
+                          }
+                        }}
+                        className="flex items-center gap-2.5 cursor-pointer p-2 hover:bg-slate-50 rounded transition-colors select-none"
+                      >
                         <input
                           type="checkbox"
                           checked={tempAllowedUsers.includes(email)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setTempAllowedUsers([...tempAllowedUsers, email]);
-                            } else {
-                              setTempAllowedUsers(tempAllowedUsers.filter((u: string) => u !== email));
-                            }
-                          }}
-                          className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                          readOnly
+                          className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500 pointer-events-none"
                         />
                         <span className="text-sm text-slate-700 truncate">{email}</span>
-                      </label>
+                      </div>
                     ))
                   )}
                 </div>
@@ -647,7 +650,7 @@ export default function EventWorkspacePage() {
                   updateItem(privacyModalItem.id, { 
                     is_private: tempIsPrivate, 
                     allowed_users: tempIsPrivate ? tempAllowedUsers : [] 
-                  });
+                  } as any); 
                 }
                 setPrivacyModalItem(null);
               }}
@@ -1192,6 +1195,7 @@ export default function EventWorkspacePage() {
                               {/* ADMIN TOGGLE FOR PRIVACY */}
                               {isAdmin && (
                                 <button 
+                                  onPointerDown={(e) => e.stopPropagation()} // MOBILE FIX
                                   onClick={() => {
                                     setPrivacyModalItem(item);
                                     setTempIsPrivate(item.is_private || false);
