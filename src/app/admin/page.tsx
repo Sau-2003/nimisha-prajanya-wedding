@@ -90,7 +90,7 @@ export default function AdminPage() {
           Access Management
         </h1>
         <p className="text-slate-500 mt-2">
-          Manage who can access restricted pages like the Budget.
+          Manage who can access restricted things.
         </p>
       </div>
 

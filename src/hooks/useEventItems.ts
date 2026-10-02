@@ -10,6 +10,8 @@ export type WorkspaceItem = {
   assignedTo?: string; // Added assignedTo property
   imageUrl?: string;
   created_at: string;
+  is_private?: boolean;      
+  allowed_users?: string[];
 };
 
 type GroupedItems = Record<CategoryId, WorkspaceItem[]>;

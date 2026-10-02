@@ -9,13 +9,14 @@ import {
   Gamepad2, Store, Lightbulb, Shirt, ExternalLink, 
   Plus, Trash2, Check, RotateCcw, Pencil, X, Calendar, 
   Image as ImageIcon, User, ChevronDown, Bold, Italic, 
-  Strikethrough, Loader2, Film, Music, Play, Phone, ShoppingCart, PackageCheck
+  Strikethrough, Loader2, Film, Music, Play, Phone, ShoppingCart, PackageCheck, Lock, Unlock
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useEventItems, CategoryId, WorkspaceItem } from '@/hooks/useEventItems';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
 import { useVendors } from '@/hooks/useVendors';
+import { usePermissions } from "@/hooks/usePermissions";
 
 const BUCKET_NAME = "event-media";
 
@@ -185,9 +186,15 @@ export default function EventWorkspacePage() {
 
   const { items, loading, addItem, updateItem, deleteItem, moveItem } = useEventItems(rawEventName);
   const { teamMembers, addTeamMember } = useTeamMembers();
-  
   const { dbVendors } = useVendors();
   
+  // PERMISSIONS (This is what was causing the error if missing!)
+  const { isAdmin } = usePermissions(); 
+  
+  // State for email lookup (used in privacy modal and filtering)
+  const [allEmails, setAllEmails] = useState<string[]>([]);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string>("");
+
   const assignedVendors = (dbVendors || []).filter(v => 
     v.events?.some(e => e.replace(/-/g, ' ').toLowerCase() === formattedEventName.toLowerCase())
   );
@@ -220,9 +227,28 @@ export default function EventWorkspacePage() {
   const [expandedMedia, setExpandedMedia] = useState<{ url: string, type: string } | null>(null);
   const [itemToDelete, setItemToDelete] = useState<{ categoryId: CategoryId; itemId: string } | null>(null);
 
+  // PRIVACY MODAL STATE
+  const [privacyModalItem, setPrivacyModalItem] = useState<any | null>(null);
+  const [tempIsPrivate, setTempIsPrivate] = useState(false);
+  const [tempAllowedUsers, setTempAllowedUsers] = useState<string[]>([]);
+
   const totalTasks = (items?.tasks?.length || 0) + (items?.taskDone?.length || 0);
   const completedTasks = items?.taskDone?.length || 0;
   const percentComplete = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
+
+  // Fetch all user emails to populate the Privacy Checklist
+  useEffect(() => {
+    const fetchEmails = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.email) setCurrentUserEmail(user.email);
+
+      const { data } = await supabase.from('user_roles').select('email');
+      if (data) {
+        setAllEmails(data.map(d => d.email));
+      }
+    };
+    fetchEmails();
+  }, []);
 
   const handleAddItem = async () => {
     const plainTextContent = newItemText.replace(/<[^>]*>?/gm, '').trim();
@@ -239,6 +265,8 @@ export default function EventWorkspacePage() {
       assignedTo: newItemAssignedTo.trim() || undefined,
       imageUrl: newItemMedia?.url || undefined,
       mediaType: newItemMedia?.type || undefined, 
+      is_private: false,
+      allowed_users: [], // Default empty allowed users
       created_at: new Date().toISOString() 
     };
 
@@ -422,9 +450,17 @@ export default function EventWorkspacePage() {
     }
 
     const list = items?.[categoryId] || [];
-    if (list.length === 0) return <p className="text-sm text-slate-400 italic">Empty</p>;
+    
+    // FILTER: Only show item if user is Admin OR item is NOT private OR user's email is allowed
+    const visibleList = list.filter((item: any) => 
+      isAdmin || 
+      !item.is_private || 
+      (item.allowed_users && item.allowed_users.includes(currentUserEmail))
+    );
+    
+    if (visibleList.length === 0) return <p className="text-sm text-slate-400 italic">Empty</p>;
 
-    const sortedList = [...list].sort((a: any, b: any) => 
+    const sortedList = [...visibleList].sort((a: any, b: any) => 
       new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime()
     );
 
@@ -439,7 +475,11 @@ export default function EventWorkspacePage() {
             <li key={item.id} className="flex flex-col">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-start gap-2 truncate">
-                  <span className="text-slate-300 mt-0.5">•</span> 
+                  {item.is_private ? (
+                    <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                  ) : (
+                    <span className="text-slate-300 mt-0.5">•</span> 
+                  )}
                   <span className={`truncate font-medium ${overdue ? 'text-red-600' : 'text-slate-700'}`}>
                     {stripHtml(item.content)}
                   </span>
@@ -451,7 +491,7 @@ export default function EventWorkspacePage() {
                 )}
               </div>
               {item.dueDate && (
-                <div className={`text-[10px] font-medium flex items-center gap-1 ml-4 mt-0.5 ${overdue ? 'text-red-500' : 'text-emerald-600'}`}>
+                <div className={`text-[10px] font-medium flex items-center gap-1 ml-5 mt-0.5 ${overdue ? 'text-red-500' : 'text-emerald-600'}`}>
                   <Calendar className="w-3 h-3" /> {overdue ? "Overdue: " : "Due by "} {formatDate(item.dueDate)}
                 </div>
               )}
@@ -547,6 +587,77 @@ export default function EventWorkspacePage() {
           );
         })}
       </div>
+
+      {/* --- PRIVACY MODAL DIALOG --- */}
+      <Dialog open={!!privacyModalItem} onOpenChange={(open) => !open && setPrivacyModalItem(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2">
+              <Lock className="w-5 h-5 text-amber-500" /> Item Privacy Settings
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-5">
+            <label className="flex items-center gap-3 cursor-pointer p-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors">
+              <input
+                type="checkbox"
+                checked={tempIsPrivate}
+                onChange={(e) => setTempIsPrivate(e.target.checked)}
+                className="w-5 h-5 text-amber-500 rounded focus:ring-amber-500 border-slate-300"
+              />
+              <span className="font-semibold text-slate-800">Make this item private</span>
+            </label>
+
+            {tempIsPrivate && (
+              <div className="space-y-3 pl-2">
+                <p className="text-sm font-medium text-slate-600">Select who can view this item:</p>
+                <div className="max-h-48 overflow-y-auto space-y-2 border border-slate-100 p-3 rounded-lg bg-white shadow-inner">
+                  {allEmails.length === 0 ? (
+                    <p className="text-xs text-slate-400 italic">No users found. Go to Admin page to add users.</p>
+                  ) : (
+                    allEmails.map((email: string) => (
+                      <label key={email} className="flex items-center gap-2.5 cursor-pointer p-1.5 hover:bg-slate-50 rounded transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={tempAllowedUsers.includes(email)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setTempAllowedUsers([...tempAllowedUsers, email]);
+                            } else {
+                              setTempAllowedUsers(tempAllowedUsers.filter((u: string) => u !== email));
+                            }
+                          }}
+                          className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                        />
+                        <span className="text-sm text-slate-700 truncate">{email}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
+            <Button variant="outline" onClick={() => setPrivacyModalItem(null)}>
+              Cancel
+            </Button>
+            <Button 
+              className="bg-emerald-600 hover:bg-emerald-700 text-white" 
+              onClick={() => {
+                if (privacyModalItem) {
+                  updateItem(privacyModalItem.id, { 
+                    is_private: tempIsPrivate, 
+                    allowed_users: tempIsPrivate ? tempAllowedUsers : [] 
+                  });
+                }
+                setPrivacyModalItem(null);
+              }}
+            >
+              Save Settings
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      {/* --- END PRIVACY MODAL --- */}
 
       <Dialog 
         open={!!activeModal} 
@@ -648,7 +759,7 @@ export default function EventWorkspacePage() {
                             {vendor.assigned_vendor || 'Unnamed Vendor'} 
                           </span>
                           <span className="text-[11px] font-medium text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded w-fit mt-0.5">
-                            {vendor.category} • {vendor.status}
+                            {vendor.status}
                           </span>
                         </div>
                         <Button 
@@ -885,9 +996,12 @@ export default function EventWorkspacePage() {
 
               return (
                 <div className="space-y-3 pb-4">
-                  {modalItems.sort((a: any, b: any) => 
-                    new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime()
-                  ).map((item: any) => {
+                  {modalItems
+                    // FILTER: Only show item if user is Admin OR item is NOT private OR email is allowed
+                    .filter((item: any) => isAdmin || !item.is_private || (item.allowed_users && item.allowed_users.includes(currentUserEmail)))
+                    .sort((a: any, b: any) => 
+                      new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime()
+                    ).map((item: any) => {
                     const overdue = activeModal === 'tasks' && isOverdue(item.dueDate || null);
                     const itemMediaType = guessMediaType(item.imageUrl, item.mediaType);
                     const isCompletedItem = currentCategoryKey === 'taskDone' || currentCategoryKey === 'itemsBrought' || currentCategoryKey === 'pujaItemsBrought';
@@ -1006,9 +1120,17 @@ export default function EventWorkspacePage() {
                           <>
                             <div className="flex-1 min-w-0">
                               <div className="flex justify-between items-center mb-1.5">
-                                <span className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">
-                                  {item.created_at || item.createdAt ? formatDate(item.created_at || item.createdAt) : formatDate(new Date().toISOString())}
-                                </span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">
+                                    {item.created_at || item.createdAt ? formatDate(item.created_at || item.createdAt) : formatDate(new Date().toISOString())}
+                                  </span>
+                                  {/* PRIVATE BADGE INDICATOR */}
+                                  {item.is_private && (
+                                    <span className="bg-amber-100 text-amber-800 text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase flex items-center gap-1">
+                                      <Lock className="w-3 h-3" /> Private
+                                    </span>
+                                  )}
+                                </div>
                                 {item.assignedTo && (
                                   <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1">
                                     <User className="w-3 h-3 text-emerald-600" /> {item.assignedTo}
@@ -1067,6 +1189,25 @@ export default function EventWorkspacePage() {
                             </div>
 
                             <div className="flex gap-1.5 shrink-0">
+                              {/* ADMIN TOGGLE FOR PRIVACY */}
+                              {isAdmin && (
+                                <button 
+                                  onClick={() => {
+                                    setPrivacyModalItem(item);
+                                    setTempIsPrivate(item.is_private || false);
+                                    setTempAllowedUsers(item.allowed_users || []);
+                                  }} 
+                                  className={`p-1.5 border rounded-md transition-colors ${
+                                    item.is_private 
+                                      ? "border-amber-200 text-amber-600 bg-amber-50 hover:bg-amber-100" 
+                                      : "border-slate-100 text-slate-400 bg-slate-50 hover:bg-slate-100"
+                                  }`}
+                                  title="Privacy Settings"
+                                >
+                                  {item.is_private ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                                </button>
+                              )}
+
                               <button onClick={() => startEditing(item)} className="p-1.5 border border-slate-100 text-slate-400 bg-slate-50 rounded-md hover:bg-slate-100 hover:text-slate-600" title="Edit">
                                 <Pencil className="w-4 h-4" />
                               </button>
@@ -1105,7 +1246,7 @@ export default function EventWorkspacePage() {
                     );
                   })}
                   
-                  {modalItems.length === 0 && (
+                  {modalItems.filter((item: any) => isAdmin || !item.is_private || (item.allowed_users && item.allowed_users.includes(currentUserEmail))).length === 0 && (
                     <p className="text-center text-slate-400 text-sm py-8 border-2 border-dashed border-slate-100 rounded-xl">No manual entries yet.</p>
                   )}
                 </div>

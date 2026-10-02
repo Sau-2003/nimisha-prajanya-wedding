@@ -2,24 +2,12 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { 
-  Plus, 
-  Trash2, 
-  Image as ImageIcon, 
-  X, 
-  Pin, 
-  BookIcon, 
-  PlusCircle, 
-  MinusCircle, 
-  Grid,
-  Bold,
-  Italic,
-  Strikethrough,
-  GripVertical
-} from "lucide-react";
+import { Lock, Unlock, Plus,  Trash2, Image as ImageIcon, X, Pin, BookIcon, 
+        PlusCircle, MinusCircle, Grid, Bold, Italic, Strikethrough, GripVertical} from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
 import { useNotes } from "@/hooks/useNotes";
+import { usePermissions } from "@/hooks/usePermissions"; 
 
 // Import Dnd-Kit components
 import {
@@ -183,10 +171,12 @@ function EditableCell({
 // --- EXCEL TABLE EDITOR COMPONENT ---
 function ExcelTableEditor({ 
   tableData, 
-  onChange 
+  onChange,
+  isAdmin // <-- Added isAdmin prop
 }: { 
   tableData: any; 
   onChange: (newData: string[][]) => void; 
+  isAdmin?: boolean; 
 }) {
   let grid: string[][] = [["Outfit", "Event", "Date"], ["", "", ""]];
   
@@ -231,22 +221,24 @@ function ExcelTableEditor({
         <span className="font-semibold text-slate-700 flex items-center gap-1.5">
           <Grid className="w-4 h-4 text-emerald-700" /> Spreadsheet
         </span>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleAddRow}
-            className="flex items-center gap-1 px-2 py-1 bg-white hover:bg-slate-200 border rounded text-slate-700 transition"
-          >
-            <PlusCircle className="w-3.5 h-3.5 text-emerald-600" /> Row
-          </button>
-          <button
-            type="button"
-            onClick={handleAddColumn}
-            className="flex items-center gap-1 px-2 py-1 bg-white hover:bg-slate-200 border rounded text-slate-700 transition"
-          >
-            <PlusCircle className="w-3.5 h-3.5 text-emerald-600" /> Column
-          </button>
-        </div>
+        {isAdmin && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleAddRow}
+              className="flex items-center gap-1 px-2 py-1 bg-white hover:bg-slate-200 border rounded text-slate-700 transition"
+            >
+              <PlusCircle className="w-3.5 h-3.5 text-emerald-600" /> Row
+            </button>
+            <button
+              type="button"
+              onClick={handleAddColumn}
+              className="flex items-center gap-1 px-2 py-1 bg-white hover:bg-slate-200 border rounded text-slate-700 transition"
+            >
+              <PlusCircle className="w-3.5 h-3.5 text-emerald-600" /> Column
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-slate-300 shadow-sm bg-white">
@@ -267,7 +259,7 @@ function ExcelTableEditor({
                     placeholder={`Column ${cIdx + 1}`}
                     className="w-full bg-transparent font-semibold text-white focus:bg-emerald-700/50 rounded px-1 min-h-[20px] break-words"
                   />
-                  {colCount > 1 && (
+                  {isAdmin && colCount > 1 && (
                     <button
                       type="button"
                       onClick={() => handleDeleteColumn(cIdx)}
@@ -279,7 +271,7 @@ function ExcelTableEditor({
                   )}
                 </th>
               ))}
-              <th className="w-10 border border-emerald-900 px-1 py-1 text-center"></th>
+              {isAdmin && <th className="w-10 border border-emerald-900 px-1 py-1 text-center"></th>}
             </tr>
           </thead>
 
@@ -306,16 +298,18 @@ function ExcelTableEditor({
                       />
                     </td>
                   ))}
-                  <td className="border border-slate-200 px-1 py-1 text-center bg-slate-50">
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteRow(actualRowIndex)}
-                      className="p-1 text-slate-400 hover:text-red-600 rounded transition"
-                      title="Delete Row"
-                    >
-                      <MinusCircle className="w-3.5 h-3.5" />
-                    </button>
-                  </td>
+                  {isAdmin && (
+                    <td className="border border-slate-200 px-1 py-1 text-center bg-slate-50">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteRow(actualRowIndex)}
+                        className="p-1 text-slate-400 hover:text-red-600 rounded transition"
+                        title="Delete Row"
+                      >
+                        <MinusCircle className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               );
             })}
@@ -327,7 +321,7 @@ function ExcelTableEditor({
 }
 
 // --- CARD COMPONENT FOR EACH INDIVIDUAL NOTE ---
-function NotesCard({ gift, onDelete, onUpdate, onImageClick }: any) {
+function NotesCard({ gift, onDelete, onUpdate, onImageClick, isAdmin }: any) {
   const {
     attributes,
     listeners,
@@ -466,18 +460,20 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick }: any) {
         isPinned ? "border-emerald-800 ring-1 ring-emerald-800/20" : "border-slate-200"
       }`}
     >
-      {/* Drag Handle Button */}
-      <div className="absolute top-6 left-3 flex items-center z-20">
-        <button
-          type="button"
-          {...attributes}
-          {...listeners}
-          className="p-1.5 text-slate-400 hover:text-slate-700 cursor-grab active:cursor-grabbing rounded-lg bg-slate-50 border border-slate-200 shadow-sm touch-none"
-          title="Drag to reorder"
-        >
-          <GripVertical className="w-4 h-4" />
-        </button>
-      </div>
+      {/* Drag Handle Button - ONLY FOR ADMINS */}
+      {isAdmin && (
+        <div className="absolute top-6 left-3 flex items-center z-20">
+          <button
+            type="button"
+            {...attributes}
+            {...listeners}
+            className="p-1.5 text-slate-400 hover:text-slate-700 cursor-grab active:cursor-grabbing rounded-lg bg-slate-50 border border-slate-200 shadow-sm touch-none"
+            title="Drag to reorder"
+          >
+            <GripVertical className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       <div className="absolute top-6 right-6 flex items-center gap-2 z-20">
         <button
@@ -499,25 +495,55 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick }: any) {
           <Pin className="w-4 h-4" fill={isPinned ? "currentColor" : "none"} />
         </button>
 
-        <button
-          type="button"
-          onMouseMove={(e) => handleTooltipMove(e, "Delete Note")}
-          onMouseLeave={handleTooltipLeave}
-          onClick={(e) => {
-            e.stopPropagation();
-            setDeleteTarget({ type: "item" });
-            setActiveTooltip(null);
-          }}
-          className="p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg opacity-50 md:group-hover:opacity-100 transition-opacity shadow-sm"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
+        {isAdmin && (
+          <>
+            <button
+              type="button"
+              onMouseMove={(e) => handleTooltipMove(e, gift.is_private ? "Make Public" : "Make Private")}
+              onMouseLeave={handleTooltipLeave}
+              onClick={(e) => {
+                e.stopPropagation();
+                onUpdate(gift.id, { is_private: !gift.is_private });
+                setActiveTooltip(null);
+              }}
+              className={`p-2 rounded-lg transition-all shadow-sm ${
+                gift.is_private 
+                  ? "bg-amber-100 text-amber-700 hover:bg-amber-200 opacity-100" 
+                  : "bg-slate-100 text-slate-500 opacity-50 md:group-hover:opacity-100 hover:bg-slate-200"
+              }`}
+            >
+              {gift.is_private ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+            </button>
+            
+            <button
+              type="button"
+              onMouseMove={(e) => handleTooltipMove(e, "Delete Note")}
+              onMouseLeave={handleTooltipLeave}
+              onClick={(e) => {
+                e.stopPropagation();
+                setDeleteTarget({ type: "item" });
+                setActiveTooltip(null);
+              }}
+              className="p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg opacity-50 md:group-hover:opacity-100 transition-opacity shadow-sm"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </>
+        )}
       </div>
 
-      <div className="pt-6 pb-2 pl-12 md:pl-16 pr-32">
-        <div className="text-[10px] text-slate-400 font-bold tracking-widest uppercase mb-1.5 ml-1">
-          {formattedDate}
+      <div className="pt-6 pb-2 pl-12 md:pl-16 pr-32 flex flex-col justify-center">
+        <div className="flex items-center gap-2 mb-1.5 ml-1">
+          <div className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">
+            {formattedDate}
+          </div>
+          {gift.is_private && (
+            <span className="bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1">
+              <Lock className="w-3 h-3" /> Hidden
+            </span>
+          )}
         </div>
+        
         <EditableCell
           value={title}
           onChange={(val) => setTitle(val)}
@@ -560,19 +586,22 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick }: any) {
             <ExcelTableEditor
               tableData={gift.table_data}
               onChange={(newTableData) => onUpdate(gift.id, { table_data: newTableData })}
+              isAdmin={isAdmin}
             />
-            <div className="mt-2 flex justify-end">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowTable(false);
-                  onUpdate(gift.id, { table_data: null });
-                }}
-                className="text-xs text-red-600 hover:underline flex items-center gap-1"
-              >
-                <X className="w-3.5 h-3.5" /> Delete Spreadsheet
-              </button>
-            </div>
+            {isAdmin && (
+              <div className="mt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowTable(false);
+                    onUpdate(gift.id, { table_data: null });
+                  }}
+                  className="text-xs text-red-600 hover:underline flex items-center gap-1"
+                >
+                  <X className="w-3.5 h-3.5" /> Delete Spreadsheet
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -603,14 +632,16 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick }: any) {
                     placeholder="Caption..."
                     className="mt-1 w-full text-xs text-center border-b border-slate-200 focus:border-emerald-600 outline-none bg-transparent"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setDeleteTarget({ type: "image", index: idx })}
-                    className="absolute -top-2 -right-2 bg-red-100 text-red-600 rounded-full p-1 opacity-50 group-hover/image:opacity-100 transition shadow"
-                    title="Remove Image"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => setDeleteTarget({ type: "image", index: idx })}
+                      className="absolute -top-2 -right-2 bg-red-100 text-red-600 rounded-full p-1 opacity-50 group-hover/image:opacity-100 transition shadow"
+                      title="Remove Image"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -681,6 +712,7 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick }: any) {
 // --- MAIN PAGE ---
 export default function NotePage() {
   const { notes, loading } = useNotes();
+  const { isAdmin } = usePermissions(); // <-- Add permissions check
   const [localNote, setLocalNote] = useState<any[]>([]);
   const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
 
@@ -739,6 +771,7 @@ export default function NotePage() {
       images: [],
       image_urls: [],
       is_pinned: false,
+      is_private: false,
       table_data: null,
       created_at: new Date().toISOString(),
     };
@@ -775,6 +808,7 @@ export default function NotePage() {
       images: [],
       image_urls: [],
       is_pinned: false,
+      is_private: false,
       table_data: defaultTable, 
       created_at: new Date().toISOString(),
     };
@@ -818,6 +852,9 @@ export default function NotePage() {
     return <div className="p-12 text-center text-emerald-600 font-bold">Loading Notes...</div>;
   }
 
+  // Filter notes so non-admins don't see private ones
+  const visibleNotes = localNote.filter((gift: any) => isAdmin || !gift.is_private);
+
   return (
     <div className="p-6 md:p-12 max-w-4xl mx-auto min-h-screen space-y-8">
       <FloatingToolbar />
@@ -855,19 +892,20 @@ export default function NotePage() {
         onDragEnd={handleDragEnd}
       >
         <SortableContext 
-          items={localNote.map((n) => n.id)} 
+          items={visibleNotes.map((n) => n.id)} 
           strategy={verticalListSortingStrategy}
         >
           <div className="space-y-6">
-            {localNote.length === 0 ? (
+            {visibleNotes.length === 0 ? (
               <div className="text-center py-12 text-slate-400 italic">
                 No Notes tracked yet. Click "Add Note Ideas" to get started!
               </div>
             ) : (
-              localNote.map((gift: any) => (
+              visibleNotes.map((gift: any) => (
                 <NotesCard
                   key={gift.id}
                   gift={gift}
+                  isAdmin={isAdmin}
                   onDelete={handleDelete}
                   onUpdate={handleUpdate}
                   onImageClick={setFullScreenImage}
