@@ -156,7 +156,7 @@ function EditableCell({
     <div
       ref={ref}
       contentEditable
-      onPointerDown={(e) => e.stopPropagation()} // MOBILE FIX
+      onPointerDown={(e) => e.stopPropagation()} 
       onInput={handleInput}
       onBlur={handleBlur}
       onKeyDown={onKeyDown}
@@ -236,7 +236,7 @@ export default function EventWorkspacePage() {
   useEffect(() => {
     const fetchEmails = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (user?.email) setCurrentUserEmail(user.email);
+      if (user?.email) setCurrentUserEmail(user.email); // Exact match to Notes logic
 
       const { data } = await supabase.from('user_roles').select('email');
       if (data) {
@@ -261,7 +261,7 @@ export default function EventWorkspacePage() {
       assignedTo: newItemAssignedTo.trim() || undefined,
       imageUrl: newItemMedia?.url || undefined,
       mediaType: newItemMedia?.type || undefined, 
-      is_private: false,
+      is_private: false, // Exact match to Notes logic
       allowed_users: [], 
       created_at: new Date().toISOString() 
     } as any; 
@@ -447,6 +447,7 @@ export default function EventWorkspacePage() {
 
     const list = items?.[categoryId] || [];
     
+    // EXACT match to Notes filter logic
     const visibleList = list.filter((item: any) => 
       isAdmin || 
       !item.is_private || 
@@ -583,7 +584,7 @@ export default function EventWorkspacePage() {
         })}
       </div>
 
-      {/* --- PRIVACY MODAL DIALOG (MOBILE FIXED) --- */}
+      {/* --- PRIVACY MODAL DIALOG --- */}
       <Dialog open={!!privacyModalItem} onOpenChange={(open) => !open && setPrivacyModalItem(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -592,7 +593,6 @@ export default function EventWorkspacePage() {
             </DialogTitle>
           </DialogHeader>
           <div className="py-4 space-y-5">
-            {/* MOBILE FIX: Entire row is clickable via onClick */}
             <div 
               onClick={() => setTempIsPrivate(!tempIsPrivate)}
               className="flex items-center gap-3 cursor-pointer p-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors select-none"
@@ -647,6 +647,7 @@ export default function EventWorkspacePage() {
               className="bg-emerald-600 hover:bg-emerald-700 text-white" 
               onClick={() => {
                 if (privacyModalItem) {
+                  // EXACT match to Notes save logic
                   updateItem(privacyModalItem.id, { 
                     is_private: tempIsPrivate, 
                     allowed_users: tempIsPrivate ? tempAllowedUsers : [] 
@@ -776,7 +777,7 @@ export default function EventWorkspacePage() {
                               .from('vendors')
                               .update({ events: newEvents, updated_at: new Date().toISOString() })
                               .eq('id', vendor.id);
-                              
+                            
                             if (error) {
                               alert("Failed to assign vendor");
                             } else {
@@ -1000,8 +1001,12 @@ export default function EventWorkspacePage() {
               return (
                 <div className="space-y-3 pb-4">
                   {modalItems
-                    // FILTER: Only show item if user is Admin OR item is NOT private OR email is allowed
-                    .filter((item: any) => isAdmin || !item.is_private || (item.allowed_users && item.allowed_users.includes(currentUserEmail)))
+                    // EXACT match to Notes filter logic
+                    .filter((item: any) => 
+                      isAdmin || 
+                      !item.is_private || 
+                      (item.allowed_users && item.allowed_users.includes(currentUserEmail))
+                    )
                     .sort((a: any, b: any) => 
                       new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime()
                     ).map((item: any) => {
@@ -1122,22 +1127,16 @@ export default function EventWorkspacePage() {
                         ) : (
                           <>
                             <div className="flex-1 min-w-0">
-                              <div className="flex justify-between items-center mb-1.5">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">
-                                    {item.created_at || item.createdAt ? formatDate(item.created_at || item.createdAt) : formatDate(new Date().toISOString())}
-                                  </span>
-                                  {/* PRIVATE BADGE INDICATOR */}
-                                  {item.is_private && (
-                                    <span className="bg-amber-100 text-amber-800 text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase flex items-center gap-1">
+                              <div className="flex flex-col mb-1.5">
+                                <span className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">
+                                  {item.created_at || item.createdAt ? formatDate(item.created_at || item.createdAt) : formatDate(new Date().toISOString())}
+                                </span>
+                                {item.is_private && (
+                                  <div className="mt-1">
+                                    <span className="bg-amber-100 text-amber-800 text-[9px] px-2 py-0.5 rounded-full font-bold uppercase inline-flex items-center gap-1">
                                       <Lock className="w-3 h-3" /> Private
                                     </span>
-                                  )}
-                                </div>
-                                {item.assignedTo && (
-                                  <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1">
-                                    <User className="w-3 h-3 text-emerald-600" /> {item.assignedTo}
-                                  </span>
+                                  </div>
                                 )}
                               </div>
                               
@@ -1192,10 +1191,8 @@ export default function EventWorkspacePage() {
                             </div>
 
                             <div className="flex gap-1.5 shrink-0">
-                              {/* ADMIN TOGGLE FOR PRIVACY */}
                               {isAdmin && (
                                 <button 
-                                  onPointerDown={(e) => e.stopPropagation()} // MOBILE FIX
                                   onClick={() => {
                                     setPrivacyModalItem(item);
                                     setTempIsPrivate(item.is_private || false);
@@ -1250,7 +1247,12 @@ export default function EventWorkspacePage() {
                     );
                   })}
                   
-                  {modalItems.filter((item: any) => isAdmin || !item.is_private || (item.allowed_users && item.allowed_users.includes(currentUserEmail))).length === 0 && (
+                  {/* EXACT match to Notes filter logic */}
+                  {modalItems.filter((item: any) => 
+                    isAdmin || 
+                    !item.is_private || 
+                    (item.allowed_users && item.allowed_users.includes(currentUserEmail))
+                  ).length === 0 && (
                     <p className="text-center text-slate-400 text-sm py-8 border-2 border-dashed border-slate-100 rounded-xl">No manual entries yet.</p>
                   )}
                 </div>

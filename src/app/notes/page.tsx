@@ -174,7 +174,7 @@ function EditableCell({
     <div
       ref={ref}
       contentEditable
-      onPointerDown={(e) => e.stopPropagation()} // MOBILE FIX
+      onPointerDown={(e) => e.stopPropagation()} 
       onInput={handleInput}
       onBlur={handleBlur}
       className={`outline-none cursor-text empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400/60 [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_strike]:line-through [&_s]:line-through ${className}`}
@@ -494,7 +494,7 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick, isAdmin, onOpenPriv
       <div className="absolute top-6 right-6 flex items-center gap-2 z-20">
         <button
           type="button"
-          onPointerDown={(e) => e.stopPropagation()} // MOBILE FIX
+          onPointerDown={(e) => e.stopPropagation()} 
           onMouseMove={(e) => handleTooltipMove(e, isPinned ? "Unpin Note" : "Pin Note")}
           onMouseLeave={handleTooltipLeave}
           onClick={(e) => {
@@ -516,7 +516,8 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick, isAdmin, onOpenPriv
           <>
             <button
               type="button"
-              onPointerDown={(e) => e.stopPropagation()} // MOBILE FIX
+              onPointerDown={(e) => e.stopPropagation()} 
+              onMouseDown={(e) => e.stopPropagation()}
               onMouseMove={(e) => handleTooltipMove(e, "Privacy Settings")}
               onMouseLeave={handleTooltipLeave}
               onClick={(e) => {
@@ -525,7 +526,7 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick, isAdmin, onOpenPriv
                 onOpenPrivacy(gift);
                 setActiveTooltip(null);
               }}
-              className={`p-2 rounded-lg transition-all shadow-sm ${
+              className={`p-2 rounded-lg transition-all shadow-sm z-30 cursor-pointer ${
                 gift.is_private 
                   ? "bg-amber-100 text-amber-700 hover:bg-amber-200 opacity-100" 
                   : "bg-slate-100 text-slate-500 opacity-50 md:group-hover:opacity-100 hover:bg-slate-200"
@@ -536,7 +537,7 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick, isAdmin, onOpenPriv
             
             <button
               type="button"
-              onPointerDown={(e) => e.stopPropagation()} // MOBILE FIX
+              onPointerDown={(e) => e.stopPropagation()} 
               onMouseMove={(e) => handleTooltipMove(e, "Delete Note")}
               onMouseLeave={handleTooltipLeave}
               onClick={(e) => {
@@ -554,16 +555,19 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick, isAdmin, onOpenPriv
       </div>
 
       <div className="pt-6 pb-2 pl-12 md:pl-16 pr-32 flex flex-col justify-center">
-        <div className="flex items-center gap-2 mb-1.5 ml-1">
-          <div className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">
-            {formattedDate}
-          </div>
-          {gift.is_private && (
-            <span className="bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1">
-              <Lock className="w-3 h-3" /> Private
-            </span>
-          )}
+        {/* Date on top */}
+        <div className="text-[10px] text-slate-400 font-bold tracking-widest uppercase mb-1 ml-1">
+          {formattedDate}
         </div>
+        
+        {/* Hidden pill placed UNDER the date */}
+        {gift.is_private && (
+          <div className="mb-2 ml-1">
+            <span className="bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider inline-flex items-center gap-1 w-fit">
+              <Lock className="w-3 h-3" /> Hidden
+            </span>
+          </div>
+        )}
         
         <EditableCell
           value={title}
@@ -592,14 +596,14 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick, isAdmin, onOpenPriv
         ) : content ? (
           <div
             onClick={handleBodyClick}
-            onPointerDown={(e) => e.stopPropagation()} // MOBILE FIX
+            onPointerDown={(e) => e.stopPropagation()} 
             className="border border-transparent hover:border-slate-200 rounded-lg p-2 whitespace-pre-wrap break-words cursor-text min-h-[50px] transition-colors text-slate-600 text-sm [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_strike]:line-through [&_s]:line-through [&_a]:text-blue-600 [&_a]:underline hover:[&_a]:text-blue-800"
             dangerouslySetInnerHTML={{ __html: linkifyHtml(content) }}
           />
         ) : !showTable ? (
           <div
             onClick={() => setIsEditing(true)}
-            onPointerDown={(e) => e.stopPropagation()} // MOBILE FIX
+            onPointerDown={(e) => e.stopPropagation()} 
             className="border border-transparent hover:border-slate-200 rounded-lg p-2 whitespace-pre-wrap break-words cursor-text min-h-[50px] transition-colors text-slate-600 text-sm"
           >
             <span className="text-slate-400 italic">Click to add description/links...</span>
@@ -617,7 +621,7 @@ function NotesCard({ gift, onDelete, onUpdate, onImageClick, isAdmin, onOpenPriv
               <div className="mt-2 flex justify-end">
                 <button
                   type="button"
-                  onPointerDown={(e) => e.stopPropagation()} // MOBILE FIX
+                  onPointerDown={(e) => e.stopPropagation()} 
                   onClick={() => {
                     setShowTable(false);
                     onUpdate(gift.id, { table_data: null });
@@ -747,7 +751,7 @@ export default function NotePage() {
   const [allEmails, setAllEmails] = useState<string[]>([]);
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("");
 
-  // TOP LEVEL PRIVACY MODAL STATE (Fixes Mobile Freeze)
+  // TOP LEVEL PRIVACY MODAL STATE 
   const [privacyModalNote, setPrivacyModalNote] = useState<any | null>(null);
   const [tempIsPrivate, setTempIsPrivate] = useState(false);
   const [tempAllowedUsers, setTempAllowedUsers] = useState<string[]>([]);
@@ -980,7 +984,7 @@ export default function NotePage() {
         </SortableContext>
       </DndContext>
 
-      {/* --- TOP-LEVEL PRIVACY MODAL DIALOG (Fixed for Mobile Touch) --- */}
+      {/* --- TOP-LEVEL PRIVACY MODAL DIALOG --- */}
       <Dialog open={!!privacyModalNote} onOpenChange={(open) => !open && setPrivacyModalNote(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>

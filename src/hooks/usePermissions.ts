@@ -5,7 +5,7 @@ import { ADMIN_EMAILS } from '@/lib/admin';
 export function usePermissions() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [canViewBudget, setCanViewBudget] = useState(false);
-  const [canViewPrivate, setCanViewPrivate] = useState(false); // <-- NEW
+  const [canViewPrivate, setCanViewPrivate] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -17,7 +17,7 @@ export function usePermissions() {
         return;
       }
 
-      // 1. Admins get everything automatically
+      // 1. Full Admins get everything automatically
       if (ADMIN_EMAILS.includes(user.email)) {
         setIsAdmin(true);
         setCanViewBudget(true);
@@ -26,16 +26,16 @@ export function usePermissions() {
         return;
       }
 
-      // 2. Check Database for specific permissions
-      const { data } = await supabase
+      // 2. Check Database for custom permissions granted by Admin
+      const { data, error } = await supabase
         .from('user_roles')
-        .select('can_view_budget, can_view_private') // <-- NEW
+        .select('can_view_budget, can_view_private')
         .eq('email', user.email)
         .single();
 
       if (data) {
         if (data.can_view_budget) setCanViewBudget(true);
-        if (data.can_view_private) setCanViewPrivate(true); // <-- NEW
+        if (data.can_view_private) setCanViewPrivate(true);
       }
       
       setLoading(false);

@@ -7,10 +7,10 @@ export type WorkspaceItem = {
   id: string;
   content: string;
   dueDate?: string;
-  assignedTo?: string; // Added assignedTo property
+  assignedTo?: string;
   imageUrl?: string;
   created_at: string;
-  is_private?: boolean;      
+  is_private?: boolean;       
   allowed_users?: string[];
 };
 
@@ -48,9 +48,11 @@ export function useEventItems(eventName: string) {
           id: row.id,
           content: row.content || "",
           dueDate: row.due_date || undefined,
-          assignedTo: row.assigned_to || undefined, // Map column
+          assignedTo: row.assigned_to || undefined,
           imageUrl: row.image_url || undefined,
           created_at: row.created_at || "",
+          is_private: row.is_private || false,          // <-- Mapped from DB
+          allowed_users: row.allowed_users || [],      // <-- Mapped from DB
         });
       }
     });
@@ -70,8 +72,10 @@ export function useEventItems(eventName: string) {
           category: category,
           content: payload.content || "No content",
           due_date: payload.dueDate || null,
-          assigned_to: payload.assignedTo || null, // Save assigned_to
-          image_url: payload.imageUrl || null
+          assigned_to: payload.assignedTo || null,
+          image_url: payload.imageUrl || null,
+          is_private: payload.is_private || false,     // <-- Saved to DB
+          allowed_users: payload.allowed_users || []   // <-- Saved to DB
         },
       ]);
 
@@ -81,21 +85,33 @@ export function useEventItems(eventName: string) {
       return;
     }
     
-    fetchItems();
+    await fetchItems();
   };
 
   const updateItem = async (id: string, updates: Partial<WorkspaceItem>) => {
-    const { error } = await supabase
-      .from("event_items")
-      .update({
-        content: updates.content,
-        due_date: updates.dueDate || null,
-        assigned_to: updates.assignedTo || null, // Update assigned_to
-        image_url: updates.imageUrl || null
-      })
-      .eq('id', id);
+    const dbUpdates: any = {};
+    if (updates.content !== undefined) dbUpdates.content = updates.content;
+    if (updates.dueDate !== undefined) dbUpdates.due_date = updates.dueDate;
+    if (updates.assignedTo !== undefined) dbUpdates.assigned_to = updates.assignedTo;
+    if (updates.imageUrl !== undefined) dbUpdates.image_url = updates.imageUrl;
+    if (updates.is_private !== undefined) dbUpdates.is_private = updates.is_private;       
     
-    if (!error) await fetchItems();
+    // ENSURE allowed_users is explicitly passed as an array
+    if (updates.allowed_users !== undefined) {
+      dbUpdates.allowed_users = updates.allowed_users; 
+    }
+
+    const { error } = await supabase
+      .from('event_items')
+      .update(dbUpdates)
+      .eq('id', id);
+
+    if (error) {
+      console.error("Error updating item:", error.message);
+      alert(`Failed to update: ${error.message}`);
+    } else {
+      await fetchItems(); 
+    }
   };
 
   const moveItem = async (id: string, newCategory: CategoryId) => {
