@@ -8,11 +8,9 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 export const metadata = {
   title: "Wedding Planner",
   description: "Manage your wedding tasks",
-  manifest: "/manifest.json",
   themeColor: "#047857",
   icons: {
-    icon: "/engagement.png",
-    apple: "/engagement.png",
+    icon: "/icon.png",
   },
   appleWebApp: {
     capable: true,
