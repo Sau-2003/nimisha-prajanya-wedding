@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { useEventItems, CategoryId, WorkspaceItem } from '@/hooks/useEventItems';
+import { useEventItems, CategoryId, WorkspaceItem, MediaItem } from '@/hooks/useEventItems';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
 import { useVendors } from '@/hooks/useVendors';
 import { usePermissions } from "@/hooks/usePermissions";
@@ -212,15 +212,15 @@ export default function EventWorkspacePage() {
   const [newItemText, setNewItemText] = useState("");
   const [newItemDate, setNewItemDate] = useState("");
   const [newItemAssignedTo, setNewItemAssignedTo] = useState("");
+  const [newItemMediaList, setNewItemMediaList] = useState<MediaItem[]>([]);
   
-  const [newItemMedia, setNewItemMedia] = useState<{ url: string, type: string } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingTaskText, setEditingTaskText] = useState("");
   const [editingTaskDate, setEditingTaskDate] = useState("");
   const [editingAssignedTo, setEditingAssignedTo] = useState("");
-  const [editingTaskMedia, setEditingTaskMedia] = useState<{ url: string, type: string } | null>(null);
+  const [editingMediaList, setEditingMediaList] = useState<MediaItem[]>([]);
 
   const [expandedMedia, setExpandedMedia] = useState<{ url: string, type: string } | null>(null);
   const [itemToDelete, setItemToDelete] = useState<{ categoryId: CategoryId; itemId: string } | null>(null);
@@ -236,7 +236,7 @@ export default function EventWorkspacePage() {
   useEffect(() => {
     const fetchEmails = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (user?.email) setCurrentUserEmail(user.email); // Exact match to Notes logic
+      if (user?.email) setCurrentUserEmail(user.email);
 
       const { data } = await supabase.from('user_roles').select('email');
       if (data) {
@@ -257,11 +257,10 @@ export default function EventWorkspacePage() {
     
     const payload = {
       content: newItemText.trim(),
-      dueDate: newItemDate || undefined, 
-      assignedTo: newItemAssignedTo.trim() || undefined,
-      imageUrl: newItemMedia?.url || undefined,
-      mediaType: newItemMedia?.type || undefined, 
-      is_private: false, // Exact match to Notes logic
+      dueDate: newItemDate || null, 
+      assignedTo: newItemAssignedTo.trim() || null,
+      mediaAttachments: newItemMediaList, // Save multiple attachments
+      is_private: false, 
       allowed_users: [], 
       created_at: new Date().toISOString() 
     } as any; 
@@ -271,18 +270,12 @@ export default function EventWorkspacePage() {
     setNewItemText("");
     setNewItemDate("");
     setNewItemAssignedTo("");
-    setNewItemMedia(null);
+    setNewItemMediaList([]);
     setShowAddForm(false);
   };
 
   const handleDeleteRequest = (categoryId: string, itemId: string) => {
     setItemToDelete({ categoryId: categoryId as CategoryId, itemId });
-  };
-
-  const confirmItemDelete = async () => {
-    if (!itemToDelete) return;
-    await deleteItem(itemToDelete.itemId);
-    setItemToDelete(null);
   };
 
   const handleMoveTask = async (itemId: string, toCategory: CategoryId) => {
@@ -293,8 +286,20 @@ export default function EventWorkspacePage() {
     setEditingItemId(item.id);
     setEditingTaskText(item.content);
     setEditingTaskDate(item.dueDate || "");
-    setEditingAssignedTo((item as any).assignedTo || "");
-    setEditingTaskMedia(item.imageUrl ? { url: item.imageUrl, type: guessMediaType(item.imageUrl, item.mediaType) } : null);
+    setEditingAssignedTo(item.assignedTo || "");
+    
+    // Support legacy single images + new array format
+    let initialMedia: MediaItem[] = [];
+    if (item.mediaAttachments && item.mediaAttachments.length > 0) {
+      initialMedia = [...item.mediaAttachments];
+    } else if (item.imageUrl) {
+      initialMedia = [{ 
+        url: item.imageUrl, 
+        type: guessMediaType(item.imageUrl, item.mediaType), 
+        caption: item.imageCaption || "" 
+      }];
+    }
+    setEditingMediaList(initialMedia);
   };
 
   const cancelEditing = () => setEditingItemId(null);
@@ -306,17 +311,69 @@ export default function EventWorkspacePage() {
     if (editingAssignedTo.trim()) {
       addTeamMember(editingAssignedTo.trim());
     }
+
+    const categoryItems = items?.[categoryId as CategoryId] as any[];
+    const originalItem = categoryItems?.find(i => i.id === itemId);
+    
+    // Cleanup any removed media from storage bucket
+    const originalMedia = originalItem?.mediaAttachments || [];
+    if (originalItem?.imageUrl && originalMedia.length === 0) {
+      originalMedia.push({ url: originalItem.imageUrl });
+    }
+    
+    const removedMediaUrls = originalMedia
+      .filter((old: any) => !editingMediaList.some(curr => curr.url === old.url))
+      .map((m: any) => m.url);
+      
+    for (const url of removedMediaUrls) {
+      await deleteMediaFromStorage(url);
+    }
     
     const payload = {
       content: editingTaskText.trim(),
-      dueDate: editingTaskDate || undefined,
-      assignedTo: editingAssignedTo.trim() || undefined,
-      imageUrl: editingTaskMedia?.url || undefined,
-      mediaType: editingTaskMedia?.type || undefined
-    };
+      dueDate: editingTaskDate || null,
+      assignedTo: editingAssignedTo.trim() || null,
+      mediaAttachments: editingMediaList,
+      // Clear legacy fields if migrating to attachments array
+      imageUrl: null,
+      mediaType: null,
+      imageCaption: null 
+    } as any; 
 
     await updateItem(itemId, payload);
     setEditingItemId(null);
+  };
+
+  const deleteMediaFromStorage = async (fileUrl: string) => {
+    try {
+      const cleanUrl = fileUrl.split('?')[0];
+      const marker = `/${BUCKET_NAME}/`;
+      const markerIndex = cleanUrl.indexOf(marker);
+      
+      if (markerIndex !== -1) {
+        const filePath = cleanUrl.substring(markerIndex + marker.length);
+        await supabase.storage.from(BUCKET_NAME).remove([filePath]);
+      }
+    } catch (error) {
+      console.error("Failed to delete media from storage:", error);
+    }
+  };
+
+  const confirmItemDelete = async () => {
+    if (!itemToDelete) return;
+    
+    const categoryItems = items?.[itemToDelete.categoryId] as any[];
+    const item = categoryItems?.find(i => i.id === itemToDelete.itemId);
+    
+    const mediaToDelete = item?.mediaAttachments || [];
+    if (item?.imageUrl) mediaToDelete.push({ url: item.imageUrl });
+
+    for (const media of mediaToDelete) {
+      if (media.url) await deleteMediaFromStorage(media.url);
+    }
+
+    await deleteItem(itemToDelete.itemId);
+    setItemToDelete(null);
   };
 
   const formatDate = (dateString: string) => {
@@ -334,66 +391,108 @@ export default function EventWorkspacePage() {
   };
 
   const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>, isEditMode: boolean) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
 
     if (!supabase) {
-      alert("Upload failed: Supabase connection is missing. Please check your .env variables.");
+      alert("Upload failed: Supabase connection is missing.");
       return;
     }
 
     setIsUploading(true);
+    const uploadedMedia: MediaItem[] = [];
 
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-      const filePath = `workspace/${fileName}`;
-      
-      const mediaType = file.type.startsWith('video/') ? 'video' 
-                      : file.type.startsWith('audio/') ? 'audio' 
-                      : 'image';
+      await Promise.all(files.map(async (file) => {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const filePath = `workspace/${fileName}`;
+        
+        const mediaType = file.type.startsWith('video/') ? 'video' 
+                        : file.type.startsWith('audio/') ? 'audio' 
+                        : 'image';
 
-      const { data, error } = await supabase.storage
-        .from(BUCKET_NAME)
-        .upload(filePath, file, { upsert: false });
+        const { error } = await supabase.storage
+          .from(BUCKET_NAME)
+          .upload(filePath, file, { upsert: false });
 
-      if (error) {
-        console.error("Upload error:", error.message);
-        alert(`Upload error: ${error.message}`);
-        setIsUploading(false);
-        return;
-      }
-
-      const { data: { publicUrl } } = supabase.storage
-        .from(BUCKET_NAME)
-        .getPublicUrl(filePath);
-
-      const mediaPayload = { url: publicUrl, type: mediaType };
+        if (!error) {
+          const { data: { publicUrl } } = supabase.storage.from(BUCKET_NAME).getPublicUrl(filePath);
+          uploadedMedia.push({ url: publicUrl, type: mediaType, caption: "" });
+        }
+      }));
 
       if (isEditMode) {
-        setEditingTaskMedia(mediaPayload);
+        setEditingMediaList(prev => [...prev, ...uploadedMedia]);
       } else {
-        setNewItemMedia(mediaPayload);
+        setNewItemMediaList(prev => [...prev, ...uploadedMedia]);
       }
     } catch (error) {
       console.error("Failed to upload media:", error);
     } finally {
       setIsUploading(false);
+      // Reset file input
+      e.target.value = '';
     }
   };
 
-  const renderMediaPreview = (media: { url: string, type: string }, onRemove: () => void) => {
+  const updateMediaCaption = (index: number, caption: string, isEditMode: boolean) => {
+    if (isEditMode) {
+      const updated = [...editingMediaList];
+      updated[index].caption = caption;
+      setEditingMediaList(updated);
+    } else {
+      const updated = [...newItemMediaList];
+      updated[index].caption = caption;
+      setNewItemMediaList(updated);
+    }
+  };
+
+  const removeMediaFromForm = (index: number, isEditMode: boolean) => {
+    if (isEditMode) {
+      setEditingMediaList(prev => prev.filter((_, i) => i !== index));
+      // Storage cleanup happens in saveEditedItem
+    } else {
+      const toRemove = newItemMediaList[index];
+      deleteMediaFromStorage(toRemove.url); // delete immediately if unsaved
+      setNewItemMediaList(prev => prev.filter((_, i) => i !== index));
+    }
+  };
+
+  const renderFormMediaList = (mediaList: MediaItem[], isEditMode: boolean) => {
+    if (!mediaList || mediaList.length === 0) return null;
+    
     return (
-      <div className="relative h-[42px] sm:h-full aspect-[4/3] border border-emerald-200 rounded-lg overflow-hidden shadow-sm group bg-black/5 shrink-0 flex items-center justify-center">
-        {media.type === 'video' && <video src={media.url} className="w-full h-full object-cover" muted />}
-        {media.type === 'audio' && <div className="w-full h-full flex items-center justify-center bg-slate-100"><Music className="w-6 h-6 text-slate-400" /></div>}
-        {media.type === 'image' && <img src={media.url} className="w-full h-full object-cover" alt="" />}
-        
-        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-          <button onClick={onRemove} className="text-white hover:text-red-400">
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
+      <div className="flex flex-col gap-3 mt-3">
+        {mediaList.map((media, idx) => (
+          <div key={idx} className="flex gap-3 items-start border border-slate-100 p-2 rounded-lg bg-slate-50 relative group pr-8">
+            <div className="w-16 h-16 shrink-0 rounded overflow-hidden bg-black/5 flex items-center justify-center">
+              {media.type === 'video' && <video src={media.url} className="w-full h-full object-cover" muted />}
+              {media.type === 'audio' && <Music className="w-6 h-6 text-slate-400" />}
+              {media.type === 'image' && <img src={media.url} className="w-full h-full object-cover" alt="" />}
+            </div>
+            
+            <div className="flex-1 w-full">
+              <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">{media.type}</p>
+              <input
+                type="text"
+                placeholder="Add a caption (optional)..."
+                value={media.caption || ""}
+                onChange={(e) => updateMediaCaption(idx, e.target.value, isEditMode)}
+                className="w-full text-xs border border-slate-200 rounded px-2.5 py-1.5 bg-white outline-none focus:border-emerald-500 text-slate-700"
+              />
+            </div>
+            
+            <button 
+              type="button"
+              onClick={() => removeMediaFromForm(idx, isEditMode)}
+              className="absolute top-2 right-2 bg-red-100 text-red-500 hover:bg-red-500 hover:text-white p-1.5 rounded transition-colors"
+              title="Remove Media"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        ))}
       </div>
     );
   };
@@ -447,7 +546,6 @@ export default function EventWorkspacePage() {
 
     const list = items?.[categoryId] || [];
     
-    // EXACT match to Notes filter logic
     const visibleList = list.filter((item: any) => 
       isAdmin || 
       !item.is_private || 
@@ -480,9 +578,9 @@ export default function EventWorkspacePage() {
                     {stripHtml(item.content)}
                   </span>
                 </div>
-                {(item as any).assignedTo && (
+                {item.assignedTo && (
                   <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full text-[10px] font-medium shrink-0 flex items-center gap-1">
-                    <User className="w-2.5 h-2.5 text-emerald-600" /> {(item as any).assignedTo}
+                    <User className="w-2.5 h-2.5 text-emerald-600" /> {item.assignedTo}
                   </span>
                 )}
               </div>
@@ -647,7 +745,6 @@ export default function EventWorkspacePage() {
               className="bg-emerald-600 hover:bg-emerald-700 text-white" 
               onClick={() => {
                 if (privacyModalItem) {
-                  // EXACT match to Notes save logic
                   updateItem(privacyModalItem.id, { 
                     is_private: tempIsPrivate, 
                     allowed_users: tempIsPrivate ? tempAllowedUsers : [] 
@@ -661,7 +758,6 @@ export default function EventWorkspacePage() {
           </div>
         </DialogContent>
       </Dialog>
-      {/* --- END PRIVACY MODAL --- */}
 
       <Dialog 
         open={!!activeModal} 
@@ -675,7 +771,7 @@ export default function EventWorkspacePage() {
         }}
       >
         <DialogContent 
-          className="sm:max-w-xl max-h-[85vh] overflow-hidden flex flex-col"
+          className="sm:max-w-2xl max-h-[85vh] overflow-hidden flex flex-col"
         >
           <DialogHeader className="shrink-0">
             <DialogTitle className="capitalize text-lg font-serif">
@@ -866,44 +962,45 @@ export default function EventWorkspacePage() {
                     </div>
                   )}
 
-                  {newItemMedia ? renderMediaPreview(newItemMedia, () => setNewItemMedia(null)) : (
-                    <div className="relative h-[42px] sm:h-full">
-                      <input 
-                        type="file"
-                        accept="image/*,video/*,audio/*"
-                        id="add-media"
-                        className="hidden"
-                        onChange={(e) => handleMediaUpload(e, false)}
-                        disabled={isUploading}
-                      />
-                      <label 
-                        htmlFor="add-media" 
-                        className={`flex items-center justify-center w-full h-full border border-dashed rounded-lg cursor-pointer text-sm transition-colors bg-white border-slate-300 text-slate-500 hover:bg-slate-50 ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      >
-                        {isUploading ? (
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        ) : (
-                          <div className="flex gap-1 mr-2 items-center text-slate-400">
-                            <ImageIcon className="w-4 h-4" />
-                            <Film className="w-4 h-4" />
-                            <Music className="w-4 h-4" />
-                          </div>
-                        )}
-                        {isUploading ? "Uploading..." : "Media"}
-                      </label>
-                    </div>
-                  )}
+                  <div className="relative h-[42px] sm:h-full">
+                    <input 
+                      type="file"
+                      multiple
+                      accept="image/*,video/*,audio/*"
+                      id="add-media"
+                      className="hidden"
+                      onChange={(e) => handleMediaUpload(e, false)}
+                      disabled={isUploading}
+                    />
+                    <label 
+                      htmlFor="add-media" 
+                      className={`flex items-center justify-center w-full h-full border border-dashed rounded-lg cursor-pointer text-sm transition-colors bg-white border-slate-300 text-slate-500 hover:bg-slate-50 ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      {isUploading ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <div className="flex gap-1 mr-2 items-center text-slate-400">
+                          <ImageIcon className="w-4 h-4" />
+                          <Film className="w-4 h-4" />
+                        </div>
+                      )}
+                      {isUploading ? "Uploading..." : "Add Media"}
+                    </label>
+                  </div>
                 </div>
+
+                {renderFormMediaList(newItemMediaList, false)}
 
                 <div className="flex gap-2 justify-end pt-2">
                   <Button 
                     variant="outline" 
                     onClick={() => {
+                      newItemMediaList.forEach(m => deleteMediaFromStorage(m.url));
                       setShowAddForm(false);
                       setNewItemText("");
                       setNewItemDate("");
                       setNewItemAssignedTo("");
-                      setNewItemMedia(null);
+                      setNewItemMediaList([]);
                       setOpenDropdownId(null);
                     }} 
                     className="px-3 py-1.5 h-9 text-slate-500 border-slate-200 text-xs"
@@ -1001,17 +1098,15 @@ export default function EventWorkspacePage() {
               return (
                 <div className="space-y-3 pb-4">
                   {modalItems
-                    // EXACT match to Notes filter logic
-                    .filter((item: any) => 
+                    .filter((item: WorkspaceItem) => 
                       isAdmin || 
                       !item.is_private || 
                       (item.allowed_users && item.allowed_users.includes(currentUserEmail))
                     )
                     .sort((a: any, b: any) => 
                       new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime()
-                    ).map((item: any) => {
+                    ).map((item: WorkspaceItem & { mediaType?: string }) => {
                     const overdue = activeModal === 'tasks' && isOverdue(item.dueDate || null);
-                    const itemMediaType = guessMediaType(item.imageUrl, item.mediaType);
                     const isCompletedItem = currentCategoryKey === 'taskDone' || currentCategoryKey === 'itemsBrought' || currentCategoryKey === 'pujaItemsBrought';
 
                     return (
@@ -1090,34 +1185,34 @@ export default function EventWorkspacePage() {
                                 </div>
                               )}
                               
-                              {editingTaskMedia ? renderMediaPreview(editingTaskMedia, () => setEditingTaskMedia(null)) : (
-                                <div className="relative h-9">
-                                  <input 
-                                    type="file"
-                                    accept="image/*,video/*,audio/*"
-                                    id={`edit-media-${item.id}`}
-                                    className="hidden"
-                                    onChange={(e) => handleMediaUpload(e, true)}
-                                    disabled={isUploading}
-                                  />
-                                  <label 
-                                    htmlFor={`edit-media-${item.id}`} 
-                                    className={`flex items-center justify-center w-full h-full border border-dashed rounded cursor-pointer text-slate-500 hover:bg-slate-50 text-xs ${isUploading ? 'opacity-50' : ''}`}
-                                  >
-                                    {isUploading ? (
-                                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                                    ) : (
-                                      <div className="flex gap-0.5 mr-1 items-center text-slate-400">
-                                        <ImageIcon className="w-3 h-3" />
-                                        <Film className="w-3 h-3" />
-                                        <Music className="w-3 h-3" />
-                                      </div>
-                                    )}
-                                    Media
-                                  </label>
-                                </div>
-                              )}
+                              <div className="relative h-9">
+                                <input 
+                                  type="file"
+                                  multiple
+                                  accept="image/*,video/*,audio/*"
+                                  id={`edit-media-${item.id}`}
+                                  className="hidden"
+                                  onChange={(e) => handleMediaUpload(e, true)}
+                                  disabled={isUploading}
+                                />
+                                <label 
+                                  htmlFor={`edit-media-${item.id}`} 
+                                  className={`flex items-center justify-center w-full h-full border border-dashed rounded cursor-pointer text-slate-500 hover:bg-slate-50 text-xs ${isUploading ? 'opacity-50' : ''}`}
+                                >
+                                  {isUploading ? (
+                                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                  ) : (
+                                    <div className="flex gap-0.5 mr-1 items-center text-slate-400">
+                                      <ImageIcon className="w-3 h-3" />
+                                      <Film className="w-3 h-3" />
+                                    </div>
+                                  )}
+                                  Add Media
+                                </label>
+                              </div>
                             </div>
+
+                            {renderFormMediaList(editingMediaList, true)}
                             
                             <div className="flex justify-end gap-2 mt-2">
                               <button onClick={cancelEditing} disabled={isUploading} className="px-3 py-1 text-xs bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200">Cancel</button>
@@ -1129,7 +1224,7 @@ export default function EventWorkspacePage() {
                             <div className="flex-1 min-w-0">
                               <div className="flex flex-col mb-1.5">
                                 <span className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">
-                                  {item.created_at || item.createdAt ? formatDate(item.created_at || item.createdAt) : formatDate(new Date().toISOString())}
+                                  {item.created_at ? formatDate(item.created_at) : formatDate(new Date().toISOString())}
                                 </span>
                                 {item.is_private && (
                                   <div className="mt-1">
@@ -1157,37 +1252,48 @@ export default function EventWorkspacePage() {
                                 </p>
                               )}
 
-                              {item.imageUrl && (
-                                <div 
-                                  className="mt-3 overflow-hidden w-full max-w-[240px] rounded-lg border border-slate-200 shadow-sm relative cursor-pointer group hover:opacity-90 transition-opacity bg-slate-50 flex items-center justify-center"
-                                  onClick={() => setExpandedMedia({ url: item.imageUrl, type: itemMediaType })}
-                                >
-                                  {itemMediaType === 'image' && (
-                                    <>
-                                      <img src={item.imageUrl} alt="attached media" className="w-full h-auto object-cover max-h-[150px]" />
-                                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center transition-colors">
-                                        <ImageIcon className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 drop-shadow-md" />
-                                      </div>
-                                    </>
-                                  )}
-                                  
-                                  {itemMediaType === 'video' && (
-                                    <>
-                                      <video src={`${item.imageUrl}#t=0.1`} className="w-full h-auto max-h-[150px] object-cover bg-black" muted />
-                                      <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 flex items-center justify-center transition-colors">
-                                        <Play className="w-8 h-8 text-white drop-shadow-md" />
-                                      </div>
-                                    </>
-                                  )}
+                              {/* --- RENDER ALL MEDIA FOR THIS ITEM IN VIEW MODE (NO DELETE BUTTONS) --- */}
+                              {(() => {
+                                const renderList = item.mediaAttachments && item.mediaAttachments.length > 0 
+                                  ? item.mediaAttachments 
+                                  : (item.imageUrl ? [{ url: item.imageUrl, type: guessMediaType(item.imageUrl, item.mediaType), caption: item.imageCaption || "" }] : []);
+                                
+                                if (renderList.length === 0) return null;
 
-                                  {itemMediaType === 'audio' && (
-                                    <div className="w-full h-24 flex items-center justify-center">
-                                      <Play className="w-8 h-8 text-slate-400 group-hover:scale-110 transition-transform" />
-                                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors" />
-                                    </div>
-                                  )}
-                                </div>
-                              )}
+                                return (
+                                  <div className="mt-3 flex flex-wrap gap-4">
+                                    {renderList.map((media, idx) => (
+                                      <div key={idx} className="w-full max-w-[240px]">
+                                        <div 
+                                          className="overflow-hidden rounded-lg border border-slate-200 shadow-sm relative cursor-pointer hover:opacity-90 transition-opacity bg-slate-50 flex items-center justify-center group/img"
+                                          onClick={() => setExpandedMedia({ url: media.url, type: media.type })}
+                                        >
+                                          {media.type === 'image' && (
+                                            <img src={media.url} alt="attached media" className="w-full h-auto object-cover max-h-[150px]" />
+                                          )}
+                                          
+                                          {media.type === 'video' && (
+                                            <video src={`${media.url}#t=0.1`} className="w-full h-auto max-h-[150px] object-cover bg-black" muted />
+                                          )}
+
+                                          {media.type === 'audio' && (
+                                            <div className="w-full h-24 flex items-center justify-center">
+                                              <Play className="w-8 h-8 text-slate-400 group-hover/img:scale-110 transition-transform" />
+                                            </div>
+                                          )}
+                                        </div>
+
+                                        {media.caption && (
+                                          <p className="text-xs text-slate-500 italic mt-1.5 px-0.5 break-words">
+                                            {media.caption}
+                                          </p>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                );
+                              })()}
+
                             </div>
 
                             <div className="flex gap-1.5 shrink-0">
@@ -1247,7 +1353,6 @@ export default function EventWorkspacePage() {
                     );
                   })}
                   
-                  {/* EXACT match to Notes filter logic */}
                   {modalItems.filter((item: any) => 
                     isAdmin || 
                     !item.is_private || 

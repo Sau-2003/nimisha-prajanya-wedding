@@ -3,12 +3,20 @@ import { supabase } from '@/lib/supabase';
 
 export type CategoryId = 'tasks' | 'taskDone' | 'itemsNeeded' | 'itemsBrought' | 'pujaItems' | 'pujaItemsBrought' | 'games' | 'vendors' | 'ideas' | 'notes';
 
+export type MediaItem = {
+  url: string;
+  type: string;
+  caption?: string;
+};
+
 export type WorkspaceItem = {
   id: string;
   content: string;
   dueDate?: string;
   assignedTo?: string;
   imageUrl?: string;
+  imageCaption?: string | null;
+  mediaAttachments?: MediaItem[]; // <-- Supports multiple media files
   created_at: string;
   is_private?: boolean;       
   allowed_users?: string[];
@@ -50,9 +58,11 @@ export function useEventItems(eventName: string) {
           dueDate: row.due_date || undefined,
           assignedTo: row.assigned_to || undefined,
           imageUrl: row.image_url || undefined,
+          imageCaption: row.image_caption || undefined,
+          mediaAttachments: row.media_attachments || [], // <-- Mapping array
           created_at: row.created_at || "",
-          is_private: row.is_private || false,          // <-- Mapped from DB
-          allowed_users: row.allowed_users || [],      // <-- Mapped from DB
+          is_private: row.is_private || false,
+          allowed_users: row.allowed_users || [],
         });
       }
     });
@@ -74,8 +84,10 @@ export function useEventItems(eventName: string) {
           due_date: payload.dueDate || null,
           assigned_to: payload.assignedTo || null,
           image_url: payload.imageUrl || null,
-          is_private: payload.is_private || false,     // <-- Saved to DB
-          allowed_users: payload.allowed_users || []   // <-- Saved to DB
+          image_caption: payload.imageCaption || null,
+          media_attachments: payload.mediaAttachments || [], // <-- Saving array
+          is_private: payload.is_private || false,
+          allowed_users: payload.allowed_users || []
         },
       ]);
 
@@ -94,9 +106,10 @@ export function useEventItems(eventName: string) {
     if (updates.dueDate !== undefined) dbUpdates.due_date = updates.dueDate;
     if (updates.assignedTo !== undefined) dbUpdates.assigned_to = updates.assignedTo;
     if (updates.imageUrl !== undefined) dbUpdates.image_url = updates.imageUrl;
+    if (updates.imageCaption !== undefined) dbUpdates.image_caption = updates.imageCaption; 
+    if (updates.mediaAttachments !== undefined) dbUpdates.media_attachments = updates.mediaAttachments; // <-- Updating array
     if (updates.is_private !== undefined) dbUpdates.is_private = updates.is_private;       
     
-    // ENSURE allowed_users is explicitly passed as an array
     if (updates.allowed_users !== undefined) {
       dbUpdates.allowed_users = updates.allowed_users; 
     }
