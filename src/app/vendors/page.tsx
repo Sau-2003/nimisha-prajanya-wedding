@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useVendors } from "@/hooks/useVendors";
+import { defaultEvents } from "@/components//layout/leftsidebar";
 
 type BookingStatus = 'Not Started' | 'Enquired' | 'Negotiating' | 'Confirmed' | 'Recommendation';
 
@@ -51,19 +52,6 @@ const statusOrder: Record<BookingStatus, number> = {
   'Recommendation': 4,
   'Not Started': 5,
 };
-
-const defaultEvents = [
-  { name: "Puja", date: "2027-01-27", link: "/events/puja", color: "bg-orange-500" },
-  { name: "Mehendi", date: "2027-01-29", link: "/events/mehendi", color: "bg-emerald-500" },
-  { name: "Check In", date: "2027-01-30", link: "/events/check-in", color: "bg-fuchsia-900" },
-  { name: "Tilak", date: "2027-01-30", link: "/events/tilak", color: "bg-yellow-900" },
-  { name: "Sangeet", date: "2027-01-30", link: "/events/sangeet", color: "bg-indigo-500" },
-  { name: "Haldi", date: "2027-01-31", link: "/events/haldi", color: "bg-amber-400" },
-  { name: "Phere", date: "2027-01-31", link: "/events/phere", color: "bg-red-500" },
-  { name: "Reception", date: "2027-01-31", link: "/events/reception", color: "bg-fuchsia-600" },
-  { name: "Pagphere", date: "2027-02-01", link: "/events/pagphere", color: "bg-cyan-500" },
-  { name: "Vidai", date: "2027-02-01", link: "/events/vidai", color: "bg-pink-400" },
-];
 
 const LinkPreview = ({ url }: { url: string }) => {
   const [data, setData] = useState<any>(null);

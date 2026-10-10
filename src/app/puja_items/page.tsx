@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from '@/lib/supabase';
 import Link from "next/link";
 import { 
-  PaperBag, Check, RotateCcw, Trash2, Calendar, 
+  Flame, Check, RotateCcw, Trash2, Calendar, 
   User, Image as ImageIcon, Music, Play, 
   ShoppingCart, PackageCheck, Loader2, Filter, Plus, Pencil,
   Users, ArrowUpDown
@@ -87,10 +87,10 @@ const isOverdue = (dateString: string | null) => {
   return dueDate < today;
 };
 
-type GlobalitemsItem = {
+type GlobalPujaItem = {
   id: string;
   event_name: string;
-  category: 'itemsNeeded' | 'itemsBrought';
+  category: 'pujaItems' | 'pujaItemsBrought';
   content: string;
   dueDate?: string;
   assignedTo?: string;
@@ -99,8 +99,8 @@ type GlobalitemsItem = {
   created_at: string;
 };
 
-export default function GlobalitemsPage() {
-  const [items, setItems] = useState<GlobalitemsItem[]>([]);
+export default function GlobalPujaPage() {
+  const [items, setItems] = useState<GlobalPujaItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'needed' | 'brought'>('needed');
   
@@ -121,7 +121,7 @@ export default function GlobalitemsPage() {
   const [customEventName, setCustomEventName] = useState('');
   
   const [formContent, setFormContent] = useState('');
-  const [formCategory, setFormCategory] = useState<'itemsNeeded' | 'itemsBrought'>('itemsNeeded');
+  const [formCategory, setFormCategory] = useState<'pujaItems' | 'pujaItemsBrought'>('pujaItems');
   const [formDueDate, setFormDueDate] = useState('');
   const [formAssignedTo, setFormAssignedTo] = useState('');
   const [formImageUrl, setFormImageUrl] = useState('');
@@ -129,16 +129,16 @@ export default function GlobalitemsPage() {
   // Use the team members hook
   const { teamMembers } = useTeamMembers();
 
-  const fetchGlobalitemsItems = async () => {
+  const fetchGlobalPujaItems = async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('event_items')
       .select('*')
-      .in('category', ['itemsNeeded', 'itemsBrought'])
+      .in('category', ['pujaItems', 'pujaItemsBrought'])
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error("Error fetching items:", error);
+      console.error("Error fetching puja items:", error);
     } else {
       const formattedData = (data || []).map(row => ({
         id: row.id,
@@ -150,7 +150,7 @@ export default function GlobalitemsPage() {
         imageUrl: row.image_url || undefined,
         mediaType: row.media_type || undefined,
         created_at: row.created_at || "",
-      })) as GlobalitemsItem[];
+      })) as GlobalPujaItem[];
       
       setItems(formattedData);
     }
@@ -158,10 +158,10 @@ export default function GlobalitemsPage() {
   };
 
   useEffect(() => {
-    fetchGlobalitemsItems();
+    fetchGlobalPujaItems();
   }, []);
 
-  const moveItem = async (id: string, newCategory: 'itemsNeeded' | 'itemsBrought') => {
+  const moveItem = async (id: string, newCategory: 'pujaItems' | 'pujaItemsBrought') => {
     setItems(prev => prev.map(item => item.id === id ? { ...item, category: newCategory } : item));
     
     const { error } = await supabase
@@ -171,7 +171,7 @@ export default function GlobalitemsPage() {
 
     if (error) {
       alert("Failed to update item status.");
-      fetchGlobalitemsItems();
+      fetchGlobalPujaItems();
     }
   };
 
@@ -189,7 +189,7 @@ export default function GlobalitemsPage() {
 
     if (error) {
       alert("Failed to delete item.");
-      fetchGlobalitemsItems();
+      fetchGlobalPujaItems();
     }
   };
 
@@ -244,7 +244,7 @@ export default function GlobalitemsPage() {
       alert(`Database Error: ${error.message}`);
       console.error("Supabase error details:", error);
     } else if (data && data.length > 0) {
-      const savedItem: GlobalitemsItem = {
+      const savedItem: GlobalPujaItem = {
         id: data[0].id,
         event_name: data[0].event_name,
         category: data[0].category,
@@ -290,11 +290,11 @@ export default function GlobalitemsPage() {
       setFormAssignedTo(selectedAssignee);
     }
 
-    setFormCategory(activeTab === 'needed' ? 'itemsNeeded' : 'itemsBrought');
+    setFormCategory(activeTab === 'needed' ? 'pujaItems' : 'pujaItemsBrought');
     setIsFormDialogOpen(true);
   };
 
-  const openEditDialog = (item: GlobalitemsItem) => {
+  const openEditDialog = (item: GlobalPujaItem) => {
     setEditingItemId(item.id);
     
     const isDefault = defaultEvents.some(e => slugify(e.name) === item.event_name);
@@ -353,8 +353,8 @@ export default function GlobalitemsPage() {
     }
   });
 
-  const neededList = processedItems.filter(i => i.category === 'itemsNeeded');
-  const broughtList = processedItems.filter(i => i.category === 'itemsBrought');
+  const neededList = processedItems.filter(i => i.category === 'pujaItems');
+  const broughtList = processedItems.filter(i => i.category === 'pujaItemsBrought');
   const displayList = activeTab === 'needed' ? neededList : broughtList;
 
   return (
@@ -364,12 +364,12 @@ export default function GlobalitemsPage() {
       <div className="mb-6 flex flex-col lg:flex-row lg:items-end justify-between gap-4 border-b border-slate-200 pb-5">
         <div className="shrink-0 overflow-hidden">
           <h1 className="font-serif text-2xl md:text-3xl font-bold text-emerald-900 flex items-center gap-2.5">
-            <PaperBag className="w-6 h-6 md:w-8 md:h-8 text-emerald-600 shrink-0" />
-            <span className="truncate">Master Items List</span>
+            <Flame className="w-6 h-6 md:w-8 md:h-8 text-emerald-600 shrink-0" />
+            <span className="truncate">Master Puja List</span>
           </h1>
           {/* Forced Single Line Subtitle */}
           <p className="text-slate-500 text-[11px] md:text-sm mt-1 md:mt-2 whitespace-nowrap overflow-hidden text-ellipsis">
-            Consolidated view of all necessary items across your events.
+            Consolidated view of all puja requirements across your events.
           </p>
         </div>
 
@@ -469,7 +469,7 @@ export default function GlobalitemsPage() {
             </div>
           ) : displayList.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 text-slate-400">
-              <PaperBag className="w-8 h-8 mb-2 opacity-20" />
+              <Flame className="w-8 h-8 mb-2 opacity-20" />
               <p className="text-sm">No items found matching your filters.</p>
             </div>
           ) : (
@@ -565,11 +565,11 @@ export default function GlobalitemsPage() {
                     {/* Actions */}
                     <div className="flex gap-1.5 shrink-0 sm:mt-8">
                       {activeTab === 'needed' ? (
-                        <button onClick={() => moveItem(item.id, 'itemsBrought')} className="p-2 border border-emerald-100 text-emerald-600 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors shadow-sm" title="Mark as Brought">
+                        <button onClick={() => moveItem(item.id, 'pujaItemsBrought')} className="p-2 border border-emerald-100 text-emerald-600 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors shadow-sm" title="Mark as Brought">
                           <Check className="w-4 h-4" />
                         </button>
                       ) : (
-                        <button onClick={() => moveItem(item.id, 'itemsNeeded')} className="p-2 border border-amber-100 text-amber-600 bg-amber-50 rounded-lg hover:bg-amber-100 transition-colors shadow-sm" title="Move back to To Buy">
+                        <button onClick={() => moveItem(item.id, 'pujaItems')} className="p-2 border border-amber-100 text-amber-600 bg-amber-50 rounded-lg hover:bg-amber-100 transition-colors shadow-sm" title="Move back to To Buy">
                           <RotateCcw className="w-4 h-4" />
                         </button>
                       )}
@@ -600,7 +600,7 @@ export default function GlobalitemsPage() {
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{editingItemId ? "Edit Item" : "Add New Item"}</DialogTitle>
+            <DialogTitle>{editingItemId ? "Edit Puja Item" : "Add Puja Item"}</DialogTitle>
           </DialogHeader>
           
           <form onSubmit={handleSaveItem} className="space-y-4 mt-2">
@@ -648,11 +648,11 @@ export default function GlobalitemsPage() {
                 <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
                 <select 
                   value={formCategory}
-                  onChange={(e) => setFormCategory(e.target.value as 'itemsNeeded' | 'itemsBrought')}
+                  onChange={(e) => setFormCategory(e.target.value as 'pujaItems' | 'pujaItemsBrought')}
                   className="w-full p-2.5 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
-                  <option value="itemsNeeded">To Buy (Needed)</option>
-                  <option value="itemsBrought">Already Brought</option>
+                  <option value="pujaItems">To Buy (Needed)</option>
+                  <option value="pujaItemsBrought">Already Brought</option>
                 </select>
               </div>
               <div>
@@ -679,7 +679,6 @@ export default function GlobalitemsPage() {
                     <option key={member} value={member}>{member}</option>
                   ))}
                   
-                  {/* Safety fallback: Keep the assigned user in the list even if they were deleted from the team */}
                   {formAssignedTo && !teamMembers.includes(formAssignedTo) && (
                     <option value={formAssignedTo}>{formAssignedTo} (Legacy)</option>
                   )}
@@ -757,7 +756,7 @@ export default function GlobalitemsPage() {
             <DialogTitle>Confirm Deletion</DialogTitle>
           </DialogHeader>
           <div className="py-2">
-            <p className="text-sm text-slate-600">Are you sure you want to delete this item? This action will remove it globally across the event.</p>
+            <p className="text-sm text-slate-600">Are you sure you want to delete this puja item? This action will remove it globally across the event.</p>
           </div>
           <div className="flex justify-end gap-2 mt-2">
             <Button variant="ghost" onClick={() => setItemToDelete(null)}>Cancel</Button>

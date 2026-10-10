@@ -6,6 +6,7 @@ import { CheckCircle2, CalendarDays, MapPin, Plus, X, Pencil, Trash2, LayoutDash
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { differenceInDays, differenceInWeeks, format, parseISO } from "date-fns";
 import { supabase } from "@/lib/supabase";
+import { defaultEvents } from "@/components//layout/leftsidebar";
 
 interface EventItem {
   id?: string;
@@ -40,19 +41,6 @@ const colorOptions = [
   { label: "Fuchsia Deep", value: "bg-fuchsia-900" },
   { label: "Pink", value: "bg-pink-400" },
   { label: "Rose", value: "bg-rose-500" },
-];
-
-const defaultEvents: EventItem[] = [
-  { name: "Puja", date: "2027-01-27", place: "", link: "/events/puja", color: "bg-orange-500" },
-  { name: "Mehendi", date: "2027-01-29", place: "", link: "/events/mehendi", color: "bg-emerald-500" },
-  { name: "Check In", date: "2027-01-30", place: "", link: "/events/check-in", color: "bg-fuchsia-900" },
-  { name: "Tilak", date: "2027-01-30", place: "", link: "/events/tilak", color: "bg-yellow-900" },
-  { name: "Sangeet", date: "2027-01-30", place: "", link: "/events/sangeet", color: "bg-indigo-500" },
-  { name: "Haldi", date: "2027-01-31", place: "", link: "/events/haldi", color: "bg-amber-400" },
-  { name: "Phere", date: "2027-01-31", place: "", link: "/events/phere", color: "bg-red-500" },
-  { name: "Reception", date: "2027-01-31", place: "", link: "/events/reception", color: "bg-fuchsia-600" },
-  { name: "Pagphere", date: "2027-02-01", place: "", link: "/events/pagphere", color: "bg-cyan-500" },
-  { name: "Vidai", date: "2027-02-01", place: "", link: "/events/vidai", color: "bg-pink-400" },
 ];
 
 type AuthMode = "signin" | "signup" | "reset" | "update-password";

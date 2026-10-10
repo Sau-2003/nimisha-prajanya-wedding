@@ -23,7 +23,7 @@ const mainNav = [
   { name: "Guests", href: "/guests", icon: Users },
   { name: "Notes", href: "/notes", icon: BookIcon },
   { name: "Task Schedule", href: "/task-schedule", icon: CalendarClock },
-  { name: "Puja", href: "/puja", icon: Flame },
+  { name: "Puja Items", href: "/puja_items", icon: Flame },
   { name: "Items", href: "/items", icon: PaperBag },
   { name: "Chadana", href: "/chadana", icon: Gem },
   { name: "Gifts", href: "/gifts", icon: Gift },
@@ -39,7 +39,7 @@ interface EventNavItem {
 }
 
 // Ensure defaults match the dashboard exactly
-const defaultEvents = [
+export const defaultEvents = [
   { name: "Puja", date: "2027-01-27", link: "/events/puja", color: "bg-orange-500" },
   { name: "Mehendi", date: "2027-01-29", link: "/events/mehendi", color: "bg-emerald-500" },
   { name: "Check In", date: "2027-01-30", link: "/events/check-in", color: "bg-fuchsia-900" },
