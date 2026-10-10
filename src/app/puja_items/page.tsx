@@ -470,7 +470,7 @@ export default function GlobalPujaPage() {
           ) : displayList.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 text-slate-400">
               <Flame className="w-8 h-8 mb-2 opacity-20" />
-              <p className="text-sm">No items found matching your filters.</p>
+              <p className="text-sm">No puja items found matching your filters.</p>
             </div>
           ) : (
             <div className="space-y-3">
