@@ -9,7 +9,8 @@ import {
   Gamepad2, Store, Lightbulb, Shirt, ExternalLink, 
   Plus, Trash2, Check, RotateCcw, Pencil, X, Calendar, 
   Image as ImageIcon, User, ChevronDown, Bold, Italic, 
-  Strikethrough, Loader2, Film, Music, Play, Phone, ShoppingCart, PackageCheck, Lock, Unlock
+  Strikethrough, Loader2, Film, Music, Play, Phone, ShoppingCart, PackageCheck, Lock, Unlock,
+  Pin, ArrowUp, ArrowDown
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -259,7 +260,8 @@ export default function EventWorkspacePage() {
       content: newItemText.trim(),
       dueDate: newItemDate || null, 
       assignedTo: newItemAssignedTo.trim() || null,
-      mediaAttachments: newItemMediaList, // Save multiple attachments
+      mediaAttachments: newItemMediaList,
+      is_pinned: false,
       is_private: false, 
       allowed_users: [], 
       created_at: new Date().toISOString() 
@@ -282,13 +284,32 @@ export default function EventWorkspacePage() {
     await moveItem(itemId, toCategory);
   };
 
+  const handleReorder = async (currentIndex: number, direction: 'up' | 'down', currentList: any[]) => {
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    const currentItem = currentList[currentIndex];
+    const targetItem = currentList[targetIndex];
+
+    if (!targetItem || currentItem.is_pinned !== targetItem.is_pinned) return;
+
+    const currentCreatedAt = new Date(currentItem.created_at || currentItem.createdAt).getTime();
+    let targetCreatedAt = new Date(targetItem.created_at || targetItem.createdAt).getTime();
+
+    if (currentCreatedAt === targetCreatedAt) {
+      targetCreatedAt += (direction === 'up' ? 1 : -1);
+    }
+
+    await Promise.all([
+      updateItem(currentItem.id, { created_at: new Date(targetCreatedAt).toISOString() } as any),
+      updateItem(targetItem.id, { created_at: new Date(currentCreatedAt).toISOString() } as any)
+    ]);
+  };
+
   const startEditing = (item: WorkspaceItem & { mediaType?: string }) => {
     setEditingItemId(item.id);
     setEditingTaskText(item.content);
     setEditingTaskDate(item.dueDate || "");
     setEditingAssignedTo(item.assignedTo || "");
     
-    // Support legacy single images + new array format
     let initialMedia: MediaItem[] = [];
     if (item.mediaAttachments && item.mediaAttachments.length > 0) {
       initialMedia = [...item.mediaAttachments];
@@ -315,7 +336,6 @@ export default function EventWorkspacePage() {
     const categoryItems = items?.[categoryId as CategoryId] as any[];
     const originalItem = categoryItems?.find(i => i.id === itemId);
     
-    // Cleanup any removed media from storage bucket
     const originalMedia = originalItem?.mediaAttachments || [];
     if (originalItem?.imageUrl && originalMedia.length === 0) {
       originalMedia.push({ url: originalItem.imageUrl });
@@ -334,7 +354,6 @@ export default function EventWorkspacePage() {
       dueDate: editingTaskDate || null,
       assignedTo: editingAssignedTo.trim() || null,
       mediaAttachments: editingMediaList,
-      // Clear legacy fields if migrating to attachments array
       imageUrl: null,
       mediaType: null,
       imageCaption: null 
@@ -431,7 +450,6 @@ export default function EventWorkspacePage() {
       console.error("Failed to upload media:", error);
     } finally {
       setIsUploading(false);
-      // Reset file input
       e.target.value = '';
     }
   };
@@ -451,10 +469,9 @@ export default function EventWorkspacePage() {
   const removeMediaFromForm = (index: number, isEditMode: boolean) => {
     if (isEditMode) {
       setEditingMediaList(prev => prev.filter((_, i) => i !== index));
-      // Storage cleanup happens in saveEditedItem
     } else {
       const toRemove = newItemMediaList[index];
-      deleteMediaFromStorage(toRemove.url); // delete immediately if unsaved
+      deleteMediaFromStorage(toRemove.url); 
       setNewItemMediaList(prev => prev.filter((_, i) => i !== index));
     }
   };
@@ -554,9 +571,11 @@ export default function EventWorkspacePage() {
     
     if (visibleList.length === 0) return <p className="text-sm text-slate-400 italic">Empty</p>;
 
-    const sortedList = [...visibleList].sort((a: any, b: any) => 
-      new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime()
-    );
+    const sortedList = [...visibleList].sort((a: any, b: any) => {
+      if (a.is_pinned && !b.is_pinned) return -1;
+      if (!a.is_pinned && b.is_pinned) return 1;
+      return new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime();
+    });
 
     const preview = sortedList.slice(0, 2);
     const remainder = sortedList.length - 2;
@@ -571,6 +590,8 @@ export default function EventWorkspacePage() {
                 <div className="flex items-start gap-2 truncate">
                   {item.is_private ? (
                     <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                  ) : item.is_pinned ? (
+                    <Pin className="w-3.5 h-3.5 text-emerald-500 fill-emerald-500 shrink-0 mt-0.5" />
                   ) : (
                     <span className="text-slate-300 mt-0.5">•</span> 
                   )}
@@ -1103,255 +1124,291 @@ export default function EventWorkspacePage() {
                       !item.is_private || 
                       (item.allowed_users && item.allowed_users.includes(currentUserEmail))
                     )
-                    .sort((a: any, b: any) => 
-                      new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime()
-                    ).map((item: WorkspaceItem & { mediaType?: string }) => {
-                    const overdue = activeModal === 'tasks' && isOverdue(item.dueDate || null);
-                    const isCompletedItem = currentCategoryKey === 'taskDone' || currentCategoryKey === 'itemsBrought' || currentCategoryKey === 'pujaItemsBrought';
+                    .sort((a: any, b: any) => {
+                      if (a.is_pinned && !b.is_pinned) return -1;
+                      if (!a.is_pinned && b.is_pinned) return 1;
+                      return new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime();
+                    })
+                    .map((item: WorkspaceItem & { mediaType?: string }, idx: number, array: any[]) => {
+                      const overdue = activeModal === 'tasks' && isOverdue(item.dueDate || null);
+                      const isCompletedItem = currentCategoryKey === 'taskDone' || currentCategoryKey === 'itemsBrought' || currentCategoryKey === 'pujaItemsBrought';
 
-                    return (
-                      <div 
-                        key={item.id} 
-                        className={`flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 border p-3.5 rounded-xl bg-white shadow-sm transition-colors ${overdue ? 'border-red-300 bg-red-50/30' : 'border-slate-200'}`}
-                      >
-                        {editingItemId === item.id ? (
-                          <div className="flex-1 flex flex-col gap-2 w-full">
-                            <EditableCell 
-                              value={editingTaskText}
-                              onChange={(val) => setEditingTaskText(val)}
-                              placeholder="Edit item..."
-                              className="border border-emerald-500 rounded-md outline-none px-3 py-2 text-slate-700 text-sm w-full min-h-[40px] bg-white"
-                              autoFocus
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' && !e.shiftKey && window.innerWidth > 768) {
-                                  e.preventDefault();
-                                  saveEditedItem(currentCategoryKey, item.id);
-                                }
-                              }}
-                            />
+                      const canMoveUp = idx > 0 && array[idx - 1].is_pinned === item.is_pinned;
+                      const canMoveDown = idx < array.length - 1 && array[idx + 1].is_pinned === item.is_pinned;
 
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm mt-1">
-                              {activeModal === 'tasks' && (
-                                <input 
-                                  type={editingTaskDate ? "date" : "text"}
-                                  onFocus={(e) => (e.target.type = "date")}
-                                  onBlur={(e) => { if (!e.target.value) e.target.type = "text"; }}
-                                  placeholder="Due Date"
-                                  value={editingTaskDate}
-                                  onChange={(e) => setEditingTaskDate(e.target.value)}
-                                  className="border rounded px-2 h-9 outline-none text-slate-600 bg-white w-full"
-                                />
-                              )}
-
-                              {activeModal === 'tasks' && (
-                                <div className="relative w-full">
-                                  <div 
-                                    onClick={() => setOpenDropdownId(openDropdownId === item.id ? null : item.id)}
-                                    className="text-sm border rounded px-2 h-9 text-slate-600 bg-white flex items-center justify-between cursor-pointer select-none"
-                                  >
-                                    <span className="truncate">{editingAssignedTo || "Assign to..."}</span>
-                                    <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1" />
-                                  </div>
-
-                                  {openDropdownId === item.id && (
-                                    <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-md shadow-xl z-50 max-h-48 overflow-y-auto">
-                                      <div className="p-1 border-b bg-slate-50 sticky top-0">
-                                        <input
-                                          type="text"
-                                          autoFocus
-                                          value={editingAssignedTo}
-                                          onChange={(e) => setEditingAssignedTo(e.target.value)}
-                                          placeholder="Type custom name..."
-                                          className="w-full text-xs px-2 py-1 border rounded bg-white outline-none focus:border-emerald-500 text-slate-700"
-                                        />
-                                      </div>
-                                      <div
-                                        onClick={() => { setEditingAssignedTo(""); setOpenDropdownId(null); }}
-                                        className="px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-100 cursor-pointer italic"
-                                      >
-                                        Unassigned
-                                      </div>
-                                      {teamMembers.map((member) => (
-                                        <div
-                                          key={member}
-                                          onClick={() => { setEditingAssignedTo(member); setOpenDropdownId(null); }}
-                                          className="px-3 py-1.5 text-xs text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 cursor-pointer truncate"
-                                        >
-                                          {member}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                              
-                              <div className="relative h-9">
-                                <input 
-                                  type="file"
-                                  multiple
-                                  accept="image/*,video/*,audio/*"
-                                  id={`edit-media-${item.id}`}
-                                  className="hidden"
-                                  onChange={(e) => handleMediaUpload(e, true)}
-                                  disabled={isUploading}
-                                />
-                                <label 
-                                  htmlFor={`edit-media-${item.id}`} 
-                                  className={`flex items-center justify-center w-full h-full border border-dashed rounded cursor-pointer text-slate-500 hover:bg-slate-50 text-xs ${isUploading ? 'opacity-50' : ''}`}
-                                >
-                                  {isUploading ? (
-                                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                                  ) : (
-                                    <div className="flex gap-0.5 mr-1 items-center text-slate-400">
-                                      <ImageIcon className="w-3 h-3" />
-                                      <Film className="w-3 h-3" />
-                                    </div>
-                                  )}
-                                  Add Media
-                                </label>
-                              </div>
-                            </div>
-
-                            {renderFormMediaList(editingMediaList, true)}
-                            
-                            <div className="flex justify-end gap-2 mt-2">
-                              <button onClick={cancelEditing} disabled={isUploading} className="px-3 py-1 text-xs bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200">Cancel</button>
-                              <button onClick={() => saveEditedItem(currentCategoryKey, item.id)} disabled={isUploading} className="px-3 py-1 text-xs bg-emerald-600 text-white rounded-md hover:bg-emerald-700">Save</button>
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex flex-col mb-1.5">
-                                <span className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">
-                                  {item.created_at ? formatDate(item.created_at) : formatDate(new Date().toISOString())}
-                                </span>
-                                {item.is_private && (
-                                  <div className="mt-1">
-                                    <span className="bg-amber-100 text-amber-800 text-[9px] px-2 py-0.5 rounded-full font-bold uppercase inline-flex items-center gap-1">
-                                      <Lock className="w-3 h-3" /> Private
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                              
-                              <div 
-                                className={`text-sm whitespace-pre-wrap break-words [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_strike]:line-through [&_s]:line-through [&_a]:text-blue-600 [&_a]:underline hover:[&_a]:text-blue-800 ${isCompletedItem ? 'line-through text-slate-400' : 'text-slate-800'}`}
-                                dangerouslySetInnerHTML={{ __html: linkifyHtml(item.content) }}
-                                onClick={(e) => {
-                                  if ((e.target as HTMLElement).tagName.toLowerCase() === 'a') {
-                                    e.stopPropagation();
+                      return (
+                        <div 
+                          key={item.id} 
+                          className={`flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 border p-3.5 rounded-xl bg-white shadow-sm transition-colors ${overdue ? 'border-red-300 bg-red-50/30' : item.is_pinned ? 'border-emerald-300 bg-emerald-50/20' : 'border-slate-200'}`}
+                        >
+                          {editingItemId === item.id ? (
+                            <div className="flex-1 flex flex-col gap-2 w-full">
+                              <EditableCell 
+                                value={editingTaskText}
+                                onChange={(val) => setEditingTaskText(val)}
+                                placeholder="Edit item..."
+                                className="border border-emerald-500 rounded-md outline-none px-3 py-2 text-slate-700 text-sm w-full min-h-[40px] bg-white"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && !e.shiftKey && window.innerWidth > 768) {
+                                    e.preventDefault();
+                                    saveEditedItem(currentCategoryKey, item.id);
                                   }
                                 }}
                               />
-                              
-                              {item.dueDate && (
-                                <p className={`text-xs font-medium flex items-center gap-1 mt-1.5 ${isCompletedItem ? 'text-slate-400' : overdue ? 'text-red-600' : 'text-emerald-600'}`}>
-                                  <Calendar className={`w-3 h-3 ${isCompletedItem ? 'text-slate-400' : overdue ? 'text-red-500' : 'text-emerald-600'}`} /> 
-                                  {overdue ? "Overdue: " : "Due by "} {formatDate(item.dueDate)}
-                                </p>
-                              )}
 
-                              {/* --- RENDER ALL MEDIA FOR THIS ITEM IN VIEW MODE (NO DELETE BUTTONS) --- */}
-                              {(() => {
-                                const renderList = item.mediaAttachments && item.mediaAttachments.length > 0 
-                                  ? item.mediaAttachments 
-                                  : (item.imageUrl ? [{ url: item.imageUrl, type: guessMediaType(item.imageUrl, item.mediaType), caption: item.imageCaption || "" }] : []);
-                                
-                                if (renderList.length === 0) return null;
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm mt-1">
+                                {activeModal === 'tasks' && (
+                                  <input 
+                                    type={editingTaskDate ? "date" : "text"}
+                                    onFocus={(e) => (e.target.type = "date")}
+                                    onBlur={(e) => { if (!e.target.value) e.target.type = "text"; }}
+                                    placeholder="Due Date"
+                                    value={editingTaskDate}
+                                    onChange={(e) => setEditingTaskDate(e.target.value)}
+                                    className="border rounded px-2 h-9 outline-none text-slate-600 bg-white w-full"
+                                  />
+                                )}
 
-                                return (
-                                  <div className="mt-3 flex flex-wrap gap-4">
-                                    {renderList.map((media, idx) => (
-                                      <div key={idx} className="w-full max-w-[240px]">
-                                        <div 
-                                          className="overflow-hidden rounded-lg border border-slate-200 shadow-sm relative cursor-pointer hover:opacity-90 transition-opacity bg-slate-50 flex items-center justify-center group/img"
-                                          onClick={() => setExpandedMedia({ url: media.url, type: media.type })}
+                                {activeModal === 'tasks' && (
+                                  <div className="relative w-full">
+                                    <div 
+                                      onClick={() => setOpenDropdownId(openDropdownId === item.id ? null : item.id)}
+                                      className="text-sm border rounded px-2 h-9 text-slate-600 bg-white flex items-center justify-between cursor-pointer select-none"
+                                    >
+                                      <span className="truncate">{editingAssignedTo || "Assign to..."}</span>
+                                      <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1" />
+                                    </div>
+
+                                    {openDropdownId === item.id && (
+                                      <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-md shadow-xl z-50 max-h-48 overflow-y-auto">
+                                        <div className="p-1 border-b bg-slate-50 sticky top-0">
+                                          <input
+                                            type="text"
+                                            autoFocus
+                                            value={editingAssignedTo}
+                                            onChange={(e) => setEditingAssignedTo(e.target.value)}
+                                            placeholder="Type custom name..."
+                                            className="w-full text-xs px-2 py-1 border rounded bg-white outline-none focus:border-emerald-500 text-slate-700"
+                                          />
+                                        </div>
+                                        <div
+                                          onClick={() => { setEditingAssignedTo(""); setOpenDropdownId(null); }}
+                                          className="px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-100 cursor-pointer italic"
                                         >
-                                          {media.type === 'image' && (
-                                            <img src={media.url} alt="attached media" className="w-full h-auto object-cover max-h-[150px]" />
-                                          )}
-                                          
-                                          {media.type === 'video' && (
-                                            <video src={`${media.url}#t=0.1`} className="w-full h-auto max-h-[150px] object-cover bg-black" muted />
-                                          )}
+                                          Unassigned
+                                        </div>
+                                        {teamMembers.map((member) => (
+                                          <div
+                                            key={member}
+                                            onClick={() => { setEditingAssignedTo(member); setOpenDropdownId(null); }}
+                                            className="px-3 py-1.5 text-xs text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 cursor-pointer truncate"
+                                          >
+                                            {member}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                                
+                                <div className="relative h-9">
+                                  <input 
+                                    type="file"
+                                    multiple
+                                    accept="image/*,video/*,audio/*"
+                                    id={`edit-media-${item.id}`}
+                                    className="hidden"
+                                    onChange={(e) => handleMediaUpload(e, true)}
+                                    disabled={isUploading}
+                                  />
+                                  <label 
+                                    htmlFor={`edit-media-${item.id}`} 
+                                    className={`flex items-center justify-center w-full h-full border border-dashed rounded cursor-pointer text-slate-500 hover:bg-slate-50 text-xs ${isUploading ? 'opacity-50' : ''}`}
+                                  >
+                                    {isUploading ? (
+                                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                    ) : (
+                                      <div className="flex gap-0.5 mr-1 items-center text-slate-400">
+                                        <ImageIcon className="w-3 h-3" />
+                                        <Film className="w-3 h-3" />
+                                      </div>
+                                    )}
+                                    Add Media
+                                  </label>
+                                </div>
+                              </div>
 
-                                          {media.type === 'audio' && (
-                                            <div className="w-full h-24 flex items-center justify-center">
-                                              <Play className="w-8 h-8 text-slate-400 group-hover/img:scale-110 transition-transform" />
-                                            </div>
+                              {renderFormMediaList(editingMediaList, true)}
+                              
+                              <div className="flex justify-end gap-2 mt-2">
+                                <button onClick={cancelEditing} disabled={isUploading} className="px-3 py-1 text-xs bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200">Cancel</button>
+                                <button onClick={() => saveEditedItem(currentCategoryKey, item.id)} disabled={isUploading} className="px-3 py-1 text-xs bg-emerald-600 text-white rounded-md hover:bg-emerald-700">Save</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex flex-col mb-1.5">
+                                  <span className="text-[10px] text-slate-400 font-bold tracking-widest uppercase flex items-center gap-1.5">
+                                    {item.is_pinned && <Pin className="w-3 h-3 text-emerald-500 fill-emerald-500 inline-block -mt-0.5" />}
+                                    {item.created_at ? formatDate(item.created_at) : formatDate(new Date().toISOString())}
+                                  </span>
+                                  {item.is_private && (
+                                    <div className="mt-1">
+                                      <span className="bg-amber-100 text-amber-800 text-[9px] px-2 py-0.5 rounded-full font-bold uppercase inline-flex items-center gap-1">
+                                        <Lock className="w-3 h-3" /> Private
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                                
+                                <div 
+                                  className={`text-sm whitespace-pre-wrap break-words [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_strike]:line-through [&_s]:line-through [&_a]:text-blue-600 [&_a]:underline hover:[&_a]:text-blue-800 ${isCompletedItem ? 'line-through text-slate-400' : 'text-slate-800'}`}
+                                  dangerouslySetInnerHTML={{ __html: linkifyHtml(item.content) }}
+                                  onClick={(e) => {
+                                    if ((e.target as HTMLElement).tagName.toLowerCase() === 'a') {
+                                      e.stopPropagation();
+                                    }
+                                  }}
+                                />
+                                
+                                {item.dueDate && (
+                                  <p className={`text-xs font-medium flex items-center gap-1 mt-1.5 ${isCompletedItem ? 'text-slate-400' : overdue ? 'text-red-600' : 'text-emerald-600'}`}>
+                                    <Calendar className={`w-3 h-3 ${isCompletedItem ? 'text-slate-400' : overdue ? 'text-red-500' : 'text-emerald-600'}`} /> 
+                                    {overdue ? "Overdue: " : "Due by "} {formatDate(item.dueDate)}
+                                  </p>
+                                )}
+
+                                {(() => {
+                                  const renderList = item.mediaAttachments && item.mediaAttachments.length > 0 
+                                    ? item.mediaAttachments 
+                                    : (item.imageUrl ? [{ url: item.imageUrl, type: guessMediaType(item.imageUrl, item.mediaType), caption: item.imageCaption || "" }] : []);
+                                  
+                                  if (renderList.length === 0) return null;
+
+                                  return (
+                                    <div className="mt-3 flex flex-wrap gap-4">
+                                      {renderList.map((media, idx) => (
+                                        <div key={idx} className="w-full max-w-[240px]">
+                                          <div 
+                                            className="overflow-hidden rounded-lg border border-slate-200 shadow-sm relative cursor-pointer hover:opacity-90 transition-opacity bg-slate-50 flex items-center justify-center group/img"
+                                            onClick={() => setExpandedMedia({ url: media.url, type: media.type })}
+                                          >
+                                            {media.type === 'image' && (
+                                              <img src={media.url} alt="attached media" className="w-full h-auto object-cover max-h-[150px]" />
+                                            )}
+                                            
+                                            {media.type === 'video' && (
+                                              <video src={`${media.url}#t=0.1`} className="w-full h-auto max-h-[150px] object-cover bg-black" muted />
+                                            )}
+
+                                            {media.type === 'audio' && (
+                                              <div className="w-full h-24 flex items-center justify-center">
+                                                <Play className="w-8 h-8 text-slate-400 group-hover/img:scale-110 transition-transform" />
+                                              </div>
+                                            )}
+                                          </div>
+
+                                          {media.caption && (
+                                            <p className="text-xs text-slate-500 italic mt-1.5 px-0.5 break-words">
+                                              {media.caption}
+                                            </p>
                                           )}
                                         </div>
+                                      ))}
+                                    </div>
+                                  );
+                                })()}
+                              </div>
 
-                                        {media.caption && (
-                                          <p className="text-xs text-slate-500 italic mt-1.5 px-0.5 break-words">
-                                            {media.caption}
-                                          </p>
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
-                                );
-                              })()}
+                              <div className="flex gap-1.5 shrink-0 items-center">
+                                <div className="flex flex-col gap-0.5 mr-1 bg-slate-50 border border-slate-100 rounded-md p-0.5">
+                                  <button 
+                                    onClick={() => handleReorder(idx, 'up', array)}
+                                    disabled={!canMoveUp}
+                                    className={`p-0.5 rounded transition-colors ${canMoveUp ? 'text-slate-400 hover:bg-slate-200 hover:text-slate-700' : 'text-slate-200 cursor-not-allowed'}`}
+                                    title="Move Up"
+                                  >
+                                    <ArrowUp className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button 
+                                    onClick={() => handleReorder(idx, 'down', array)}
+                                    disabled={!canMoveDown}
+                                    className={`p-0.5 rounded transition-colors ${canMoveDown ? 'text-slate-400 hover:bg-slate-200 hover:text-slate-700' : 'text-slate-200 cursor-not-allowed'}`}
+                                    title="Move Down"
+                                  >
+                                    <ArrowDown className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
 
-                            </div>
-
-                            <div className="flex gap-1.5 shrink-0">
-                              {isAdmin && (
                                 <button 
-                                  onClick={() => {
-                                    setPrivacyModalItem(item);
-                                    setTempIsPrivate(item.is_private || false);
-                                    setTempAllowedUsers(item.allowed_users || []);
-                                  }} 
+                                  onClick={() => updateItem(item.id, { is_pinned: !item.is_pinned } as any)} 
                                   className={`p-1.5 border rounded-md transition-colors ${
-                                    item.is_private 
-                                      ? "border-amber-200 text-amber-600 bg-amber-50 hover:bg-amber-100" 
+                                    item.is_pinned 
+                                      ? "border-emerald-200 text-emerald-600 bg-emerald-50 hover:bg-emerald-100" 
                                       : "border-slate-100 text-slate-400 bg-slate-50 hover:bg-slate-100"
                                   }`}
-                                  title="Privacy Settings"
+                                  title={item.is_pinned ? "Unpin Item" : "Pin Item"}
                                 >
-                                  {item.is_private ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                                  <Pin className={`w-4 h-4 ${item.is_pinned ? "fill-emerald-600" : ""}`} />
                                 </button>
-                              )}
 
-                              <button onClick={() => startEditing(item)} className="p-1.5 border border-slate-100 text-slate-400 bg-slate-50 rounded-md hover:bg-slate-100 hover:text-slate-600" title="Edit">
-                                <Pencil className="w-4 h-4" />
-                              </button>
-                              
-                              {activeModal === 'tasks' && (
-                                <button onClick={() => handleMoveTask(item.id, 'taskDone' as CategoryId)} className="p-1.5 border border-emerald-100 text-emerald-500 bg-white rounded-md hover:bg-emerald-50" title="Mark Done">
-                                  <Check className="w-4 h-4" />
+                                {isAdmin && (
+                                  <button 
+                                    onClick={() => {
+                                      setPrivacyModalItem(item);
+                                      setTempIsPrivate(item.is_private || false);
+                                      setTempAllowedUsers(item.allowed_users || []);
+                                    }} 
+                                    className={`p-1.5 border rounded-md transition-colors ${
+                                      item.is_private 
+                                        ? "border-amber-200 text-amber-600 bg-amber-50 hover:bg-amber-100" 
+                                        : "border-slate-100 text-slate-400 bg-slate-50 hover:bg-slate-100"
+                                    }`}
+                                    title="Privacy Settings"
+                                  >
+                                    {item.is_private ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                                  </button>
+                                )}
+
+                                <button onClick={() => startEditing(item)} className="p-1.5 border border-slate-100 text-slate-400 bg-slate-50 rounded-md hover:bg-slate-100 hover:text-slate-600" title="Edit">
+                                  <Pencil className="w-4 h-4" />
                                 </button>
-                              )}
+                                
+                                {activeModal === 'tasks' && (
+                                  <button onClick={() => handleMoveTask(item.id, 'taskDone' as CategoryId)} className="p-1.5 border border-emerald-100 text-emerald-500 bg-white rounded-md hover:bg-emerald-50" title="Mark Done">
+                                    <Check className="w-4 h-4" />
+                                  </button>
+                                )}
 
-                              {activeModal === 'taskDone' && (
-                                <button onClick={() => handleMoveTask(item.id, 'tasks' as CategoryId)} className="p-1.5 border border-amber-100 text-amber-500 bg-white rounded-md hover:bg-amber-50" title="Restore to Tasks">
-                                  <RotateCcw className="w-4 h-4" />
+                                {activeModal === 'taskDone' && (
+                                  <button onClick={() => handleMoveTask(item.id, 'tasks' as CategoryId)} className="p-1.5 border border-amber-100 text-amber-500 bg-white rounded-md hover:bg-amber-50" title="Restore to Tasks">
+                                    <RotateCcw className="w-4 h-4" />
+                                  </button>
+                                )}
+
+                                {(activeModal === 'itemsNeeded' || activeModal === 'pujaItems') && subTab === 'needed' && (
+                                  <button onClick={() => handleMoveTask(item.id, (activeModal === 'itemsNeeded' ? 'itemsBrought' : 'pujaItemsBrought') as CategoryId)} className="p-1.5 border border-emerald-100 text-emerald-500 bg-white rounded-md hover:bg-emerald-50" title="Mark as Brought">
+                                    <Check className="w-4 h-4" />
+                                  </button>
+                                )}
+
+                                {(activeModal === 'itemsNeeded' || activeModal === 'pujaItems') && subTab === 'brought' && (
+                                  <button onClick={() => handleMoveTask(item.id, activeModal as CategoryId)} className="p-1.5 border border-amber-100 text-amber-500 bg-white rounded-md hover:bg-amber-50" title="Move back to To Buy">
+                                    <RotateCcw className="w-4 h-4" />
+                                  </button>
+                                )}
+
+                                <button onClick={() => handleDeleteRequest(currentCategoryKey, item.id)} className="p-1.5 border border-red-100 text-red-400 bg-white rounded-md hover:bg-red-50" title="Delete">
+                                  <Trash2 className="w-4 h-4" />
                                 </button>
-                              )}
-
-                              {(activeModal === 'itemsNeeded' || activeModal === 'pujaItems') && subTab === 'needed' && (
-                                <button onClick={() => handleMoveTask(item.id, (activeModal === 'itemsNeeded' ? 'itemsBrought' : 'pujaItemsBrought') as CategoryId)} className="p-1.5 border border-emerald-100 text-emerald-500 bg-white rounded-md hover:bg-emerald-50" title="Mark as Brought">
-                                  <Check className="w-4 h-4" />
-                                </button>
-                              )}
-
-                              {(activeModal === 'itemsNeeded' || activeModal === 'pujaItems') && subTab === 'brought' && (
-                                <button onClick={() => handleMoveTask(item.id, activeModal as CategoryId)} className="p-1.5 border border-amber-100 text-amber-500 bg-white rounded-md hover:bg-amber-50" title="Move back to To Buy">
-                                  <RotateCcw className="w-4 h-4" />
-                                </button>
-                              )}
-
-                              <button onClick={() => handleDeleteRequest(currentCategoryKey, item.id)} className="p-1.5 border border-red-100 text-red-400 bg-white rounded-md hover:bg-red-50" title="Delete">
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
                   
                   {modalItems.filter((item: any) => 
                     isAdmin || 

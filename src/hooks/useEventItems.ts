@@ -16,10 +16,11 @@ export type WorkspaceItem = {
   assignedTo?: string;
   imageUrl?: string;
   imageCaption?: string | null;
-  mediaAttachments?: MediaItem[]; // <-- Supports multiple media files
+  mediaAttachments?: MediaItem[];
   created_at: string;
   is_private?: boolean;       
   allowed_users?: string[];
+  is_pinned?: boolean; // <-- Added is_pinned type
 };
 
 type GroupedItems = Record<CategoryId, WorkspaceItem[]>;
@@ -59,10 +60,11 @@ export function useEventItems(eventName: string) {
           assignedTo: row.assigned_to || undefined,
           imageUrl: row.image_url || undefined,
           imageCaption: row.image_caption || undefined,
-          mediaAttachments: row.media_attachments || [], // <-- Mapping array
+          mediaAttachments: row.media_attachments || [],
           created_at: row.created_at || "",
           is_private: row.is_private || false,
           allowed_users: row.allowed_users || [],
+          is_pinned: row.is_pinned || false, // <-- Map from database
         });
       }
     });
@@ -85,9 +87,10 @@ export function useEventItems(eventName: string) {
           assigned_to: payload.assignedTo || null,
           image_url: payload.imageUrl || null,
           image_caption: payload.imageCaption || null,
-          media_attachments: payload.mediaAttachments || [], // <-- Saving array
+          media_attachments: payload.mediaAttachments || [],
           is_private: payload.is_private || false,
-          allowed_users: payload.allowed_users || []
+          allowed_users: payload.allowed_users || [],
+          is_pinned: payload.is_pinned || false, // <-- Insert into database
         },
       ]);
 
@@ -107,11 +110,11 @@ export function useEventItems(eventName: string) {
     if (updates.assignedTo !== undefined) dbUpdates.assigned_to = updates.assignedTo;
     if (updates.imageUrl !== undefined) dbUpdates.image_url = updates.imageUrl;
     if (updates.imageCaption !== undefined) dbUpdates.image_caption = updates.imageCaption; 
-    if (updates.mediaAttachments !== undefined) dbUpdates.media_attachments = updates.mediaAttachments; // <-- Updating array
+    if (updates.mediaAttachments !== undefined) dbUpdates.media_attachments = updates.mediaAttachments;
     if (updates.is_private !== undefined) dbUpdates.is_private = updates.is_private;       
-    
-    if (updates.allowed_users !== undefined) {
-      dbUpdates.allowed_users = updates.allowed_users; 
+    if (updates.is_pinned !== undefined) dbUpdates.is_pinned = updates.is_pinned; // <-- Handle patch updates
+    if (updates.created_at !== undefined) dbUpdates.created_at = updates.created_at;
+    if (updates.allowed_users !== undefined) {dbUpdates.allowed_users = updates.allowed_users; 
     }
 
     const { error } = await supabase
