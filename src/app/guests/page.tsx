@@ -67,7 +67,7 @@ export default function GuestsPage() {
   [dbGuests, activeTab]);
 
   const currentTabObj = TABS.find(t => t.name === activeTab);
-  const totalPeople = filteredGuests.reduce((acc, g) => acc + (Number(g.count) || 0), 0);
+  const totalPeople = filteredGuests.reduce((acc, g) => acc + (Number(g.count) || 0), 0) + " People";
 
   // Bulletproof side detection to recover any guests whose N/P was wiped out
   const getDerivedSide = (guest: any) => {
@@ -134,8 +134,6 @@ export default function GuestsPage() {
 
     const joinedMobiles = (editForm.mobiles || []).filter(Boolean).join(" ");
 
-    // FIX: Forcefully protect and set the N/P side so it doesn't get wiped out to `null` 
-    // when you save from the Staying tabs (where the dropdown is hidden)
     let sideToSave = editForm.side;
     if (activeTab.includes("Nimisha")) sideToSave = "N";
     if (activeTab.includes("Prajanya")) sideToSave = "P";
@@ -309,15 +307,18 @@ export default function GuestsPage() {
       </div>
 
       <div className="border rounded-lg p-6 bg-white shadow-sm">
+        
+        {/* UPDATED HEADER SECTION */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-          <h2 className="text-xl font-semibold">{activeTab} List</h2>
           
-          {/* UPDATED: Flex container optimized for mobile 1-line alignment */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full font-medium text-xs whitespace-nowrap">
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="text-xl font-semibold">{activeTab} List</h2>
+            <span className="bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full font-medium text-sm whitespace-nowrap">
               Total: {totalPeople}
             </span>
-            
+          </div>
+          
+          <div className="flex flex-wrap items-center gap-2">
             {currentTabObj?.formLink && (
               <a 
                 href={currentTabObj.formLink} 
@@ -327,14 +328,13 @@ export default function GuestsPage() {
                 <Button 
                   variant="outline"
                   size="sm"
-                  className="h-7 px-2.5 text-xs border-emerald-600 text-emerald-700 hover:bg-emerald-50 flex items-center gap-1.5"
+                  className="h-8 px-3 text-xs border-emerald-600 text-emerald-700 hover:bg-emerald-50 flex items-center gap-1.5"
                 >
                   <ExternalLink className="w-3.5 h-3.5" /> Form
                 </Button>
               </a>
             )}
             
-            {/* NEW: RSVP Site link button */}
             {currentTabObj?.rsvpLink && (
               <a 
                 href={currentTabObj.rsvpLink} 
@@ -343,13 +343,14 @@ export default function GuestsPage() {
               >
                 <Button 
                   size="sm"
-                  className="h-7 px-2.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 shadow-sm"
+                  className="h-8 px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 shadow-sm"
                 >
                   <ExternalLink className="w-3.5 h-3.5" /> RSVP Site
                 </Button>
               </a>
             )}
           </div>
+
         </div>
 
         <div className="overflow-x-auto">
