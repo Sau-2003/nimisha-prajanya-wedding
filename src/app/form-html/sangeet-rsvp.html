@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wedding RSVP - Sangeet Ceremony</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Lato:wght@300;400&display=swap');
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Lato', sans-serif;
+      /* Soft romantic background - replace URL with your own floral background if desired */
+      background: linear-gradient(rgba(247, 241, 237, 0.85), rgba(247, 241, 237, 0.85)), url('https://images.unsplash.com/photo-1519225421980-715cb0215aed?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80') center/cover fixed;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      color: #4a4a4a;
+    }
+
+    .rsvp-card {
+      background: #ffffff;
+      padding: 3rem 2rem;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+      width: 100%;
+      max-width: 450px;
+      text-align: center;
+      border: 1px solid #f0e9e4;
+    }
+
+    h1 {
+      font-family: 'Playfair Display', serif;
+      color: #2c3e50;
+      font-size: 2.2rem;
+      margin-bottom: 0.5rem;
+      font-weight: 600;
+    }
+
+    p.subtitle {
+      font-style: italic;
+      color: #7f8c8d;
+      margin-bottom: 2rem;
+      font-family: 'Playfair Display', serif;
+    }
+
+    .form-group {
+      text-align: left;
+      margin-bottom: 1.5rem;
+    }
+
+    label {
+      display: block;
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: #34495e;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    input[type="tel"],
+    select {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 1rem;
+      font-family: 'Lato', sans-serif;
+      box-sizing: border-box;
+      transition: border-color 0.3s;
+    }
+
+    input:focus, select:focus {
+      outline: none;
+      border-color: #d4af37; /* Gold accent */
+    }
+
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #fdfbf9;
+      padding: 15px;
+      border-radius: 6px;
+      border: 1px solid #eee;
+    }
+
+    .checkbox-group label {
+      margin-bottom: 0;
+      text-transform: none;
+      letter-spacing: normal;
+      font-weight: 400;
+      font-size: 1rem;
+    }
+
+    input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      accent-color: #d4af37;
+    }
+
+    button {
+      background: #2c3e50;
+      color: white;
+      border: none;
+      padding: 14px 20px;
+      width: 100%;
+      font-size: 1.1rem;
+      font-family: 'Playfair Display', serif;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.3s, transform 0.1s;
+      margin-top: 1rem;
+    }
+
+    button:hover {
+      background: #1a252f;
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+
+    .success-message {
+      display: none;
+      color: #27ae60;
+      font-weight: bold;
+      margin-top: 1rem;
+      font-family: 'Playfair Display', serif;
+      font-size: 1.2rem;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Hidden iframe prevents the page from redirecting to Google Forms after submit -->
+  <script type="text/javascript">var submitted=false;</script>
+  <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;" onload="if(submitted) { document.getElementById('rsvp-form').style.display='none'; document.getElementById('success-msg').style.display='block'; }"></iframe>
+
+  <div class="rsvp-card">
+    <h1>Kindly RSVP</h1>
+    <p class="subtitle">For the Sangeet Ceremony</p>
+
+    <!-- UPDATE THE ACTION URL HERE -->
+    <form id="rsvp-form" action="https://docs.google.com/forms/d/e/1FAIpQLSdfEPMNpl-G_8XD65yQL1J7y7dQExduNW9TLYEBaelOdYjnhg/formResponse" method="POST" target="hidden_iframe" onsubmit="submitted=true;">
+      
+      <div class="form-group">
+        <label for="family">Name</label>
+        <!-- Updated with your real ID -->
+        <input type="text" id="family" name="entry.875929226" required placeholder="">
+      </div>
+
+      <div class="form-group">
+        <label for="count">Number of People Attending</label>
+        <!-- Updated with your real ID -->
+        <input type="number" id="count" name="entry.691989859" required min="1" max="10" placeholder="">
+      </div>
+
+      <button type="submit">Confirm Attendance</button>
+    </form>
+
+    <div id="success-msg" class="success-message">
+      Thank you! Your RSVP has been received. <br><br> We can't wait to celebrate with you.
+    </div>
+  </div>
+
+</body>
+</html>

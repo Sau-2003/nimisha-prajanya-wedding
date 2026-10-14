@@ -10,23 +10,28 @@ import { useGuests } from "@/hooks/useGuests";
 const TABS = [
   { 
     name: "Nimisha's Side Staying", 
-    formLink: "https://docs.google.com/forms/d/e/1FAIpQLScFBiRBcWdcMJImcindFgZowuJb3DLrKHbZ5zAqLxv6FHBTqw/viewform?usp=sharing&ouid=108021249968731666581" 
+    formLink: "https://docs.google.com/forms/d/e/1FAIpQLScFBiRBcWdcMJImcindFgZowuJb3DLrKHbZ5zAqLxv6FHBTqw/viewform?usp=sharing&ouid=108021249968731666581",
+    rsvpLink: "https://nimisha-rsvp.netlify.app/"
   },
   { 
     name: "Prajanya's Side Staying", 
-    formLink: "https://docs.google.com/forms/d/e/1FAIpQLSd1hcMj5I4TplzX1tsj65pw9UJwZ6vurnQyRTKR-Pyy_rmvyw/viewform?usp=dialog" 
+    formLink: "https://docs.google.com/forms/d/e/1FAIpQLSd1hcMj5I4TplzX1tsj65pw9UJwZ6vurnQyRTKR-Pyy_rmvyw/viewform?usp=dialog",
+    rsvpLink: "https://prajanya-rsvp.netlify.app/"
   },
   { 
     name: "Sangeet", 
-    formLink: "https://docs.google.com/forms/d/e/1FAIpQLSdfEPMNpl-G_8XD65yQL1J7y7dQExduNW9TLYEBaelOdYjnhg/viewform?usp=header" 
+    formLink: "https://docs.google.com/forms/d/e/1FAIpQLSdfEPMNpl-G_8XD65yQL1J7y7dQExduNW9TLYEBaelOdYjnhg/viewform?usp=header",
+    rsvpLink: "https://sangeet-rsvp.netlify.app/"
   },
   { 
     name: "Haldi", 
-    formLink: "https://docs.google.com/forms/d/e/1FAIpQLSfaMDcetY_j-CK7xERXNcTsI5c12_lmzYzxx7ZjTqHTSIFj9A/viewform?usp=header" 
+    formLink: "https://docs.google.com/forms/d/e/1FAIpQLSfaMDcetY_j-CK7xERXNcTsI5c12_lmzYzxx7ZjTqHTSIFj9A/viewform?usp=header",
+    rsvpLink: "https://haldi-rsvp.netlify.app/"
   },
   { 
     name: "Reception", 
-    formLink: "https://docs.google.com/forms/d/e/1FAIpQLSfqcaNhDeWyOTPepyfPxIoQhLlZrWropZowTSIoNR_esXDM6g/viewform"
+    formLink: "https://docs.google.com/forms/d/e/1FAIpQLSfqcaNhDeWyOTPepyfPxIoQhLlZrWropZowTSIoNR_esXDM6g/viewform",
+    rsvpLink: "https://receptionrsvp.netlify.app/"
   },
 ];
 
@@ -273,7 +278,7 @@ export default function GuestsPage() {
         
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
           <a 
-            href="https://docs.google.com/spreadsheets/d/1PnsOf0vpQs3I_S7ilQF7heiBwYvePVzsyz81I74czgA/edit?gid=1068383416#gid=1068383416" 
+            href="https://docs.google.com/spreadsheets/d/1PnsOf0vpQs3I_S7ilQF7heiBwYvePVzsyz81I74czgA/edit?gid=421945919#gid=421945919" 
             target="_blank" 
             rel="noopener noreferrer"
             className="w-full sm:w-auto"
@@ -305,11 +310,14 @@ export default function GuestsPage() {
 
       <div className="border rounded-lg p-6 bg-white shadow-sm">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-          <div className="flex flex-wrap items-center gap-4">
-            <h2 className="text-xl font-semibold">{activeTab} List</h2>
-            <span className="bg-emerald-50 text-emerald-700 px-4 py-1 rounded-full font-medium text-sm">
-              Total: {totalPeople} people
+          <h2 className="text-xl font-semibold">{activeTab} List</h2>
+          
+          {/* UPDATED: Flex container optimized for mobile 1-line alignment */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full font-medium text-xs whitespace-nowrap">
+              Total: {totalPeople}
             </span>
+            
             {currentTabObj?.formLink && (
               <a 
                 href={currentTabObj.formLink} 
@@ -319,9 +327,25 @@ export default function GuestsPage() {
                 <Button 
                   variant="outline"
                   size="sm"
-                  className="border-emerald-600 text-emerald-700 hover:bg-emerald-50 flex items-center gap-2"
+                  className="h-7 px-2.5 text-xs border-emerald-600 text-emerald-700 hover:bg-emerald-50 flex items-center gap-1.5"
                 >
-                  <ExternalLink className="w-4 h-4" /> Open Form
+                  <ExternalLink className="w-3.5 h-3.5" /> Form
+                </Button>
+              </a>
+            )}
+            
+            {/* NEW: RSVP Site link button */}
+            {currentTabObj?.rsvpLink && (
+              <a 
+                href={currentTabObj.rsvpLink} 
+                target="_blank" 
+                rel="noopener noreferrer"
+              >
+                <Button 
+                  size="sm"
+                  className="h-7 px-2.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 shadow-sm"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" /> RSVP Site
                 </Button>
               </a>
             )}
