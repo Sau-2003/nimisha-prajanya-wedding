@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { 
-  ClipboardList, CheckCircle2, PaperBag, Flame, 
+  ClipboardList, CheckCircle2, Package, Flame, 
   Gamepad2, Store, Lightbulb, Shirt, ExternalLink, 
   Plus, Trash2, Check, RotateCcw, Pencil, X, Calendar, 
   Image as ImageIcon, User, ChevronDown, Bold, Italic, 
@@ -673,7 +673,7 @@ export default function EventWorkspacePage() {
     { id: 'outfit', title: 'Outfit', icon: Shirt, color: 'text-red-500', isLink: true, href: `/events/${rawEventName}/outfits`, subtext: 'Manage Outfits' },
     { id: 'ideas', title: 'Ideas', icon: Lightbulb, color: 'text-amber-500', isLink: false },
     { id: 'games', title: 'Games', icon: Gamepad2, color: 'text-purple-500', isLink: false },
-    { id: 'itemsNeeded', title: 'Items Needed', icon: PaperBag, color: 'text-pink-500', isLink: false },
+    { id: 'itemsNeeded', title: 'Items Needed', icon: Package, color: 'text-pink-500', isLink: false },
     { id: 'vendors', title: 'Vendors', icon: Store, color: 'text-teal-500', isLink: false },
     { id: 'pujaItems', title: 'Puja Items', icon: Flame, color: 'text-orange-500', isLink: false },
   ];
