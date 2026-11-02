@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import {LayoutDashboard,FileText,
-Gem,CalendarHeart,ClipboardList,Gift,ShoppingBag,PaperBag,Flame,Users,IndianRupee,Menu,X,BookIcon,CalendarClock,Handshake,SquareMenu,Search,ArrowUpDown,Folders,LogOut,ShieldCheck,} from "lucide-react";
+Gem,CalendarHeart,ClipboardList,Gift,ShoppingBag,Package,Flame,Users,IndianRupee,Menu,X,BookIcon,CalendarClock,Handshake,SquareMenu,Search,ArrowUpDown,Folders,LogOut,ShieldCheck,} from "lucide-react";
 import { DressIcon } from "@phosphor-icons/react";
 
 import { supabase } from "@/lib/supabase";
@@ -25,7 +25,7 @@ const mainNav = [
   { name: "Task Schedule", href: "/task-schedule", icon: CalendarClock },
   { name: "Puja Items", href: "/puja_items", icon: Flame },
   { name: "Documents", href: "/documents", icon: FileText },
-  { name: "Items", href: "/items", icon: PaperBag },
+  { name: "Items", href: "/items", icon: Package },
   { name: "Chadana", href: "/chadana", icon: Gem },
   { name: "Gifts", href: "/gifts", icon: Gift },
   { name: "Shoping", href: "/shoping", icon: ShoppingBag },

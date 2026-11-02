@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from '@/lib/supabase';
 import Link from "next/link";
 import { 
-  PaperBag, Check, RotateCcw, Trash2, Calendar, 
+  Package, Check, RotateCcw, Trash2, Calendar, 
   User, Image as ImageIcon, Music, Play, 
   ShoppingCart, PackageCheck, Loader2, Filter, Plus, Pencil,
   Users, ArrowUpDown
@@ -364,7 +364,7 @@ export default function GlobalitemsPage() {
       <div className="mb-6 flex flex-col lg:flex-row lg:items-end justify-between gap-4 border-b border-slate-200 pb-5">
         <div className="shrink-0 overflow-hidden">
           <h1 className="font-serif text-2xl md:text-3xl font-bold text-emerald-900 flex items-center gap-2.5">
-            <PaperBag className="w-6 h-6 md:w-8 md:h-8 text-emerald-600 shrink-0" />
+            <Package className="w-6 h-6 md:w-8 md:h-8 text-emerald-600 shrink-0" />
             <span className="truncate">Master Items List</span>
           </h1>
           {/* Forced Single Line Subtitle */}
@@ -469,7 +469,7 @@ export default function GlobalitemsPage() {
             </div>
           ) : displayList.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 text-slate-400">
-              <PaperBag className="w-8 h-8 mb-2 opacity-20" />
+              <Package className="w-8 h-8 mb-2 opacity-20" />
               <p className="text-sm">No items found matching your filters.</p>
             </div>
           ) : (
