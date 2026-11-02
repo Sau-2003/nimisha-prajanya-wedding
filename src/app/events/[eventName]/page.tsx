@@ -10,7 +10,7 @@ import {
   Plus, Trash2, Check, RotateCcw, Pencil, X, Calendar, 
   Image as ImageIcon, User, ChevronDown, Bold, Italic, 
   Strikethrough, Loader2, Film, Music, Play, Phone, ShoppingCart, PackageCheck, Lock, Unlock,
-  Pin, ArrowUp, ArrowDown
+  Pin, ArrowUp, ArrowDown, Search
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -209,6 +209,12 @@ export default function EventWorkspacePage() {
   const [subTab, setSubTab] = useState<'needed' | 'brought'>('needed');
   const [showAddForm, setShowAddForm] = useState(false);
   const [isImportingVendors, setIsImportingVendors] = useState(false); 
+
+  // --- SEARCH STATE ---
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [globalSearchQuery, setGlobalSearchQuery] = useState("");
+  const [isModalSearchActive, setIsModalSearchActive] = useState(false);
+  const [modalSearchQuery, setModalSearchQuery] = useState("");
   
   const [newItemText, setNewItemText] = useState("");
   const [newItemDate, setNewItemDate] = useState("");
@@ -476,6 +482,49 @@ export default function EventWorkspacePage() {
     }
   };
 
+  // --- GLOBAL SEARCH HELPER ---
+  const getGlobalSearchResults = () => {
+    const q = globalSearchQuery.trim().toLowerCase();
+    if (!q) return { matchedItems: [], matchedVendors: [] };
+
+    const categoryMeta: { key: string; modalId: CategoryId; subTab?: 'needed' | 'brought'; label: string }[] = [
+      { key: 'tasks', modalId: 'tasks', label: 'Tasks' },
+      { key: 'taskDone', modalId: 'taskDone', label: 'Task Done' },
+      { key: 'ideas', modalId: 'ideas', label: 'Ideas' },
+      { key: 'games', modalId: 'games', label: 'Games' },
+      { key: 'itemsNeeded', modalId: 'itemsNeeded', subTab: 'needed', label: 'Items Needed (To Buy)' },
+      { key: 'itemsBrought', modalId: 'itemsNeeded', subTab: 'brought', label: 'Items Needed (Brought)' },
+      { key: 'pujaItems', modalId: 'pujaItems', subTab: 'needed', label: 'Puja Items (To Buy)' },
+      { key: 'pujaItemsBrought', modalId: 'pujaItems', subTab: 'brought', label: 'Puja Items (Brought)' },
+    ];
+
+    const matchedItems: { item: any; meta: typeof categoryMeta[0] }[] = [];
+
+    categoryMeta.forEach((meta) => {
+      const list = (items as any)?.[meta.key] || [];
+      list.forEach((item: any) => {
+        const isVisible = isAdmin || !item.is_private || (item.allowed_users && item.allowed_users.includes(currentUserEmail));
+        if (!isVisible) return;
+
+        const textMatch = stripHtml(item.content).toLowerCase().includes(q);
+        const assigneeMatch = item.assignedTo?.toLowerCase().includes(q);
+        const captionMatch = item.mediaAttachments?.some((m: any) => m.caption?.toLowerCase().includes(q));
+
+        if (textMatch || assigneeMatch || captionMatch) {
+          matchedItems.push({ item, meta });
+        }
+      });
+    });
+
+    const matchedVendors = assignedVendors.filter(v =>
+      (v.assigned_vendor || "").toLowerCase().includes(q) ||
+      (v.category || "").toLowerCase().includes(q) ||
+      (v.status || "").toLowerCase().includes(q)
+    );
+
+    return { matchedItems, matchedVendors };
+  };
+
   const renderFormMediaList = (mediaList: MediaItem[], isEditMode: boolean) => {
     if (!mediaList || mediaList.length === 0) return null;
     
@@ -631,25 +680,43 @@ export default function EventWorkspacePage() {
 
   if (loading) return <div className="p-12 text-center text-emerald-600">Loading workspace...</div>;
 
+  const { matchedItems, matchedVendors } = getGlobalSearchResults();
+
   return (
     <div className="min-h-screen p-6 md:p-12 max-w-6xl mx-auto">
       
       <FloatingToolbar />
 
       <div className="mb-10">
-        <div className="flex flex-col md:flex-row md:items-center gap-4 mb-2">
-          <h1 className="text-3xl font-serif font-bold text-emerald-900">
-            {formattedEventName} Workspace
-          </h1>
-          <div className="flex items-center gap-3">
-            <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold tracking-wide">
-              {percentComplete}% Completed
-            </span>
-            <span className="bg-slate-100 text-slate-500 px-3 py-1 rounded-full text-xs font-medium tracking-wide">
-              {completedTasks} / {totalTasks} Tasks
-            </span>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2">
+          <div className="flex flex-col md:flex-row md:items-center gap-4">
+            <h1 className="text-3xl font-serif font-bold text-emerald-900">
+              {formattedEventName} Workspace
+            </h1>
+            <div className="flex items-center gap-3">
+              <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold tracking-wide">
+                {percentComplete}% Completed
+              </span>
+              <span className="bg-slate-100 text-slate-500 px-3 py-1 rounded-full text-xs font-medium tracking-wide">
+                {completedTasks} / {totalTasks} Tasks
+              </span>
+            </div>
           </div>
+
+          {/* --- SEARCH BUTTON --- */}
+          <Button
+            variant="outline"
+            onClick={() => {
+              setGlobalSearchQuery("");
+              setIsSearchOpen(true);
+            }}
+            className="flex items-center gap-2 text-slate-600 border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/40 hover:text-emerald-800 rounded-xl px-4 py-2 h-10 w-full md:w-auto justify-start md:justify-center shadow-sm transition-all"
+          >
+            <Search className="w-4 h-4 text-emerald-600" />
+            <span className="text-sm font-medium">Search Workspace...</span>
+          </Button>
         </div>
+
         <div className="w-full md:w-64 h-2.5 bg-slate-100 rounded-full overflow-hidden mt-3">
           <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${percentComplete}%` }}></div>
         </div>
@@ -686,6 +753,8 @@ export default function EventWorkspacePage() {
                 setEditingItemId(null); 
                 setShowAddForm(false);
                 setIsImportingVendors(false);
+                setIsModalSearchActive(false);
+                setModalSearchQuery("");
               }}
               className="bg-white border border-slate-100 p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow text-left h-full flex flex-col group"
             >
@@ -702,6 +771,122 @@ export default function EventWorkspacePage() {
           );
         })}
       </div>
+
+      {/* --- GLOBAL SEARCH DIALOG --- */}
+      <Dialog open={isSearchOpen} onOpenChange={setIsSearchOpen}>
+        <DialogContent className="sm:max-w-xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader className="shrink-0">
+            <DialogTitle className="flex items-center gap-2 font-serif text-lg">
+              <Search className="w-5 h-5 text-emerald-600" />
+              Search {formattedEventName} Workspace
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="relative mt-2 shrink-0">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              autoFocus
+              value={globalSearchQuery}
+              onChange={(e) => setGlobalSearchQuery(e.target.value)}
+              placeholder="Search tasks, ideas, items, assignees, or vendors..."
+              className="w-full pl-10 pr-9 py-2.5 text-sm border border-slate-200 rounded-xl outline-none focus:border-emerald-500 bg-slate-50 focus:bg-white transition-colors"
+            />
+            {globalSearchQuery && (
+              <button
+                onClick={() => setGlobalSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex-1 overflow-y-auto pr-1 mt-3 space-y-4 min-h-0">
+            {!globalSearchQuery.trim() ? (
+              <p className="text-center text-slate-400 text-xs py-10 italic">
+                Type a keyword above to search across all workspace categories and vendors.
+              </p>
+            ) : matchedItems.length === 0 && matchedVendors.length === 0 ? (
+              <p className="text-center text-slate-400 text-sm py-10 border-2 border-dashed border-slate-100 rounded-xl">
+                No matching items or vendors found for "{globalSearchQuery}".
+              </p>
+            ) : (
+              <>
+                {matchedItems.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 px-1">
+                      Workspace Entries ({matchedItems.length})
+                    </h4>
+                    {matchedItems.map(({ item, meta }) => (
+                      <div
+                        key={item.id}
+                        onClick={() => {
+                          setIsSearchOpen(false);
+                          setActiveModal(meta.modalId);
+                          if (meta.subTab) setSubTab(meta.subTab);
+                          setIsModalSearchActive(true);
+                          setModalSearchQuery(globalSearchQuery);
+                        }}
+                        className="p-3 bg-white border border-slate-200 hover:border-emerald-400 rounded-xl cursor-pointer transition-all shadow-sm flex flex-col gap-1.5 group"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
+                            {meta.label}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            {item.assignedTo && (
+                              <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                <User className="w-2.5 h-2.5 text-emerald-600" /> {item.assignedTo}
+                              </span>
+                            )}
+                            {item.dueDate && (
+                              <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                                <Calendar className="w-2.5 h-2.5" /> {formatDate(item.dueDate)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <p className="text-sm text-slate-800 group-hover:text-emerald-900 line-clamp-2 font-medium">
+                          {stripHtml(item.content)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {matchedVendors.length > 0 && (
+                  <div className="space-y-2 pt-2">
+                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 px-1">
+                      Assigned Vendors ({matchedVendors.length})
+                    </h4>
+                    {matchedVendors.map((vendor) => (
+                      <div
+                        key={vendor.id}
+                        onClick={() => {
+                          setIsSearchOpen(false);
+                          setActiveModal('vendors');
+                          setIsModalSearchActive(true);
+                          setModalSearchQuery(globalSearchQuery);
+                        }}
+                        className="p-3 bg-emerald-50/40 border border-emerald-200 hover:border-emerald-400 rounded-xl cursor-pointer transition-all flex items-center justify-between"
+                      >
+                        <div>
+                          <p className="text-sm font-semibold text-slate-800">{vendor.assigned_vendor || "Unnamed"}</p>
+                          <p className="text-xs text-slate-500">{vendor.category}</p>
+                        </div>
+                        <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                          {vendor.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* --- PRIVACY MODAL DIALOG --- */}
       <Dialog open={!!privacyModalItem} onOpenChange={(open) => !open && setPrivacyModalItem(null)}>
@@ -780,6 +965,7 @@ export default function EventWorkspacePage() {
         </DialogContent>
       </Dialog>
 
+      {/* --- CATEGORY MANAGEMENT MODAL --- */}
       <Dialog 
         open={!!activeModal} 
         onOpenChange={(open) => {
@@ -788,13 +974,16 @@ export default function EventWorkspacePage() {
             setShowAddForm(false);
             setOpenDropdownId(null);
             setIsImportingVendors(false);
+            setIsModalSearchActive(false);
+            setModalSearchQuery("");
           }
         }}
       >
         <DialogContent 
           className="sm:max-w-2xl max-h-[85vh] overflow-hidden flex flex-col"
         >
-          <DialogHeader className="shrink-0">
+          {/* --- IN-MODAL HEADER WITH LUCIAN SEARCH ICON BUTTON --- */}
+          <DialogHeader className="shrink-0 flex flex-row items-center justify-between space-y-0 pb-2 border-b border-slate-100 pr-10">
             <DialogTitle className="capitalize text-lg font-serif">
               {activeModal === 'itemsNeeded' 
                 ? 'Manage Items Needed' 
@@ -802,13 +991,46 @@ export default function EventWorkspacePage() {
                 ? 'Manage Puja Items'
                 : `Manage ${activeModal?.replace(/([A-Z])/g, ' $1').trim()}`}
             </DialogTitle>
+
+            <div className="flex items-center gap-2">
+              {!isModalSearchActive ? (
+                <button
+                  onClick={() => setIsModalSearchActive(true)}
+                  className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-emerald-600 transition-colors flex items-center justify-center"
+                  title="Search items"
+                >
+                  <Search className="w-4 h-4" />
+                </button>
+              ) : (
+                <div className="relative w-48 sm:w-60 animate-in fade-in zoom-in-95">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    autoFocus
+                    value={modalSearchQuery}
+                    onChange={(e) => setModalSearchQuery(e.target.value)}
+                    placeholder="Search items..."
+                    className="w-full pl-8 pr-7 py-1 text-xs border border-slate-200 rounded-md outline-none focus:border-emerald-500 bg-slate-50 focus:bg-white transition-colors text-slate-700"
+                  />
+                  <button
+                    onClick={() => {
+                      setModalSearchQuery("");
+                      setIsModalSearchActive(false);
+                    }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+            </div>
           </DialogHeader>
 
           {(activeModal === 'itemsNeeded' || activeModal === 'pujaItems') && (
-            <div className="flex border-b border-slate-200 mt-2">
+            <div className="flex border-b border-slate-200 mt-1">
               <button
                 onClick={() => { setSubTab('needed'); setShowAddForm(false); }}
-                className={`flex-1 py-2.5 text-xs font-semibold flex items-center justify-center gap-2 border-b-2 transition-colors ${
+                className={`flex-1 py-2 text-xs font-semibold flex items-center justify-center gap-2 border-b-2 transition-colors ${
                   subTab === 'needed' 
                     ? 'border-emerald-600 text-emerald-700 bg-emerald-50/40' 
                     : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -819,7 +1041,7 @@ export default function EventWorkspacePage() {
               </button>
               <button
                 onClick={() => { setSubTab('brought'); setShowAddForm(false); }}
-                className={`flex-1 py-2.5 text-xs font-semibold flex items-center justify-center gap-2 border-b-2 transition-colors ${
+                className={`flex-1 py-2 text-xs font-semibold flex items-center justify-center gap-2 border-b-2 transition-colors ${
                   subTab === 'brought' 
                     ? 'border-emerald-600 text-emerald-700 bg-emerald-50/40' 
                     : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -1056,7 +1278,17 @@ export default function EventWorkspacePage() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {assignedVendors.map((vendor) => (
+                    {assignedVendors
+                      .filter(v => {
+                        if (!modalSearchQuery.trim()) return true;
+                        const q = modalSearchQuery.toLowerCase();
+                        return (
+                          (v.assigned_vendor || "").toLowerCase().includes(q) ||
+                          (v.category || "").toLowerCase().includes(q) ||
+                          (v.status || "").toLowerCase().includes(q)
+                        );
+                      })
+                      .map((vendor) => (
                       <div 
                         key={vendor.id} 
                         className="p-3 bg-emerald-50/40 border border-emerald-200/80 rounded-xl flex flex-col justify-between gap-2 shadow-sm relative group"
@@ -1116,25 +1348,34 @@ export default function EventWorkspacePage() {
               
               const modalItems = currentCategoryKey ? [...((items as any)?.[currentCategoryKey] || [])] : [];
 
+              const filteredModalItems = modalItems
+                .filter((item: WorkspaceItem) => 
+                  isAdmin || 
+                  !item.is_private || 
+                  (item.allowed_users && item.allowed_users.includes(currentUserEmail))
+                )
+                .filter((item: WorkspaceItem) => {
+                  if (!modalSearchQuery.trim()) return true;
+                  const q = modalSearchQuery.toLowerCase();
+                  const textMatch = stripHtml(item.content).toLowerCase().includes(q);
+                  const assigneeMatch = item.assignedTo?.toLowerCase().includes(q);
+                  const captionMatch = item.mediaAttachments?.some((m: any) => m.caption?.toLowerCase().includes(q));
+                  return textMatch || assigneeMatch || captionMatch;
+                })
+                .sort((a: any, b: any) => {
+                  if (a.is_pinned && !b.is_pinned) return -1;
+                  if (!a.is_pinned && b.is_pinned) return 1;
+                  return new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime();
+                });
+
               return (
                 <div className="space-y-3 pb-4">
-                  {modalItems
-                    .filter((item: WorkspaceItem) => 
-                      isAdmin || 
-                      !item.is_private || 
-                      (item.allowed_users && item.allowed_users.includes(currentUserEmail))
-                    )
-                    .sort((a: any, b: any) => {
-                      if (a.is_pinned && !b.is_pinned) return -1;
-                      if (!a.is_pinned && b.is_pinned) return 1;
-                      return new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime();
-                    })
-                    .map((item: WorkspaceItem & { mediaType?: string }, idx: number, array: any[]) => {
+                  {filteredModalItems.map((item: WorkspaceItem & { mediaType?: string }, idx: number, array: any[]) => {
                       const overdue = activeModal === 'tasks' && isOverdue(item.dueDate || null);
                       const isCompletedItem = currentCategoryKey === 'taskDone' || currentCategoryKey === 'itemsBrought' || currentCategoryKey === 'pujaItemsBrought';
 
-                      const canMoveUp = idx > 0 && array[idx - 1].is_pinned === item.is_pinned;
-                      const canMoveDown = idx < array.length - 1 && array[idx + 1].is_pinned === item.is_pinned;
+                      const canMoveUp = !modalSearchQuery.trim() && idx > 0 && array[idx - 1].is_pinned === item.is_pinned;
+                      const canMoveDown = !modalSearchQuery.trim() && idx < array.length - 1 && array[idx + 1].is_pinned === item.is_pinned;
 
                       return (
                         <div 
@@ -1383,7 +1624,7 @@ export default function EventWorkspacePage() {
                                 )}
 
                                 {activeModal === 'taskDone' && (
-                                  <button onClick={() => handleMoveTask(item.id, 'tasks' as CategoryId)} className="p-1.5 border border-amber-100 text-amber-500 bg-white rounded-md hover:bg-amber-50" title="Restore to Tasks">
+                                  <button onClick={() => handleMoveTask(item.id, 'tasks' as CategoryId)} className="p-1.5 border border-amber-100 text-amber-500 bg-white rounded-md hover:bg-emerald-50" title="Restore to Tasks">
                                     <RotateCcw className="w-4 h-4" />
                                   </button>
                                 )}
@@ -1395,7 +1636,7 @@ export default function EventWorkspacePage() {
                                 )}
 
                                 {(activeModal === 'itemsNeeded' || activeModal === 'pujaItems') && subTab === 'brought' && (
-                                  <button onClick={() => handleMoveTask(item.id, activeModal as CategoryId)} className="p-1.5 border border-amber-100 text-amber-500 bg-white rounded-md hover:bg-amber-50" title="Move back to To Buy">
+                                  <button onClick={() => handleMoveTask(item.id, activeModal as CategoryId)} className="p-1.5 border border-amber-100 text-amber-500 bg-white rounded-md hover:bg-emerald-50" title="Move back to To Buy">
                                     <RotateCcw className="w-4 h-4" />
                                   </button>
                                 )}
@@ -1410,12 +1651,10 @@ export default function EventWorkspacePage() {
                       );
                     })}
                   
-                  {modalItems.filter((item: any) => 
-                    isAdmin || 
-                    !item.is_private || 
-                    (item.allowed_users && item.allowed_users.includes(currentUserEmail))
-                  ).length === 0 && (
-                    <p className="text-center text-slate-400 text-sm py-8 border-2 border-dashed border-slate-100 rounded-xl">No manual entries yet.</p>
+                  {filteredModalItems.length === 0 && (
+                    <p className="text-center text-slate-400 text-sm py-8 border-2 border-dashed border-slate-100 rounded-xl">
+                      {modalSearchQuery.trim() ? `No items matching "${modalSearchQuery}"` : "No manual entries yet."}
+                    </p>
                   )}
                 </div>
               );

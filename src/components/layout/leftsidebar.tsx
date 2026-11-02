@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import {LayoutDashboard,
+import {LayoutDashboard,FileText,
 Gem,CalendarHeart,ClipboardList,Gift,ShoppingBag,PaperBag,Flame,Users,IndianRupee,Menu,X,BookIcon,CalendarClock,Handshake,SquareMenu,Search,ArrowUpDown,Folders,LogOut,ShieldCheck,} from "lucide-react";
 import { DressIcon } from "@phosphor-icons/react";
 
@@ -18,6 +18,7 @@ const mainNav = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Global Task Board", href: "/global_task_board", icon: ClipboardList },
   { name: "Menu", href: "/menu", icon: SquareMenu },
+  { name: "Documents", href: "/documents", icon: FileText },
   { name: "Vendors", href: "/vendors", icon: Handshake },
   { name: "Budget", href: "/budget", icon: IndianRupee, requiresBudget: true },
   { name: "Guests", href: "/guests", icon: Users },

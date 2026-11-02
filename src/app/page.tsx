@@ -2,11 +2,15 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, CalendarDays, MapPin, Plus, X, Pencil, Trash2, LayoutDashboard } from "lucide-react";
+import { 
+  CheckCircle2, CalendarDays, MapPin, Plus, X, Pencil, Trash2, 
+  LayoutDashboard, Search, FileText, Users, Store, CheckSquare, 
+  Loader2, Wallet, ShoppingBag, Utensils, Gift, Layers, Sparkles
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { differenceInDays, differenceInWeeks, format, parseISO } from "date-fns";
 import { supabase } from "@/lib/supabase";
-import { defaultEvents } from "@/components//layout/leftsidebar";
+import { defaultEvents } from "@/components/layout/leftsidebar";
 
 interface EventItem {
   id?: string;
@@ -15,6 +19,15 @@ interface EventItem {
   place?: string;
   link: string;
   color: string;
+}
+
+interface UniversalSearchResult {
+  id: string;
+  category: string;
+  title: string;
+  subtitle: string;
+  link: string;
+  color?: string;
 }
 
 const colorOptions = [
@@ -43,6 +56,87 @@ const colorOptions = [
   { label: "Rose", value: "bg-rose-500" },
 ];
 
+const EXACT_TABLES = [
+  { name: "budget", link: "/budget", label: "Budget" },
+  { name: "chadana", link: "/chadana", label: "Chadana" },
+  { name: "entry_collaborators", link: "/collaborators", label: "Collaborators" },
+  { name: "event_items", link: "/tasks", label: "Event Tasks" },
+  { name: "events", link: "/events", label: "Events" },
+  { name: "gift_masterlist", link: "/gifts", label: "Gift Masterlist" },
+  { name: "gifts", link: "/gifts", label: "Gifts" },
+  { name: "guests", link: "/guests", label: "Guests" },
+  { name: "menus", link: "/menus", label: "Menus" },
+  { name: "notes", link: "/notes", label: "Notes" },
+  { name: "option_tabs", link: "/options", label: "Option Tabs" },
+];
+
+const IGNORED_KEYS = new Set(["id", "user_id", "created_at", "updated_at", "color", "link", "entry_id"]);
+
+function extractTextFromAny(obj: any, prefix = ""): { key: string; value: string }[] {
+  if (obj === null || obj === undefined) return [];
+  if (typeof obj !== "object") {
+    return [{ key: prefix || "value", value: String(obj) }];
+  }
+  if (Array.isArray(obj)) {
+    return obj.flatMap((item, idx) => extractTextFromAny(item, `${prefix}[${idx + 1}]`));
+  }
+  return Object.entries(obj).flatMap(([k, v]) => {
+    if (IGNORED_KEYS.has(k.toLowerCase()) || k.toLowerCase().endsWith("_id")) return [];
+    const nextKey = prefix ? `${prefix}.${k}` : k;
+    return extractTextFromAny(v, nextKey);
+  });
+}
+
+// --- Dynamic Route Resolver for Exact Item Navigation ---
+function resolveExactRoute(tableName: string, row: Record<string, any>): { label: string; link: string } {
+  const t = tableName.toLowerCase();
+  const explicitLink = row.link || row.url || row.path || row.route;
+
+  if (explicitLink) {
+    // If table has a pre-saved link (like /events/sangeet), use it directly
+    return { label: getTableLabel(t), link: explicitLink };
+  }
+
+  const itemId = row.id;
+
+  if (t === "events") {
+    return { label: "Events", link: itemId ? `/events/${itemId}` : "/" };
+  }
+  if (t === "notes") {
+    return { label: "Notes", link: itemId ? `/notes/${itemId}` : "/notes" };
+  }
+  if (t === "chadana") {
+    return { label: "Chadana", link: itemId ? `/chadana/${itemId}` : "/chadana" };
+  }
+  if (t === "gifts" || t === "gift_masterlist") {
+    return { label: "Gifts", link: itemId ? `/gifts/${itemId}` : "/gifts" };
+  }
+  if (t === "guests") {
+    return { label: "Guests", link: itemId ? `/guests/${itemId}` : "/guests" };
+  }
+  if (t === "menus") {
+    return { label: "Menus", link: itemId ? `/menus/${itemId}` : "/menus" };
+  }
+  if (t === "event_items") {
+    return { label: "Event Tasks", link: itemId ? `/tasks/${itemId}` : "/tasks" };
+  }
+  if (t === "budget") {
+    return { label: "Budget", link: itemId ? `/budget/${itemId}` : "/budget" };
+  }
+
+  const formattedLabel = t.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  return {
+    label: formattedLabel,
+    link: itemId ? `/${t}/${itemId}` : `/${t}`,
+  };
+}
+
+function getTableLabel(t: string): string {
+  const found = EXACT_TABLES.find((tbl) => tbl.name === t);
+  if (found) return found.label;
+  return t.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 type AuthMode = "signin" | "signup" | "reset" | "update-password";
 
 export default function Dashboard() {
@@ -60,83 +154,168 @@ export default function Dashboard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   
+  // --- Universal Search State ---
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<UniversalSearchResult[]>([]);
+  
   const [newEvent, setNewEvent] = useState<EventItem>({
-    name: "",
-    date: "",
-    place: "",
-    link: "",
-    color: "bg-emerald-500",
+    name: "", date: "", place: "", link: "", color: "bg-emerald-500",
   });
   const [savingEvent, setSavingEvent] = useState(false);
+
+  // Keyboard shortcut Cmd+K / Ctrl+K
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setIsSearchOpen((prev) => !prev);
+      } else if (e.key === "Escape") {
+        setIsSearchOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   useEffect(() => {
     const checkUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-
       if (user) {
         setIsAuthorized(true);
         fetchEvents();
       } else {
         const savedEmail = localStorage.getItem("wedding_app_email");
-        if (savedEmail) {
-          setEmail(savedEmail);
-        }
+        if (savedEmail) setEmail(savedEmail);
       }
       setIsChecking(false);
     };
-
     checkUser();
   }, []);
 
+  // --- Universal Schema-Agnostic Deep Scanner with Exact Routing ---
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsSearching(true);
+      const q = searchQuery.toLowerCase().trim();
+      const allMatches: UniversalSearchResult[] = [];
+      const seenIds = new Set<string>();
+
+      // 1. Scan Local/Sidebar Events
+      events.forEach((evt, idx) => {
+        const searchableText = `${evt.name} ${evt.place || ""} ${evt.date || ""}`.toLowerCase();
+        if (searchableText.includes(q)) {
+          seenIds.add(`Events-${evt.link}`);
+          allMatches.push({
+            id: `local-evt-${idx}`,
+            category: "Events",
+            title: evt.name,
+            subtitle: [evt.place, formatDateDisplay(evt.date)].filter(Boolean).join(" • "),
+            link: evt.link || "/",
+            color: evt.color,
+          });
+        }
+      });
+
+      // 2. Scan every exact table from your schema in parallel
+      await Promise.all(
+        EXACT_TABLES.map(async ({ name: tableName }) => {
+          try {
+            const { data, error } = await supabase.from(tableName).select("*").limit(500);
+            if (error || !data) return;
+
+            data.forEach((row: Record<string, any>, rowIndex: number) => {
+              const flatFields = extractTextFromAny(row);
+
+              const matches = flatFields.filter(({ value }) => value.toLowerCase().includes(q));
+              if (matches.length === 0) return;
+
+              const title =
+                row.name ||
+                row.title ||
+                row.item ||
+                row.event_name ||
+                row.family ||
+                row.tab_name ||
+                row.label ||
+                row.collaborator_email ||
+                row.category ||
+                matches[0]?.value ||
+                "Record";
+
+              const subtitleParts = flatFields
+                .filter(({ value }) => value !== String(title) && value.trim() !== "")
+                .slice(0, 3)
+                .map(({ key, value }) => {
+                  const cleanKey = key.split(".").pop()?.replace(/_/g, " ") || key;
+                  return `${cleanKey}: ${value}`;
+                });
+
+              const resolved = resolveExactRoute(tableName, row);
+              const dedupeKey = `${tableName}-${row.id || title}`;
+              if (seenIds.has(dedupeKey)) return;
+              seenIds.add(dedupeKey);
+
+              allMatches.push({
+                id: `${tableName}-${row.id || rowIndex}`,
+                category: resolved.label,
+                title: String(title),
+                subtitle: subtitleParts.join(" • ") || `Found in ${resolved.label}`,
+                link: resolved.link,
+                color: row.color,
+              });
+            });
+          } catch {
+            // Silently handle any query issues
+          }
+        })
+      );
+
+      setSearchResults(allMatches);
+      setIsSearching(false);
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, events]);
+
   const fetchEvents = async () => {
     const { data, error } = await supabase.from("events").select("*");
-    
     if (!error && data) {
       const dbEventLinks = data.map(evt => evt.link);
       const untouchedDefaults = defaultEvents.filter(evt => !dbEventLinks.includes(evt.link));
-      
       const combinedEvents = [...untouchedDefaults, ...data].sort((a, b) => {
         const dateA = a.date || "9999-12-31"; 
         const dateB = b.date || "9999-12-31";
         return dateA.localeCompare(dateB);
       });
-
       setEvents(combinedEvents);
     }
   };
 
   const handleOpenAddModal = () => {
     setEditingEventId(null);
-    setNewEvent({
-      name: "",
-      date: "",
-      place: "",
-      link: "",
-      color: "bg-emerald-500",
-    });
+    setNewEvent({ name: "", date: "", place: "", link: "", color: "bg-emerald-500" });
     setIsModalOpen(true);
   };
 
   const handleOpenEditModal = (evt: EventItem) => {
     setEditingEventId(evt.id || null);
-    setNewEvent({
-      name: evt.name,
-      date: evt.date || "",
-      place: evt.place || "",
-      link: evt.link,
-      color: evt.color,
-    });
+    setNewEvent({ name: evt.name, date: evt.date || "", place: evt.place || "", link: evt.link, color: evt.color });
     setIsModalOpen(true);
   };
 
   const handleDeleteEvent = async (id: string) => {
     if (!window.confirm("Are you sure you want to delete this event?")) return;
     const { error } = await supabase.from("events").delete().eq("id", id);
-    if (!error) {
-      fetchEvents();
-    } else {
-      alert("Error deleting event: " + error.message);
-    }
+    if (!error) fetchEvents();
+    else alert("Error deleting event: " + error.message);
   };
 
   const handleSaveEvent = async (e: React.FormEvent) => {
@@ -147,120 +326,59 @@ export default function Dashboard() {
 
     if (editingEventId) {
       const { error } = await supabase.from("events").update({
-          name: newEvent.name,
-          date: newEvent.date || "", 
-          place: newEvent.place || "",
-          link: generatedLink,
-          color: newEvent.color,
+          name: newEvent.name, date: newEvent.date || "", place: newEvent.place || "", link: generatedLink, color: newEvent.color,
         }).eq("id", editingEventId);
-
-      if (!error) {
-        setIsModalOpen(false);
-        fetchEvents();
-      }
+      if (!error) { setIsModalOpen(false); fetchEvents(); }
     } else {
       const { error } = await supabase.from("events").insert([{
-          name: newEvent.name,
-          date: newEvent.date || "",
-          place: newEvent.place || "",
-          link: generatedLink,
-          color: newEvent.color,
-          user_id: user?.id,
+          name: newEvent.name, date: newEvent.date || "", place: newEvent.place || "", link: generatedLink, color: newEvent.color, user_id: user?.id,
         }]);
-      if (!error) {
-        setIsModalOpen(false);
-        fetchEvents();
-      }
+      if (!error) { setIsModalOpen(false); fetchEvents(); }
     }
     setSavingEvent(false);
   };
 
   const formatDateDisplay = (dateString?: string) => {
     if (!dateString) return "Date TBD";
-    try {
-      return format(parseISO(dateString), "MMM d, yyyy");
-    } catch {
-      return dateString;
-    }
+    try { return format(parseISO(dateString), "MMM d, yyyy"); } 
+    catch { return dateString; }
+  };
+
+  const getCategoryIcon = (category: string, color?: string) => {
+    const c = category.toLowerCase();
+    if (c.includes("event")) return <div className={`w-8 h-8 rounded-full flex items-center justify-center ${color || "bg-emerald-500"} text-white shrink-0`}><CalendarDays className="w-4 h-4" /></div>;
+    if (c.includes("note") || c.includes("chadana")) return <div className="w-8 h-8 rounded-full flex items-center justify-center bg-amber-100 text-amber-600 shrink-0"><FileText className="w-4 h-4" /></div>;
+    if (c.includes("guest")) return <div className="w-8 h-8 rounded-full flex items-center justify-center bg-blue-100 text-blue-600 shrink-0"><Users className="w-4 h-4" /></div>;
+    if (c.includes("gift")) return <div className="w-8 h-8 rounded-full flex items-center justify-center bg-pink-100 text-pink-600 shrink-0"><Gift className="w-4 h-4" /></div>;
+    if (c.includes("budget")) return <div className="w-8 h-8 rounded-full flex items-center justify-center bg-emerald-100 text-emerald-700 shrink-0"><Wallet className="w-4 h-4" /></div>;
+    if (c.includes("menu")) return <div className="w-8 h-8 rounded-full flex items-center justify-center bg-orange-100 text-orange-600 shrink-0"><Utensils className="w-4 h-4" /></div>;
+    if (c.includes("task")) return <div className="w-8 h-8 rounded-full flex items-center justify-center bg-rose-100 text-rose-600 shrink-0"><CheckSquare className="w-4 h-4" /></div>;
+    return <div className="w-8 h-8 rounded-full flex items-center justify-center bg-slate-100 text-slate-600 shrink-0"><Layers className="w-4 h-4" /></div>;
   };
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    setAuthLoading(true);
-    setAuthError(null);
-    setAuthSuccess(null);
-
-    if (authMode === "reset") {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
-      if (error) setAuthError(error.message);
-      else {
-        setAuthSuccess("A password reset link has been sent to your email.");
-        setAuthMode("signin");
-      }
-    } else if (authMode === "signup") {
-      const { error, data } = await supabase.auth.signUp({ email, password });
-      if (error) setAuthError(error.message);
-      else if (data.user?.identities?.length === 0) setAuthError("This email is already registered. Please sign in.");
-      else {
-        setAuthSuccess("Account created! You can now sign in.");
-        setAuthMode("signin");
-        setPassword("");
-      }
-    } else if (authMode === "update-password") {
-      const { error } = await supabase.auth.updateUser({ password });
-      if (error) setAuthError(error.message);
-      else {
-        setAuthSuccess("Password updated successfully.");
-        setAuthMode("signin");
-        setPassword("");
-      }
-    } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) setAuthError(error.message);
-      else {
-        localStorage.setItem("wedding_app_email", email);
-        setIsAuthorized(true);
-        fetchEvents();
-      }
+    setAuthLoading(true); setAuthError(null); setAuthSuccess(null);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) setAuthError(error.message);
+    else {
+      localStorage.setItem("wedding_app_email", email);
+      setIsAuthorized(true);
+      fetchEvents();
     }
     setAuthLoading(false);
   };
-
-  const authTitle =
-    authMode === "signin"
-      ? "Welcome Back"
-      : authMode === "signup"
-        ? "Create an Account"
-        : authMode === "reset"
-          ? "Reset Password"
-          : "Set New Password";
-
-  const authSubtitle =
-    authMode === "signin"
-      ? "Sign in to access the wedding planner"
-      : authMode === "signup"
-        ? "Sign up with your email to get started"
-        : authMode === "reset"
-          ? "Enter your email to receive a reset link"
-          : "Please enter your new password below";
-
-  const authButtonLabel =
-    authLoading
-      ? "Processing..."
-      : authMode === "signin"
-        ? "Sign In"
-        : authMode === "signup"
-          ? "Sign Up"
-          : authMode === "reset"
-            ? "Send Reset Link"
-            : "Update Password";
 
   const targetDate = new Date("2027-01-31");
   const today = new Date();
   const daysToGo = differenceInDays(targetDate, today);
   const weeksToGo = differenceInWeeks(targetDate, today);
+
+  const groupedResults = searchResults.reduce<Record<string, UniversalSearchResult[]>>((acc, item) => {
+    if (!acc[item.category]) acc[item.category] = [];
+    acc[item.category].push(item);
+    return acc;
+  }, {});
 
   if (isChecking) return null;
 
@@ -269,93 +387,20 @@ export default function Dashboard() {
       <div className="h-[100dvh] w-screen overflow-y-auto flex items-center justify-center bg-slate-50 p-4 sm:p-6">
         <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl border border-slate-200 p-6 sm:p-8 flex flex-col justify-center my-auto">
           <div className="text-center mb-6">
-            <h1 className="text-2xl font-serif font-bold text-emerald-900">
-              {authTitle}
-            </h1>
-            <p className="text-sm text-slate-500 mt-1.5">
-              {authSubtitle}
-            </p>
+            <h1 className="text-2xl font-serif font-bold text-emerald-900">Welcome Back</h1>
           </div>
-          {authError && <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded-xl border border-red-100">{authError}</div>}
-          {authSuccess && <div className="mb-4 p-3 bg-emerald-50 text-emerald-700 text-sm rounded-xl border border-emerald-100">{authSuccess}</div>}
-          
+          {authError && <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded-xl">{authError}</div>}
           <form onSubmit={handleAuth} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Email Address</label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-2.5 text-base sm:text-sm border border-slate-200 rounded-xl text-slate-800"
-                placeholder="you@email.com"
-              />
+              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-4 py-2.5 text-sm border rounded-xl" />
             </div>
-
-            {authMode !== "reset" && (
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-sm font-medium text-slate-700">
-                    {authMode === "update-password" ? "New Password" : "Password"}
-                  </label>
-                  {authMode === "signin" && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAuthMode("reset");
-                        setAuthError(null);
-                        setAuthSuccess(null);
-                      }}
-                      className="text-xs text-emerald-600 hover:text-emerald-700 hover:underline font-medium"
-                    >
-                      Forgot?
-                    </button>
-                  )}
-                </div>
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-2.5 text-base sm:text-sm border border-slate-200 rounded-xl text-slate-800"
-                  placeholder="••••••••"
-                />
-              </div>
-            )}
-
-            <button type="submit" disabled={authLoading} className="w-full bg-emerald-600 text-white py-3 rounded-xl text-base sm:text-sm font-medium hover:bg-emerald-700 shadow-sm mt-2">
-              {authButtonLabel}
-            </button>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
+              <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-4 py-2.5 text-sm border rounded-xl" />
+            </div>
+            <button type="submit" disabled={authLoading} className="w-full bg-emerald-600 text-white py-3 rounded-xl text-sm font-medium">{authLoading ? "Processing..." : "Sign In"}</button>
           </form>
-
-          <div className="mt-5 text-center text-sm text-slate-500">
-            {authMode === "reset" ? (
-              <button
-                onClick={() => {
-                  setAuthMode("signin");
-                  setAuthError(null);
-                  setAuthSuccess(null);
-                }}
-                className="text-emerald-600 hover:text-emerald-700 font-medium hover:underline"
-              >
-                Back to Sign In
-              </button>
-            ) : (
-              <>
-                {authMode === "signin" ? "Don't have an account? " : "Already have an account? "}
-                <button
-                  onClick={() => {
-                    setAuthMode(authMode === "signin" ? "signup" : "signin");
-                    setAuthError(null);
-                    setAuthSuccess(null);
-                  }}
-                  className="text-emerald-600 hover:text-emerald-700 font-medium hover:underline"
-                >
-                  {authMode === "signin" ? "Sign up here" : "Sign in here"}
-                </button>
-              </>
-            )}
-          </div>
         </div>
       </div>
     );
@@ -365,162 +410,137 @@ export default function Dashboard() {
     <div className="min-h-screen px-3 py-4 sm:p-6 md:p-12 w-full max-w-6xl mx-auto space-y-6 md:space-y-10 relative">
       
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 md:gap-8">
-        
-        {/* MATCHED SHOPPING FORMAT HERE */}
         <div>
           <h1 className="text-3xl font-serif font-bold text-emerald-900 flex items-center gap-3">
-            <LayoutDashboard className="w-8 h-8 text-emerald-700 shrink-0" />Wedding Planner</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            January 31, 2027
-          </p>
+            <LayoutDashboard className="w-8 h-8 text-emerald-700 shrink-0" />Wedding Planner
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">January 31, 2027</p>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 w-full md:w-auto md:flex md:gap-4">
-          <div className="flex flex-col items-center justify-center bg-emerald-50 border border-emerald-100 px-4 py-4 sm:px-6 rounded-2xl shadow-sm md:min-w-[120px]">
-            <span className="text-3xl md:text-4xl font-bold text-emerald-700">{daysToGo > 0 ? daysToGo : 0}</span>
-            <span className="text-xs sm:text-sm font-medium text-emerald-600 uppercase tracking-wide mt-1">Days to go</span>
-          </div>
-          <div className="flex flex-col items-center justify-center bg-emerald-50 border border-emerald-100 px-4 py-4 sm:px-6 rounded-2xl shadow-sm md:min-w-[120px]">
-            <span className="text-3xl md:text-4xl font-bold text-emerald-700">{weeksToGo > 0 ? weeksToGo : 0}</span>
-            <span className="text-xs sm:text-sm font-medium text-emerald-600 uppercase tracking-wide mt-1">Weeks to go</span>
+        <div className="flex items-center gap-3 sm:gap-4 w-full md:w-auto">
+          <button 
+            onClick={() => setIsSearchOpen(true)}
+            className="hidden md:flex items-center gap-2.5 px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm text-slate-500 hover:border-emerald-500 hover:text-emerald-700 transition-all shadow-sm w-56 lg:w-72"
+          >
+            <Search className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span className="truncate">Search entire app...</span>
+            <kbd className="ml-auto text-[10px] bg-slate-100 px-1.5 py-0.5 rounded font-sans text-slate-400">⌘K</kbd>
+          </button>
+          
+          <button onClick={() => setIsSearchOpen(true)} className="md:hidden p-3.5 bg-white border border-slate-200 rounded-2xl text-emerald-700 shadow-sm shrink-0">
+            <Search className="w-5 h-5" />
+          </button>
+
+          <div className="grid grid-cols-2 gap-3 flex-1 md:flex-none md:flex md:gap-4">
+            <div className="flex flex-col items-center justify-center bg-emerald-50 border border-emerald-100 px-4 py-4 sm:px-6 rounded-2xl shadow-sm md:min-w-[120px]">
+              <span className="text-3xl font-bold text-emerald-700">{daysToGo > 0 ? daysToGo : 0}</span>
+              <span className="text-xs font-medium text-emerald-600 uppercase mt-1">Days to go</span>
+            </div>
+            <div className="flex flex-col items-center justify-center bg-emerald-50 border border-emerald-100 px-4 py-4 sm:px-6 rounded-2xl shadow-sm md:min-w-[120px]">
+              <span className="text-3xl font-bold text-emerald-700">{weeksToGo > 0 ? weeksToGo : 0}</span>
+              <span className="text-xs font-medium text-emerald-600 uppercase mt-1">Weeks to go</span>
+            </div>
           </div>
         </div>
       </div>
 
       <Card className="shadow-sm border-slate-200">
         <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4">
-          <CardTitle className="flex items-center gap-2 text-xl md:text-2xl">
-            <CheckCircle2 className="text-emerald-600" /> Event Schedule
-          </CardTitle>
-          <button
-            onClick={handleOpenAddModal}
-            className="flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors w-full sm:w-auto shadow-sm"
-          >
+          <CardTitle className="flex items-center gap-2 text-xl"><CheckCircle2 className="text-emerald-600" /> Event Schedule</CardTitle>
+          <button onClick={handleOpenAddModal} className="flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-sm w-full sm:w-auto">
             <Plus className="w-4 h-4" /> Add Event
           </button>
         </CardHeader>
-        
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 p-4 sm:p-6 pt-0">
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 p-4 pt-0">
           {events.map((evt, idx) => (
-            <div
-              key={evt.id || idx}
-              className="p-4 sm:p-5 border border-slate-200 rounded-xl flex items-center justify-between gap-3 hover:border-emerald-500 hover:shadow-md transition-all bg-white group"
-            >
-              <Link href={evt.link} className="flex items-center gap-3 md:gap-4 flex-1 min-w-0 cursor-pointer">
-                <div className={`w-2 h-14 md:h-16 rounded-full shrink-0 ${evt.color}`}></div>
+            <div key={evt.id || idx} className="p-4 border rounded-xl flex items-center justify-between gap-3 hover:border-emerald-500 bg-white group">
+              <Link href={evt.link} className="flex items-center gap-3 flex-1 min-w-0">
+                <div className={`w-2 h-14 rounded-full shrink-0 ${evt.color}`}></div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-base md:text-lg font-semibold text-slate-800 truncate">{evt.name}</p>
-                  <p className="text-xs sm:text-sm text-slate-500 flex items-center gap-1.5 mt-1">
-                    <CalendarDays className="w-3.5 h-3.5 shrink-0" /> {formatDateDisplay(evt.date)}
-                  </p>
-                  {evt.place && (
-                    <p className="text-xs sm:text-sm text-slate-500 flex items-center gap-1.5 mt-0.5 truncate">
-                      <MapPin className="w-3.5 h-3.5 shrink-0" /> {evt.place}
-                    </p>
-                  )}
+                  <p className="font-semibold text-slate-800 truncate">{evt.name}</p>
+                  <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-1"><CalendarDays className="w-3.5 h-3.5" /> {formatDateDisplay(evt.date)}</p>
+                  {evt.place && <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5 truncate"><MapPin className="w-3.5 h-3.5" /> {evt.place}</p>}
                 </div>
               </Link>
-
-              <div className="flex items-center gap-1 shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                <button
-                  onClick={() => handleOpenEditModal(evt)}
-                  className="p-2.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-                  title="Edit Event"
-                >
-                  <Pencil className="w-4 h-4" />
-                </button>
-
-                {evt.id && (
-                  <button
-                    onClick={() => handleDeleteEvent(evt.id!)}
-                    className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    title="Delete Event"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
+              <div className="flex gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                <button onClick={() => handleOpenEditModal(evt)} className="p-2 text-slate-400 hover:text-emerald-600"><Pencil className="w-4 h-4" /></button>
+                {evt.id && <button onClick={() => handleDeleteEvent(evt.id!)} className="p-2 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>}
               </div>
             </div>
           ))}
         </CardContent>
       </Card>
 
+      {/* Universal Search Modal with Exact Navigation */}
+      {isSearchOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-start justify-center p-4 pt-16 z-50">
+          <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col">
+            <div className="flex items-center px-4 border-b border-slate-100">
+              <Search className="w-5 h-5 text-emerald-600 shrink-0" />
+              <input
+                type="text" autoFocus value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search budget, chadana, gifts, guests, menus, notes, tasks..."
+                className="w-full px-4 py-4 text-base bg-transparent border-none focus:ring-0 outline-none"
+              />
+              {isSearching ? (
+                <Loader2 className="w-5 h-5 text-emerald-500 animate-spin mr-2 shrink-0" />
+              ) : (
+                <button onClick={() => { setIsSearchOpen(false); setSearchQuery(""); }} className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg">
+                  <X className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+            
+            <div className="max-h-[65vh] overflow-y-auto p-3">
+              {searchQuery.trim() === "" ? (
+                <div className="p-8 text-center text-slate-500 text-sm">Type anything to search across all your tables and JSON columns.</div>
+              ) : Object.keys(groupedResults).length > 0 ? (
+                <div className="space-y-4">
+                  {Object.entries(groupedResults).map(([category, items]) => (
+                    <div key={category} className="space-y-1">
+                      <div className="px-3 py-1.5 text-xs font-semibold text-emerald-800 uppercase bg-slate-50 rounded-lg">{category} ({items.length})</div>
+                      {items.map((item) => (
+                        <Link href={item.link} key={item.id} onClick={() => setIsSearchOpen(false)} className="flex items-start gap-3 px-3 py-2.5 hover:bg-emerald-50/70 rounded-xl transition-colors">
+                          {getCategoryIcon(item.category, item.color)}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-slate-800 truncate">{item.title}</p>
+                            <p className="text-xs text-slate-500 line-clamp-2 mt-0.5">{item.subtitle}</p>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              ) : !isSearching ? (
+                <div className="p-8 text-center text-slate-500 text-sm">No matches found for &ldquo;{searchQuery}&rdquo;.</div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add/Edit Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 space-y-5 shadow-2xl border border-slate-200 my-auto">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 space-y-5">
             <div className="flex justify-between items-center">
-              <h3 className="text-xl font-serif font-bold text-slate-900">
-                {editingEventId ? "Edit Event" : "Add Event"}
-              </h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 p-1.5 rounded-full transition-colors">
-                <X className="w-5 h-5" />
-              </button>
+              <h3 className="text-xl font-bold">{editingEventId ? "Edit Event" : "Add Event"}</h3>
+              <button onClick={() => setIsModalOpen(false)} className="p-1.5 bg-slate-100 rounded-full"><X className="w-5 h-5" /></button>
             </div>
-
             <form onSubmit={handleSaveEvent} className="space-y-4">
+              <div><label className="block text-sm font-medium mb-1">Name *</label><input type="text" required value={newEvent.name} onChange={(e) => setNewEvent({...newEvent, name: e.target.value})} className="w-full px-4 py-2 border rounded-xl" /></div>
+              <div><label className="block text-sm font-medium mb-1">Date</label><input type="date" value={newEvent.date} onChange={(e) => setNewEvent({...newEvent, date: e.target.value})} className="w-full px-4 py-2 border rounded-xl" /></div>
+              <div><label className="block text-sm font-medium mb-1">Place</label><input type="text" value={newEvent.place} onChange={(e) => setNewEvent({...newEvent, place: e.target.value})} className="w-full px-4 py-2 border rounded-xl" /></div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Event Name <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  required
-                  value={newEvent.name}
-                  onChange={(e) => setNewEvent({ ...newEvent, name: e.target.value })}
-                  className="w-full px-4 py-2.5 text-base sm:text-sm border border-slate-200 rounded-xl text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                  placeholder="e.g., Reception"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Date (Optional)</label>
-                <input
-                  type="date"
-                  value={newEvent.date}
-                  onChange={(e) => setNewEvent({ ...newEvent, date: e.target.value })}
-                  className="w-full px-4 py-2.5 text-base sm:text-sm border border-slate-200 rounded-xl text-slate-800 bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Place / Venue (Optional)</label>
-                <input
-                  type="text"
-                  value={newEvent.place}
-                  onChange={(e) => setNewEvent({ ...newEvent, place: e.target.value })}
-                  className="w-full px-4 py-2.5 text-base sm:text-sm border border-slate-200 rounded-xl text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                  placeholder="e.g., Grand Ballroom"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Theme Color</label>
-                <select
-                  value={newEvent.color}
-                  onChange={(e) => setNewEvent({ ...newEvent, color: e.target.value })}
-                  className="w-full px-4 py-2.5 text-base sm:text-sm border border-slate-200 rounded-xl bg-white text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                >
-                  {colorOptions.map((col) => (
-                    <option key={col.value} value={col.value}>
-                      {col.label}
-                    </option>
-                  ))}
+                <label className="block text-sm font-medium mb-1">Theme Color</label>
+                <select value={newEvent.color} onChange={(e) => setNewEvent({...newEvent, color: e.target.value})} className="w-full px-4 py-2 border rounded-xl">
+                  {colorOptions.map(col => <option key={col.value} value={col.value}>{col.label}</option>)}
                 </select>
               </div>
-
               <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="flex-1 bg-slate-100 text-slate-700 py-3 rounded-xl text-base sm:text-sm font-medium hover:bg-slate-200 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingEvent}
-                  className="flex-1 bg-emerald-600 text-white py-3 rounded-xl text-base sm:text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm"
-                >
-                  {savingEvent ? "Saving..." : "Save Event"}
-                </button>
+                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 bg-slate-100 py-3 rounded-xl font-medium">Cancel</button>
+                <button type="submit" disabled={savingEvent} className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-medium">{savingEvent ? "Saving..." : "Save"}</button>
               </div>
             </form>
           </div>
