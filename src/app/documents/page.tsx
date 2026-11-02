@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { 
-  Trash2, FileText, BookOpen, Menu, X, Plus, 
+  Trash2, FileText, BookOpen, X,  
   Bold, Italic, Strikethrough, List, ListOrdered, CheckSquare, Printer, Search 
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog";
@@ -124,7 +124,7 @@ function DocToolbar() {
       <button 
         type="button" 
         onClick={insertSamsungCheckbox} 
-        className="p-1.5 hover:bg-slate-200 rounded transition-colors flex items-center gap-1 text-xs font-medium text-emerald-700" 
+        className="p-1.5 hover:bg-slate-200 rounded transition-colors" 
         title="Insert Checklist (Samsung Notes Style)"
       >
         <CheckSquare className="w-4 h-4" /> 
