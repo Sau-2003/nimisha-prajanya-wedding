@@ -3,8 +3,8 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { 
-  Trash2, FileText, BookOpen, Plus, 
-  Bold, Italic, Strikethrough, List, ListOrdered, CheckSquare, Printer 
+  Trash2, FileText, BookOpen, Menu, X, Plus, 
+  Bold, Italic, Strikethrough, List, ListOrdered, CheckSquare, Printer, Search 
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
@@ -239,8 +239,10 @@ export default function WeddingDocsPage() {
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const [docDeleteTarget, setDocDeleteTarget] = useState<string | null>(null);
   const [docLoading, setDocLoading] = useState(true);
+  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  // Resizable Sidebar Width State
+  // Resizable Sidebar Width State (Desktop)
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const isResizingRef = useRef(false);
 
@@ -299,9 +301,24 @@ export default function WeddingDocsPage() {
     return docs.find(d => d.id === selectedDocId) || null;
   }, [docs, selectedDocId]);
 
+  const filteredDocs = useMemo(() => {
+    if (!searchQuery.trim()) return docs;
+    const query = searchQuery.toLowerCase();
+    return docs.filter(d => 
+      d.title.toLowerCase().includes(query) || 
+      d.content.toLowerCase().includes(query)
+    );
+  }, [docs, searchQuery]);
+
   const addDoc = async () => {
+    const untitledCount = docs.filter(d => 
+      d.title === 'Untitled Document' || /^Untitled Document-\d+$/.test(d.title)
+    ).length;
+
+    const newTitle = untitledCount === 0 ? 'Untitled Document' : `Untitled Document-${untitledCount}`;
+
     const newDoc = {
-      title: 'Untitled Document',
+      title: newTitle,
       content: '',
       created_at: new Date().toISOString()
     };
@@ -323,6 +340,8 @@ export default function WeddingDocsPage() {
       setDocs(prev => [fallbackDoc, ...prev]);
       setSelectedDocId(fallbackDoc.id);
     }
+    setIsMobileDrawerOpen(false);
+    setSearchQuery("");
   };
 
   const updateDoc = async (id: string, updates: Partial<DocItem>) => {
@@ -397,14 +416,23 @@ export default function WeddingDocsPage() {
           <p className="text-xs md:text-sm text-slate-500 mt-0.5">
             Manage itineraries, notes, and planning guides.
           </p>
-          <div className="mt-2.5">
+          <div className="mt-2.5 flex items-center gap-2">
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={addDoc}
-              className="border-emerald-200 text-emerald-800 gap-1.5 h-8 text-xs font-medium"
+              onClick={() => addDoc()}
+              className="md:hidden border-emerald-200 text-emerald-800 gap-1.5 h-8 text-xs font-medium"
             >
               <FilePlusCornerIcon className="w-4 h-4 text-emerald-700" /> New Document
+            </Button>
+            {/* Mobile Button to toggle right-side documents drawer */}
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setIsMobileDrawerOpen(true)}
+              className="md:hidden border-emerald-200 text-emerald-800 gap-1.5 h-8 text-xs font-medium"
+            >
+              <BookOpen className="w-4 h-4 text-emerald-700" /> Documents
             </Button>
           </div>
         </div>
@@ -458,7 +486,7 @@ export default function WeddingDocsPage() {
           )}
         </div>
 
-        {/* Resizable Sidebar (Right) */}
+        {/* Resizable Sidebar (Right - Desktop) */}
         <div 
           style={{ width: `${sidebarWidth}px` }}
           className="hidden md:flex bg-white rounded-xl shadow-md border border-slate-100 p-4 flex-col h-[75vh] relative shrink-0"
@@ -472,7 +500,7 @@ export default function WeddingDocsPage() {
             <div className="w-1 h-8 rounded-full bg-slate-200 group-hover:bg-emerald-500 transition-colors" />
           </div>
 
-          <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
+          <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-100">
             <span className="font-serif font-bold text-emerald-900 text-sm flex items-center gap-2">
               <BookOpen className="w-4 h-4 text-emerald-700" /> Documents
             </span>
@@ -481,11 +509,33 @@ export default function WeddingDocsPage() {
             </Button>
           </div>
 
+          {/* Search Input */}
+          <div className="relative mb-3">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+            <input
+              type="text"
+              placeholder="Search documents..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-700 focus:outline-none focus:border-emerald-400"
+            />
+            {searchQuery && (
+              <button 
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+              >
+                ×
+              </button>
+            )}
+          </div>
+
           <div className="flex-1 overflow-auto space-y-1 pr-1">
-            {docs.length === 0 ? (
-              <div className="text-center py-6 text-slate-400 text-xs italic">No documents yet.</div>
+            {filteredDocs.length === 0 ? (
+              <div className="text-center py-6 text-slate-400 text-xs italic">
+                {searchQuery ? "No matching documents." : "No documents yet."}
+              </div>
             ) : (
-              docs.map((doc) => (
+              filteredDocs.map((doc) => (
                 <div
                   key={doc.id}
                   onClick={() => setSelectedDocId(doc.id)}
@@ -495,7 +545,7 @@ export default function WeddingDocsPage() {
                       : 'text-slate-600 hover:bg-slate-50'
                   }`}
                 >
-                  <span className="truncate flex-1">{doc.title || 'Untitled'}</span>
+                  <span className="truncate flex-1">{doc.title || 'Untitled Document'}</span>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -511,6 +561,82 @@ export default function WeddingDocsPage() {
             )}
           </div>
         </div>
+
+        {/* Mobile Documents Drawer (Right Slide-In) */}
+        {isMobileDrawerOpen && (
+          <div className="fixed inset-0 z-50 flex bg-black/50 md:hidden animate-in fade-in">
+            {/* 1. This empty flex-1 div comes first, pushing the drawer to the right */}
+            <div className="flex-1" onClick={() => setIsMobileDrawerOpen(false)} />
+            
+            {/* 2. Drawer content aligns on the right edge */}
+            <div className="bg-white w-4/5 max-w-xs h-full p-4 flex flex-col shadow-2xl animate-in slide-in-from-right">
+              <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-100">
+                <span className="font-serif font-bold text-emerald-900 text-base flex items-center gap-2">
+                  <BookOpen className="w-5 h-5 text-emerald-700" /> Documents
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button size="icon" variant="ghost" onClick={() => setIsMobileDrawerOpen(false)} className="h-8 w-8">
+                    <X className="w-5 h-5" />
+                  </Button>
+                </div>            
+              </div>
+
+              {/* Mobile Search Input */}
+              <div className="relative mb-3">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="Search documents..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-700 focus:outline-none focus:border-emerald-400"
+                />
+                {searchQuery && (
+                  <button 
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+
+              <div className="flex-1 overflow-auto space-y-1 pr-1">
+                {filteredDocs.length === 0 ? (
+                  <div className="text-center py-6 text-slate-400 text-xs italic">
+                    {searchQuery ? "No matching documents." : "No documents yet."}
+                  </div>
+                ) : (
+                  filteredDocs.map((doc) => (
+                    <div
+                      key={doc.id}
+                      onClick={() => {
+                        setSelectedDocId(doc.id);
+                        setIsMobileDrawerOpen(false);
+                      }}
+                      className={`group flex items-center justify-between p-3 rounded-lg cursor-pointer text-sm transition-all ${
+                        selectedDocId === doc.id 
+                          ? 'bg-emerald-50 text-emerald-900 font-semibold border border-emerald-200 shadow-sm' 
+                          : 'text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span className="truncate flex-1">{doc.title || 'Untitled Document'}</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDocDeleteTarget(doc.id);
+                        }}
+                        className="text-slate-400 hover:text-red-500 p-1"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Confirmation Dialog for Document Deletion */}
