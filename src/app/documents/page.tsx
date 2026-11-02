@@ -127,7 +127,7 @@ function DocToolbar() {
         className="p-1.5 hover:bg-slate-200 rounded transition-colors flex items-center gap-1 text-xs font-medium text-emerald-700" 
         title="Insert Checklist (Samsung Notes Style)"
       >
-        <CheckSquare className="w-4 h-4" /> Checklist
+        <CheckSquare className="w-4 h-4" /> 
       </button>
 
       <div className="h-4 w-[1px] bg-slate-300 mx-1" />
@@ -473,7 +473,7 @@ export default function WeddingDocsPage() {
                 <EditableCell
                   value={activeDoc.content || ""}
                   onChange={(val) => updateDoc(activeDoc.id, { content: val })}
-                  placeholder="Start typing your notes, checklists, or details here..."
+                  placeholder="Start typing your notes..."
                   className="w-full h-full min-h-[350px] outline-none text-slate-700 leading-relaxed text-sm md:text-base"
                 />
               </div>
