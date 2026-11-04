@@ -10,13 +10,11 @@ import {
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
 
-// Exact A4 dimensions at 96 DPI (210mm x 297mm, aspect ratio 1 : 1.4142)
 const A4_WIDTH_PX = 794;
 const A4_ASPECT_RATIO = 1.4142;
-const DESKTOP_MARGIN_PX = 76; // 20mm print margin
-const BOTTOM_GREY_BAR_PX = 32; // Grey shading strip only at the bottom of each page
+const DESKTOP_MARGIN_PX = 76; 
+const BOTTOM_GREY_BAR_PX = 32; 
 
-// --- FILE PLUS CORNER SVG ICON ---
 function FilePlusCornerIcon({ className = "w-4 h-4" }: { className?: string }) {
   return (
     <svg 
@@ -37,7 +35,6 @@ function FilePlusCornerIcon({ className = "w-4 h-4" }: { className?: string }) {
   );
 }
 
-// --- DOCS FORMATTING TOOLBAR ---
 function DocToolbar({ onFormat }: { onFormat: () => void }) {
   const execCmd = (command: string, value: string = '') => {
     document.execCommand(command, false, value);
@@ -70,13 +67,13 @@ function DocToolbar({ onFormat }: { onFormat: () => void }) {
             } else {
               this.removeAttribute('checked');
               textSpan.style.textDecoration = 'none';
-              textSpan.style.color = '#334155';
+              textSpan.style.color = '#1e293b';
             }
           "
         />
         <span 
           contenteditable="true" 
-          class="outline-none border-b border-transparent focus:border-emerald-400 text-slate-700 flex-1 transition-colors"
+          class="outline-none border-b border-transparent focus:border-emerald-400 text-[#1e293b] flex-1 transition-colors"
         >${lineText}</span>
       `;
       fragment.appendChild(wrapper);
@@ -139,7 +136,7 @@ function DocToolbar({ onFormat }: { onFormat: () => void }) {
   );
 }
 
-// --- A4 PRINT-LAYOUT EDITOR (GREY SHADING ONLY AT BOTTOM, NO PAGE HEADER) ---
+// --- GOOGLE DOCS STYLE RESPONSIVE EDITOR ---
 function WordPaginatedEditor({
   docId,
   content,
@@ -158,16 +155,25 @@ function WordPaginatedEditor({
 
   const [pageCount, setPageCount] = useState(1);
   const [pageWidth, setPageWidth] = useState(A4_WIDTH_PX);
+  const [isMobile, setIsMobile] = useState(false);
 
-  // Maintain exact A4 aspect ratio (1 : 1.4142) across desktop and mobile
+  // Detect mobile screen to switch to Google Docs style fluid mobile view
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
   const pageHeight = Math.round(pageWidth * A4_ASPECT_RATIO);
   const pageMargin = Math.max(24, Math.round(pageWidth * (DESKTOP_MARGIN_PX / A4_WIDTH_PX)));
   const pageStride = pageHeight + BOTTOM_GREY_BAR_PX;
 
-  // Wrap bare text nodes at root of editor into <div> blocks so every line can be paginated cleanly
   const normalizeRootTextNodes = useCallback(() => {
     const editor = editorRef.current;
-    if (!editor) return;
+    if (!editor || isMobile) return;
 
     const sel = window.getSelection();
     const childNodes = Array.from(editor.childNodes);
@@ -190,17 +196,16 @@ function WordPaginatedEditor({
         }
       }
     });
-  }, [editorRef]);
+  }, [editorRef, isMobile]);
 
-  // Real-time A4 pagination engine
   const recalculatePages = useCallback(() => {
+    if (isMobile) return; // Google Docs mobile uses natural fluid scrolling without artificial page breaks
     const editor = editorRef.current;
     const stack = pageStackRef.current;
     if (!editor || !stack || pageHeight < 100) return;
 
     normalizeRootTextNodes();
 
-    // 1. Clear previous page-break margin offsets before measuring natural flow
     const prevPushed = editor.querySelectorAll<HTMLElement>('[data-page-break="true"]');
     prevPushed.forEach((el) => {
       el.style.removeProperty("margin-top");
@@ -209,7 +214,6 @@ function WordPaginatedEditor({
 
     const stackRect = stack.getBoundingClientRect();
 
-    // Collect paginatable blocks in document order
     const getBlocks = (): HTMLElement[] => {
       const list: HTMLElement[] = [];
       Array.from(editor.children).forEach((child) => {
@@ -239,7 +243,6 @@ function WordPaginatedEditor({
       const pagePrintableBottom = pageIdx * pageStride + (pageHeight - pageMargin);
 
       if (elBottom > pagePrintableBottom) {
-        // Case A: Block starts below the top line of the current page -> push it across the bottom grey bar to the next page's top margin
         if (elTop > pagePrintableTop + 32) {
           const nextPageIdx = pageIdx + 1;
           const nextPagePrintableTop = nextPageIdx * pageStride + pageMargin;
@@ -248,66 +251,6 @@ function WordPaginatedEditor({
           el.style.marginTop = `${pushAmount}px`;
           el.setAttribute("data-page-break", "true");
           maxPageIdx = Math.max(maxPageIdx, nextPageIdx);
-        } 
-        // Case B: Single long continuous paragraph overflows an entire A4 page -> split it at the bottom margin
-        else if (el.childNodes.length === 1 && el.firstChild?.nodeType === Node.TEXT_NODE) {
-          const textNode = el.firstChild as Text;
-          const text = textNode.data;
-          if (text.length > 1) {
-            const testRange = document.createRange();
-            let low = 1;
-            let high = text.length;
-            let splitIdx = -1;
-            const targetBottomClient = stackRect.top + pagePrintableBottom;
-
-            while (low <= high) {
-              const mid = Math.floor((low + high) / 2);
-              testRange.setStart(textNode, 0);
-              testRange.setEnd(textNode, mid);
-              const r = testRange.getBoundingClientRect();
-              if (r.bottom <= targetBottomClient) {
-                splitIdx = mid;
-                low = mid + 1;
-              } else {
-                high = mid - 1;
-              }
-            }
-
-            if (splitIdx > 0 && splitIdx < text.length) {
-              const lastSpace = text.lastIndexOf(" ", splitIdx);
-              if (lastSpace > splitIdx - 32 && lastSpace > 0) {
-                splitIdx = lastSpace;
-              }
-
-              const sel = window.getSelection();
-              const isCursorInNode = sel && sel.rangeCount > 0 && sel.anchorNode === textNode;
-              const cursorOffset = isCursorInNode ? sel.anchorOffset : -1;
-
-              const firstPart = text.slice(0, splitIdx);
-              const rawSecondPart = text.slice(splitIdx);
-              const trimmedSecondPart = rawSecondPart.replace(/^\s+/, "");
-              const removedSpaces = rawSecondPart.length - trimmedSecondPart.length;
-
-              textNode.data = firstPart;
-
-              const nextDiv = document.createElement("div");
-              nextDiv.className = el.className;
-              const newTextNode = document.createTextNode(trimmedSecondPart);
-              nextDiv.appendChild(newTextNode);
-              el.parentNode?.insertBefore(nextDiv, el.nextSibling);
-
-              if (isCursorInNode && sel && cursorOffset >= splitIdx) {
-                const newRange = document.createRange();
-                const nextOffset = Math.max(0, Math.min(newTextNode.length, cursorOffset - splitIdx - removedSpaces));
-                newRange.setStart(newTextNode, nextOffset);
-                newRange.collapse(true);
-                sel.removeAllRanges();
-                sel.addRange(newRange);
-              }
-
-              blocks = getBlocks();
-            }
-          }
         }
       } else {
         maxPageIdx = Math.max(maxPageIdx, pageIdx);
@@ -322,13 +265,12 @@ function WordPaginatedEditor({
     }
 
     setPageCount(maxPageIdx + 1);
-  }, [editorRef, normalizeRootTextNodes, pageHeight, pageMargin, pageStride]);
+  }, [editorRef, normalizeRootTextNodes, pageHeight, pageMargin, pageStride, isMobile]);
 
   useEffect(() => {
     recalculateRef.current = recalculatePages;
   }, [recalculatePages, recalculateRef]);
 
-  // Measure available width so desktop uses 794px A4 width and mobile fits inside the screen
   useEffect(() => {
     const stack = pageStackRef.current;
     if (!stack) return;
@@ -346,7 +288,6 @@ function WordPaginatedEditor({
     return () => ro.disconnect();
   }, []);
 
-  // Sync content reliably on initial mount and whenever switching documents
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor) return;
@@ -359,83 +300,111 @@ function WordPaginatedEditor({
       } else {
         editor.innerHTML = content || "<div><br/></div>";
       }
-      requestAnimationFrame(() => recalculatePages());
+      if (!isMobile) requestAnimationFrame(() => recalculatePages());
     }
-  }, [docId, content, editorRef, recalculatePages]);
+  }, [docId, content, editorRef, recalculatePages, isMobile]);
 
   useEffect(() => {
-    requestAnimationFrame(() => recalculatePages());
-  }, [pageWidth, recalculatePages]);
+    if (!isMobile) requestAnimationFrame(() => recalculatePages());
+  }, [pageWidth, recalculatePages, isMobile]);
 
   const handleInput = () => {
     const editor = editorRef.current;
     if (!editor) return;
-    recalculatePages();
+    if (!isMobile) recalculatePages();
     onChange(editor.innerHTML);
   };
 
-  const totalStackHeight = pageCount * pageStride;
+  const totalStackHeight = isMobile ? undefined : pageCount * pageStride;
 
   return (
     <div 
       onClick={() => editorRef.current?.focus()}
       className="h-[65vh] md:h-[70vh] w-full bg-white overflow-y-auto overflow-x-hidden cursor-text"
     >
-      <div
-        ref={pageStackRef}
-        style={{ minHeight: `${totalStackHeight}px` }}
-        className="relative mx-auto w-full max-w-[794px] bg-white"
-      >
-        {/* Background A4 Pages with Grey Shading ONLY at the Bottom of Each Page */}
-        <div className="absolute inset-0 pointer-events-none z-0 flex flex-col">
-          {Array.from({ length: pageCount }).map((_, idx) => (
-            <div key={idx} className="w-full shrink-0 flex flex-col">
-              {/* White A4 Page Area */}
-              <div
-                style={{ height: `${pageHeight}px` }}
-                className="w-full bg-white relative border-x border-slate-200/80"
-              >
-                {/* Page Number at Bottom Margin of Page */}
-                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[11px] font-sans text-slate-400 select-none">
-                  Page {idx + 1} of {pageCount}
-                </div>
-              </div>
-
-              {/* Grey Shading Bar ONLY at the Bottom */}
-              <div
-                style={{ height: `${BOTTOM_GREY_BAR_PX}px` }}
-                className="w-full bg-slate-200/80 border-t border-b border-slate-300 shadow-[inset_0_3px_5px_-2px_rgba(0,0,0,0.12)]"
-              />
-            </div>
-          ))}
+      {/* MOBILE VIEW: Google Docs Mobile Fluid Layout */}
+      {isMobile ? (
+        <div className="w-full min-h-full bg-white p-6">
+          <div
+            ref={editorRef}
+            contentEditable
+            onInput={handleInput}
+            suppressContentEditableWarning
+            style={{
+              fontFamily: "Arial, sans-serif",
+              fontSize: "16px",
+              lineHeight: "1.6",
+              color: "#1e293b",
+              WebkitTextSizeAdjust: "100%",
+              textSizeAdjust: "100%",
+              minHeight: "100%"
+            }}
+            className="
+              w-full outline-none text-[#1e293b] cursor-text break-words
+              empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400/60
+              [&>div]:min-h-[1.6em] [&>p]:min-h-[1.6em] [&_li]:min-h-[1.6em]
+              [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6
+              [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_strike]:line-through [&_s]:line-through
+            "
+            data-placeholder="Start typing your document..."
+          />
         </div>
-
-        {/* Foreground Editable Document Body (No Header on Page) */}
+      ) : (
+        /* DESKTOP VIEW: Google Docs Desktop A4 Paginated Layout */
         <div
-          ref={editorRef}
-          contentEditable
-          onInput={handleInput}
-          suppressContentEditableWarning
-          style={{
-            fontFamily: "Arial, sans-serif",
-            fontSize: "16px",
-            lineHeight: "1.6",
-            paddingTop: `${pageMargin}px`,
-            paddingBottom: `${pageMargin + BOTTOM_GREY_BAR_PX}px`,
-            paddingLeft: `${pageMargin}px`,
-            paddingRight: `${pageMargin}px`,
-            minHeight: `${totalStackHeight}px`
-          }}
-          className="
-            relative z-10 w-full outline-none text-[#1e293b] cursor-text break-words
-            empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400/60
-            [&>div]:min-h-[1.6em] [&>p]:min-h-[1.6em] [&_li]:min-h-[1.6em]
-            [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6
-            [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_strike]:line-through [&_s]:line-through
-          "
-          data-placeholder="Start typing your document..."
-        />
-      </div>
+          ref={pageStackRef}
+          style={{ minHeight: `${totalStackHeight}px` }}
+          className="relative mx-auto w-full max-w-[794px] bg-white"
+        >
+          <div className="absolute inset-0 pointer-events-none z-0 flex flex-col">
+            {Array.from({ length: pageCount }).map((_, idx) => (
+              <div key={idx} className="w-full shrink-0 flex flex-col">
+                <div
+                  style={{ height: `${pageHeight}px` }}
+                  className="w-full bg-white relative border-x border-slate-200/80"
+                >
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[11px] font-sans text-slate-400 select-none">
+                    Page {idx + 1} of {pageCount}
+                  </div>
+                </div>
+
+                <div
+                  style={{ height: `${BOTTOM_GREY_BAR_PX}px` }}
+                  className="w-full bg-slate-200/80 border-t border-b border-slate-300 shadow-[inset_0_3px_5px_-2px_rgba(0,0,0,0.12)]"
+                />
+              </div>
+            ))}
+          </div>
+
+          <div
+            ref={editorRef}
+            contentEditable
+            onInput={handleInput}
+            suppressContentEditableWarning
+            style={{
+              fontFamily: "Arial, sans-serif",
+              fontSize: "16px",
+              lineHeight: "1.6",
+              color: "#1e293b",
+              WebkitTextSizeAdjust: "100%",
+              textSizeAdjust: "100%",
+              paddingTop: `${pageMargin}px`,
+              paddingBottom: `${pageMargin + BOTTOM_GREY_BAR_PX}px`,
+              paddingLeft: `${pageMargin}px`,
+              paddingRight: `${pageMargin}px`,
+              minHeight: `${totalStackHeight}px`
+            }}
+            className="
+              relative z-10 w-full outline-none text-[#1e293b] cursor-text break-words
+              empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400/60
+              [&>div]:min-h-[1.6em] [&>p]:min-h-[1.6em] [&_li]:min-h-[1.6em]
+              [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6
+              [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_strike]:line-through [&_s]:line-through
+            "
+            data-placeholder="Start typing your document..."
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -510,7 +479,6 @@ export default function WeddingDocsPage() {
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const isResizingRef = useRef(false);
 
-  // --- Realtime & Debounce Refs ---
   const pendingUpdates = useRef<Record<string, Partial<DocItem>>>({});
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -561,7 +529,6 @@ export default function WeddingDocsPage() {
 
     fetchDocs();
 
-    // --- Supabase Realtime Subscription for cross-device syncing ---
     const channel = supabase
       .channel('wedding-docs-sync')
       .on(
@@ -623,16 +590,13 @@ export default function WeddingDocsPage() {
     setTimeout(() => setIsNewDocCreated(true), 50);
   };
 
-  // --- Debounced Database Update ---
   const updateDoc = (id: string, updates: Partial<DocItem>) => {
     if (updates.title !== undefined && isNewDocCreated) setIsNewDocCreated(false);
     
-    // 1. Update UI instantly
     setDocs(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d));
     
     if (id.startsWith('local-')) return;
 
-    // 2. Queue updates and debounce database writes by 1 second
     pendingUpdates.current[id] = { ...pendingUpdates.current[id], ...updates };
 
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -663,7 +627,6 @@ export default function WeddingDocsPage() {
     setDocDeleteTarget(null);
   };
 
-  // Opens a Print Dialog containing the exact Document with the Header injected
   const handlePrint = () => {
     if (!activeDoc) return;
     recalculateRef.current();
@@ -706,8 +669,6 @@ export default function WeddingDocsPage() {
               margin: 0; 
               padding: 0;
             }
-            
-            /* --- INJECTED PRINT HEADER --- */
             .print-header {
               text-align: center;
               border-bottom: 2px solid #e2e8f0;
@@ -725,8 +686,6 @@ export default function WeddingDocsPage() {
               font-size: 12px; 
               color: #64748b; 
             }
-            
-            /* --- DOCUMENT CONTENT --- */
             .content { 
               font-size: 16px; 
               line-height: 1.6;
@@ -739,8 +698,6 @@ export default function WeddingDocsPage() {
             .content ol { list-style-type: decimal; padding-left: 24px; margin: 0; }
             input[type="checkbox"] { margin-right: 10px; transform: scale(1.1); accent-color: #059669; }
             .samsung-task-item { display: flex; align-items: center; margin: 6px 0; }
-            
-            /* Print breaks match mobile/desktop auto-breaks exactly */
             [data-page-break="true"] {
               page-break-before: always !important;
               break-before: page !important;
@@ -749,15 +706,11 @@ export default function WeddingDocsPage() {
           </style>
         </head>
         <body>
-          <!-- TITLE BLOCK ON FIRST PRINTED PAGE -->
           <div class="print-header">
             <h1>${activeDoc.title || 'Untitled Document'}</h1>
             <div class="date">Last updated: ${formattedDate}</div>
           </div>
-          
           <div class="content">${liveHtml}</div>
-          
-          <!-- Small delay ensures the print preview paints perfectly before dialog pops up -->
           <script>
             window.onload = () => { 
               setTimeout(() => {
@@ -796,7 +749,6 @@ export default function WeddingDocsPage() {
       </div>
 
       <div className="flex flex-col md:flex-row gap-4 md:gap-6 relative items-start">
-        {/* Main Document Editor Column (min-w-0 ensures it never overflows desktop flex layout) */}
         <div className="flex-1 min-w-0 w-full bg-white rounded-xl shadow-md border border-slate-200 p-2 sm:p-4 md:p-6 flex flex-col">
           {activeDoc ? (
             <div className="flex flex-col space-y-3">
@@ -837,7 +789,6 @@ export default function WeddingDocsPage() {
           )}
         </div>
 
-        {/* Desktop Documents Sidebar */}
         <div style={{ width: `${sidebarWidth}px` }} className="hidden md:flex bg-white rounded-xl shadow-md border border-slate-200 p-4 flex-col h-[84vh] relative shrink-0">
           <div onMouseDown={startResizing} className="absolute -left-2 top-0 bottom-0 w-4 cursor-ew-resize flex items-center justify-center group z-10">
             <div className="w-1 h-8 rounded-full bg-slate-200 group-hover:bg-emerald-500 transition-colors" />
@@ -860,7 +811,6 @@ export default function WeddingDocsPage() {
           </div>
         </div>
 
-        {/* Mobile Documents Drawer */}
         {isMobileDrawerOpen && (
           <div className="fixed inset-0 z-50 flex bg-black/50 md:hidden animate-in fade-in">
             <div className="flex-1" onClick={() => setIsMobileDrawerOpen(false)} />
