@@ -363,12 +363,11 @@ export default function GlobalitemsPage() {
       {/* Header section */}
       <div className="mb-6 flex flex-col lg:flex-row lg:items-end justify-between gap-4 border-b border-slate-200 pb-5">
         <div className="shrink-0 overflow-hidden">
-          <h1 className="font-serif text-2xl md:text-3xl font-bold text-emerald-900 flex items-center gap-2.5">
-            <Package className="w-6 h-6 md:w-8 md:h-8 text-emerald-600 shrink-0" />
-            <span className="truncate">Master Items List</span>
-          </h1>
-          {/* Forced Single Line Subtitle */}
-          <p className="text-slate-500 text-[11px] md:text-sm mt-1 md:mt-2 whitespace-nowrap overflow-hidden text-ellipsis">
+          <h1 className="font-serif text-3xl font-bold text-emerald-900 flex items-center gap-3">
+            <Package className="w-8 h-8 text-emerald-600" />
+            Master Items List
+          </h1> 
+          <p className="mt-2 text-slate-500">
             Consolidated view of all necessary items across your events.
           </p>
         </div>

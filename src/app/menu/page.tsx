@@ -394,7 +394,7 @@ export default function MenuPage() {
         <div>
           <h1 className="font-serif text-3xl font-bold text-emerald-900 flex items-center gap-3">
             <SquareMenu className="w-8 h-8 text-emerald-600" />
-            Menu Management
+            Menu Mgmt.
           </h1>
           <p className="mt-2 text-slate-500">
             Build event menus.

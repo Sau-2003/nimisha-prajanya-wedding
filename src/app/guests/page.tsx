@@ -267,19 +267,19 @@ export default function GuestsPage() {
         <div>
           <h1 className="font-serif text-3xl font-bold text-emerald-900 flex items-center gap-3">
             <Users className="w-8 h-8 text-emerald-600" />
-            Guest Management
+            Guest Mgmt.
           </h1>
           <p className="mt-2 text-slate-500">
             View all guests by events.
           </p>
         </div>
         
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+        <div className="flex flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
           <a 
             href="https://docs.google.com/spreadsheets/d/1PnsOf0vpQs3I_S7ilQF7heiBwYvePVzsyz81I74czgA/edit?gid=421945919#gid=421945919" 
             target="_blank" 
             rel="noopener noreferrer"
-            className="w-full sm:w-auto"
+            className="flex-1"
           >
             <Button 
               variant="outline"
@@ -290,9 +290,9 @@ export default function GuestsPage() {
           </a>
           <Button 
             onClick={exportToGoogleSheets} 
-            className="bg-emerald-700 hover:bg-emerald-800 text-white flex items-center justify-center gap-2 w-full sm:w-auto"
+            className="bg-emerald-700 hover:bg-emerald-800 text-white flex items-center justify-center gap-2 flex-1"
           >
-            <FileSpreadsheet className="w-4 h-4" /> Export to Sheets
+            <FileSpreadsheet className="w-4 h-4" /> Export to Sheet
           </Button>
         </div>
       </div>
