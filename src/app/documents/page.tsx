@@ -10,12 +10,11 @@ import {
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
 
-// Exact A4 dimensions at 96 DPI (210mm x 297mm)
+// Exact A4 dimensions at 96 DPI (210mm x 297mm, aspect ratio 1 : 1.4142)
 const A4_WIDTH_PX = 794;
-const A4_HEIGHT_PX = 1123;
-const PRINT_MARGIN_PX = 76; // 20mm print margin
-const BOTTOM_GREY_BAR_PX = 32; // Visual shading strip at the bottom
-const PAGE_STRIDE = A4_HEIGHT_PX + BOTTOM_GREY_BAR_PX;
+const A4_ASPECT_RATIO = 1.4142;
+const DESKTOP_MARGIN_PX = 76; // 20mm print margin
+const BOTTOM_GREY_BAR_PX = 32; // Grey shading strip only at the bottom of each page
 
 // --- FILE PLUS CORNER SVG ICON ---
 function FilePlusCornerIcon({ className = "w-4 h-4" }: { className?: string }) {
@@ -140,7 +139,7 @@ function DocToolbar({ onFormat }: { onFormat: () => void }) {
   );
 }
 
-// --- A4 SCALED PRINT-LAYOUT EDITOR (MOBILE & DESKTOP PERFECT) ---
+// --- A4 PRINT-LAYOUT EDITOR (GREY SHADING ONLY AT BOTTOM, NO PAGE HEADER) ---
 function WordPaginatedEditor({
   docId,
   content,
@@ -154,34 +153,18 @@ function WordPaginatedEditor({
   editorRef: React.RefObject<HTMLDivElement | null>;
   recalculateRef: React.MutableRefObject<() => void>;
 }) {
-  const viewportRef = useRef<HTMLDivElement>(null);
   const pageStackRef = useRef<HTMLDivElement>(null);
   const loadedDocIdRef = useRef<string | null>(null);
 
   const [pageCount, setPageCount] = useState(1);
-  const [scale, setScale] = useState(1);
+  const [pageWidth, setPageWidth] = useState(A4_WIDTH_PX);
 
-  // Measure available width and compute mobile scale factor
-  useEffect(() => {
-    const vp = viewportRef.current;
-    if (!vp) return;
+  // Maintain exact A4 aspect ratio (1 : 1.4142) across desktop and mobile
+  const pageHeight = Math.round(pageWidth * A4_ASPECT_RATIO);
+  const pageMargin = Math.max(24, Math.round(pageWidth * (DESKTOP_MARGIN_PX / A4_WIDTH_PX)));
+  const pageStride = pageHeight + BOTTOM_GREY_BAR_PX;
 
-    const updateScale = () => {
-      // 16px to allow for a small 8px padding on left/right on mobile screens
-      const availableWidth = vp.clientWidth - 16;
-      if (availableWidth <= 0) return;
-      
-      // If screen is smaller than A4, zoom out. If larger, stay at 100%.
-      const newScale = availableWidth < A4_WIDTH_PX ? availableWidth / A4_WIDTH_PX : 1;
-      setScale(newScale);
-    };
-
-    updateScale();
-    const ro = new ResizeObserver(updateScale);
-    ro.observe(vp);
-    return () => ro.disconnect();
-  }, []);
-
+  // Wrap bare text nodes at root of editor into <div> blocks so every line can be paginated cleanly
   const normalizeRootTextNodes = useCallback(() => {
     const editor = editorRef.current;
     if (!editor) return;
@@ -190,7 +173,7 @@ function WordPaginatedEditor({
     const childNodes = Array.from(editor.childNodes);
 
     childNodes.forEach((node) => {
-      if (node.nodeType === Node.TEXT_NODE && (node.textContent || "").trim().length > 0) {
+      if (node.nodeType === Node.TEXT_NODE && (node.textContent || "").length > 0) {
         const isFocused = sel && sel.rangeCount > 0 && sel.anchorNode === node;
         const offset = isFocused ? sel.anchorOffset : 0;
 
@@ -209,13 +192,15 @@ function WordPaginatedEditor({
     });
   }, [editorRef]);
 
+  // Real-time A4 pagination engine
   const recalculatePages = useCallback(() => {
     const editor = editorRef.current;
     const stack = pageStackRef.current;
-    if (!editor || !stack) return;
+    if (!editor || !stack || pageHeight < 100) return;
 
     normalizeRootTextNodes();
 
+    // 1. Clear previous page-break margin offsets before measuring natural flow
     const prevPushed = editor.querySelectorAll<HTMLElement>('[data-page-break="true"]');
     prevPushed.forEach((el) => {
       el.style.removeProperty("margin-top");
@@ -223,9 +208,8 @@ function WordPaginatedEditor({
     });
 
     const stackRect = stack.getBoundingClientRect();
-    // Because stack is scaled, we must un-scale the bounding rects to calculate against the true 1123px height
-    const currentScale = scale || 1; 
 
+    // Collect paginatable blocks in document order
     const getBlocks = (): HTMLElement[] => {
       const list: HTMLElement[] = [];
       Array.from(editor.children).forEach((child) => {
@@ -247,24 +231,25 @@ function WordPaginatedEditor({
     for (let i = 0; i < blocks.length; i++) {
       const el = blocks[i];
       const rect = el.getBoundingClientRect();
-      // True position in the unscaled 1123px dimension
-      const elTop = (rect.top - stackRect.top) / currentScale;
-      const elBottom = (rect.bottom - stackRect.top) / currentScale;
+      const elTop = rect.top - stackRect.top;
+      const elBottom = rect.bottom - stackRect.top;
 
-      const pageIdx = Math.max(0, Math.floor(elTop / PAGE_STRIDE));
-      const pagePrintableTop = pageIdx * PAGE_STRIDE + PRINT_MARGIN_PX;
-      const pagePrintableBottom = pageIdx * PAGE_STRIDE + (A4_HEIGHT_PX - PRINT_MARGIN_PX);
+      const pageIdx = Math.max(0, Math.floor(elTop / pageStride));
+      const pagePrintableTop = pageIdx * pageStride + pageMargin;
+      const pagePrintableBottom = pageIdx * pageStride + (pageHeight - pageMargin);
 
       if (elBottom > pagePrintableBottom) {
+        // Case A: Block starts below the top line of the current page -> push it across the bottom grey bar to the next page's top margin
         if (elTop > pagePrintableTop + 32) {
           const nextPageIdx = pageIdx + 1;
-          const nextPagePrintableTop = nextPageIdx * PAGE_STRIDE + PRINT_MARGIN_PX;
+          const nextPagePrintableTop = nextPageIdx * pageStride + pageMargin;
           const pushAmount = Math.ceil(nextPagePrintableTop - elTop);
 
           el.style.marginTop = `${pushAmount}px`;
           el.setAttribute("data-page-break", "true");
           maxPageIdx = Math.max(maxPageIdx, nextPageIdx);
         } 
+        // Case B: Single long continuous paragraph overflows an entire A4 page -> split it at the bottom margin
         else if (el.childNodes.length === 1 && el.firstChild?.nodeType === Node.TEXT_NODE) {
           const textNode = el.firstChild as Text;
           const text = textNode.data;
@@ -273,7 +258,7 @@ function WordPaginatedEditor({
             let low = 1;
             let high = text.length;
             let splitIdx = -1;
-            const targetBottomClient = stackRect.top + (pagePrintableBottom * currentScale);
+            const targetBottomClient = stackRect.top + pagePrintableBottom;
 
             while (low <= high) {
               const mid = Math.floor((low + high) / 2);
@@ -290,7 +275,9 @@ function WordPaginatedEditor({
 
             if (splitIdx > 0 && splitIdx < text.length) {
               const lastSpace = text.lastIndexOf(" ", splitIdx);
-              if (lastSpace > splitIdx - 32 && lastSpace > 0) splitIdx = lastSpace;
+              if (lastSpace > splitIdx - 32 && lastSpace > 0) {
+                splitIdx = lastSpace;
+              }
 
               const sel = window.getSelection();
               const isCursorInNode = sel && sel.rangeCount > 0 && sel.anchorNode === textNode;
@@ -329,18 +316,37 @@ function WordPaginatedEditor({
 
     if (blocks.length > 0) {
       const lastEl = blocks[blocks.length - 1];
-      const lastBottom = (lastEl.getBoundingClientRect().bottom - stackRect.top) / currentScale;
-      const lastPageIdx = Math.max(0, Math.floor((lastBottom - 4) / PAGE_STRIDE));
+      const lastBottom = lastEl.getBoundingClientRect().bottom - stackRect.top;
+      const lastPageIdx = Math.max(0, Math.floor((lastBottom - 4) / pageStride));
       maxPageIdx = Math.max(maxPageIdx, lastPageIdx);
     }
 
     setPageCount(maxPageIdx + 1);
-  }, [editorRef, normalizeRootTextNodes, scale]);
+  }, [editorRef, normalizeRootTextNodes, pageHeight, pageMargin, pageStride]);
 
   useEffect(() => {
     recalculateRef.current = recalculatePages;
   }, [recalculatePages, recalculateRef]);
 
+  // Measure available width so desktop uses 794px A4 width and mobile fits inside the screen
+  useEffect(() => {
+    const stack = pageStackRef.current;
+    if (!stack) return;
+
+    const updateWidth = () => {
+      const w = stack.clientWidth;
+      if (w > 0) {
+        setPageWidth(Math.min(A4_WIDTH_PX, w));
+      }
+    };
+
+    updateWidth();
+    const ro = new ResizeObserver(updateWidth);
+    ro.observe(stack);
+    return () => ro.disconnect();
+  }, []);
+
+  // Sync content reliably on initial mount and whenever switching documents
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor) return;
@@ -359,7 +365,7 @@ function WordPaginatedEditor({
 
   useEffect(() => {
     requestAnimationFrame(() => recalculatePages());
-  }, [scale, recalculatePages]);
+  }, [pageWidth, recalculatePages]);
 
   const handleInput = () => {
     const editor = editorRef.current;
@@ -368,82 +374,67 @@ function WordPaginatedEditor({
     onChange(editor.innerHTML);
   };
 
-  const totalUnscaledHeight = pageCount * PAGE_STRIDE;
+  const totalStackHeight = pageCount * pageStride;
 
   return (
-    // Viewport provides scrolling and a grey background outside the document bounds
     <div 
-      ref={viewportRef}
       onClick={() => editorRef.current?.focus()}
-      className="h-[65vh] md:h-[70vh] w-full bg-slate-200/80 overflow-y-auto overflow-x-hidden flex justify-center py-4 cursor-text"
+      className="h-[65vh] md:h-[70vh] w-full bg-white overflow-y-auto overflow-x-hidden cursor-text"
     >
-      {/* 
-        This wrapper dictates the physical scrolling height and width of the scaled document.
-        Because scale() shrinks visually but not physically, this stops massive white space on mobile.
-      */}
-      <div 
-        style={{
-          width: `${A4_WIDTH_PX * scale}px`,
-          height: `${totalUnscaledHeight * scale}px`
-        }}
-        className="relative shrink-0"
+      <div
+        ref={pageStackRef}
+        style={{ minHeight: `${totalStackHeight}px` }}
+        className="relative mx-auto w-full max-w-[794px] bg-white"
       >
-        <div
-          ref={pageStackRef}
-          style={{
-            width: `${A4_WIDTH_PX}px`,
-            height: `${totalUnscaledHeight}px`,
-            transform: `scale(${scale})`,
-            transformOrigin: "top left"
-          }}
-          className="relative"
-        >
-          {/* Background A4 Pages with Grey Shading ONLY at the Bottom of Each Page */}
-          <div className="absolute inset-0 pointer-events-none z-0 flex flex-col">
-            {Array.from({ length: pageCount }).map((_, idx) => (
-              <div key={idx} className="w-full shrink-0 flex flex-col">
-                <div
-                  style={{ height: `${A4_HEIGHT_PX}px` }}
-                  className="w-full bg-white relative border-x border-t border-slate-300 shadow-sm"
-                >
-                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[11px] font-sans text-slate-400 select-none">
-                    Page {idx + 1} of {pageCount}
-                  </div>
+        {/* Background A4 Pages with Grey Shading ONLY at the Bottom of Each Page */}
+        <div className="absolute inset-0 pointer-events-none z-0 flex flex-col">
+          {Array.from({ length: pageCount }).map((_, idx) => (
+            <div key={idx} className="w-full shrink-0 flex flex-col">
+              {/* White A4 Page Area */}
+              <div
+                style={{ height: `${pageHeight}px` }}
+                className="w-full bg-white relative border-x border-slate-200/80"
+              >
+                {/* Page Number at Bottom Margin of Page */}
+                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[11px] font-sans text-slate-400 select-none">
+                  Page {idx + 1} of {pageCount}
                 </div>
-                <div
-                  style={{ height: `${BOTTOM_GREY_BAR_PX}px` }}
-                  className="w-full bg-slate-200/80 border-b border-slate-300 shadow-[inset_0_3px_5px_-2px_rgba(0,0,0,0.12)]"
-                />
               </div>
-            ))}
-          </div>
 
-          {/* Foreground Editable Document Body (100% Width, scaled visually) */}
-          <div
-            ref={editorRef}
-            contentEditable
-            onInput={handleInput}
-            suppressContentEditableWarning
-            style={{
-              fontFamily: "Arial, sans-serif",
-              fontSize: "16px",
-              lineHeight: "1.6",
-              paddingTop: `${PRINT_MARGIN_PX}px`,
-              paddingBottom: `${PRINT_MARGIN_PX + BOTTOM_GREY_BAR_PX}px`,
-              paddingLeft: `${PRINT_MARGIN_PX}px`,
-              paddingRight: `${PRINT_MARGIN_PX}px`,
-              minHeight: `${totalUnscaledHeight}px`
-            }}
-            className="
-              relative z-10 w-full outline-none text-[#1e293b] cursor-text break-words
-              empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400/60
-              [&>div]:min-h-[1.6em] [&>p]:min-h-[1.6em] [&_li]:min-h-[1.6em]
-              [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6
-              [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_strike]:line-through [&_s]:line-through
-            "
-            data-placeholder="Start typing your document..."
-          />
+              {/* Grey Shading Bar ONLY at the Bottom */}
+              <div
+                style={{ height: `${BOTTOM_GREY_BAR_PX}px` }}
+                className="w-full bg-slate-200/80 border-t border-b border-slate-300 shadow-[inset_0_3px_5px_-2px_rgba(0,0,0,0.12)]"
+              />
+            </div>
+          ))}
         </div>
+
+        {/* Foreground Editable Document Body (No Header on Page) */}
+        <div
+          ref={editorRef}
+          contentEditable
+          onInput={handleInput}
+          suppressContentEditableWarning
+          style={{
+            fontFamily: "Arial, sans-serif",
+            fontSize: "16px",
+            lineHeight: "1.6",
+            paddingTop: `${pageMargin}px`,
+            paddingBottom: `${pageMargin + BOTTOM_GREY_BAR_PX}px`,
+            paddingLeft: `${pageMargin}px`,
+            paddingRight: `${pageMargin}px`,
+            minHeight: `${totalStackHeight}px`
+          }}
+          className="
+            relative z-10 w-full outline-none text-[#1e293b] cursor-text break-words
+            empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400/60
+            [&>div]:min-h-[1.6em] [&>p]:min-h-[1.6em] [&_li]:min-h-[1.6em]
+            [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6
+            [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_strike]:line-through [&_s]:line-through
+          "
+          data-placeholder="Start typing your document..."
+        />
       </div>
     </div>
   );
@@ -519,6 +510,10 @@ export default function WeddingDocsPage() {
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const isResizingRef = useRef(false);
 
+  // --- NEW: Debounce state for Supabase saves ---
+  const pendingUpdates = useRef<Record<string, Partial<DocItem>>>({});
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const startResizing = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     isResizingRef.current = true;
@@ -563,7 +558,35 @@ export default function WeddingDocsPage() {
       }
       setDocLoading(false);
     };
+
     fetchDocs();
+
+    // --- NEW: Supabase Realtime Subscription ---
+    const channel = supabase
+      .channel('wedding-docs-sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'wedding_docs' },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setDocs((prev) => {
+              if (prev.some(d => d.id === payload.new.id)) return prev;
+              return [payload.new as DocItem, ...prev];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            setDocs((prev) => 
+              prev.map(d => d.id === payload.new.id ? { ...d, ...(payload.new as DocItem) } : d)
+            );
+          } else if (payload.eventType === 'DELETE') {
+            setDocs((prev) => prev.filter(d => d.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const activeDoc = useMemo(() => {
@@ -600,19 +623,39 @@ export default function WeddingDocsPage() {
     setTimeout(() => setIsNewDocCreated(true), 50);
   };
 
-  const updateDoc = async (id: string, updates: Partial<DocItem>) => {
+  // --- UPDATED: Debounced Database Updates ---
+  const updateDoc = (id: string, updates: Partial<DocItem>) => {
     if (updates.title !== undefined && isNewDocCreated) setIsNewDocCreated(false);
+    
+    // 1. Update UI instantly so typing feels responsive
     setDocs(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d));
     
-    if (!id.startsWith('local-')) {
-      await supabase.from('wedding_docs').update(updates).eq('id', id);
-    }
+    if (id.startsWith('local-')) return;
+
+    // 2. Queue updates and debounce the database call (saves every 1 second of inactivity)
+    pendingUpdates.current[id] = { ...pendingUpdates.current[id], ...updates };
+
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    
+    saveTimeoutRef.current = setTimeout(async () => {
+      const updatesToProcess = { ...pendingUpdates.current };
+      pendingUpdates.current = {}; // clear immediately
+      
+      for (const docId of Object.keys(updatesToProcess)) {
+        await supabase
+          .from('wedding_docs')
+          .update(updatesToProcess[docId])
+          .eq('id', docId);
+      }
+    }, 1000);
   };
 
   const confirmDeleteDoc = async () => {
     if (!docDeleteTarget) return;
     setDocs(prev => prev.filter(d => d.id !== docDeleteTarget));
-    if (!docDeleteTarget.startsWith('local-')) await supabase.from('wedding_docs').delete().eq('id', docDeleteTarget);
+    if (!docDeleteTarget.startsWith('local-')) {
+      await supabase.from('wedding_docs').delete().eq('id', docDeleteTarget);
+    }
     if (selectedDocId === docDeleteTarget) {
       const remaining = docs.filter(d => d.id !== docDeleteTarget);
       setSelectedDocId(remaining.length > 0 ? remaining[0].id : null);
@@ -621,6 +664,7 @@ export default function WeddingDocsPage() {
   };
 
   const handlePrint = () => {
+    // ... [Keep your exact existing handlePrint implementation here] ...
     if (!activeDoc) return;
     recalculateRef.current();
 
@@ -712,7 +756,16 @@ export default function WeddingDocsPage() {
           </div>
           
           <div class="content">${liveHtml}</div>
-          <script>window.onload = () => { window.print(); window.close(); }</script>
+          
+          <!-- Small delay ensures the print preview paints perfectly before dialog pops up -->
+          <script>
+            window.onload = () => { 
+              setTimeout(() => {
+                window.print(); 
+                window.close(); 
+              }, 300);
+            };
+          </script>
         </body>
       </html>
     `);
@@ -743,7 +796,7 @@ export default function WeddingDocsPage() {
       </div>
 
       <div className="flex flex-col md:flex-row gap-4 md:gap-6 relative items-start">
-        {/* Main Document Editor Column */}
+        {/* Main Document Editor Column (min-w-0 ensures it never overflows desktop flex layout) */}
         <div className="flex-1 min-w-0 w-full bg-white rounded-xl shadow-md border border-slate-200 p-2 sm:p-4 md:p-6 flex flex-col">
           {activeDoc ? (
             <div className="flex flex-col space-y-3">
@@ -759,8 +812,8 @@ export default function WeddingDocsPage() {
                     Last updated: {new Date(activeDoc.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                   </div>
                 </div>
-                <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5 border-slate-200 text-slate-700 hover:bg-slate-50 shrink-0 h-8 text-xs" title="Print Document">
-                  <Printer className="w-3.5 h-3.5 text-slate-500" /> Print
+                <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5 border-slate-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-300 shrink-0 h-8 text-xs font-medium transition-colors" title="Print & Preview">
+                  <Printer className="w-3.5 h-3.5 text-emerald-600" /> Print
                 </Button>
               </div>
 
