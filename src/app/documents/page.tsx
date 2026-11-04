@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { 
   Trash2, FileText, BookOpen, X,   
   Bold, Italic, Strikethrough, List, ListOrdered, CheckSquare, Printer, Search,
-  AlignLeft, AlignCenter, AlignRight, AlignJustify, Indent, Outdent
+  AlignLeft, AlignCenter, AlignRight, AlignJustify, Indent, Outdent, Undo2, Redo2
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
@@ -44,20 +44,46 @@ function DocToolbar({ onFormat }: { onFormat: () => void }) {
   const insertSamsungCheckbox = () => {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return;
-    const range = selection.getRangeAt(0);
+    
+    // 1. Check if we are already inside a checkbox item (TOGGLE OFF)
+    let container: HTMLElement | null = selection.anchorNode as HTMLElement;
+    while (container && container !== document.body) {
+      if (container.nodeType === Node.ELEMENT_NODE && container.classList.contains('samsung-task-item')) {
+        const textSpan = container.querySelector('span');
+        const text = textSpan ? textSpan.innerHTML : '<br/>';
+        
+        const normalDiv = document.createElement('div');
+        normalDiv.innerHTML = text;
+        
+        container.parentNode?.insertBefore(normalDiv, container);
+        container.remove();
+        
+        const newRange = document.createRange();
+        newRange.selectNodeContents(normalDiv);
+        newRange.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(newRange);
+        onFormat();
+        return;
+      }
+      container = container.parentElement;
+    }
 
+    // 2. If not in a checkbox, convert current selection into one (TOGGLE ON)
+    const range = selection.getRangeAt(0);
     const selectedText = selection.toString().trim();
-    const lines = selectedText ? selectedText.split(/\r?\n/).filter(l => l.trim() !== "") : ["Task item"];
+    const lines = selectedText ? selectedText.split(/\r?\n/).filter(l => l.trim() !== "") : [""];
 
     const fragment = document.createDocumentFragment();
+    let firstSpan: HTMLElement | null = null;
 
     lines.forEach((lineText) => {
       const wrapper = document.createElement('div');
-      wrapper.className = 'flex items-center gap-2.5 my-1.5 group select-none samsung-task-item';
+      wrapper.className = 'flex items-start gap-2.5 my-1.5 group select-none samsung-task-item';
       wrapper.innerHTML = `
         <input 
           type="checkbox" 
-          class="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-600" 
+          class="w-4 h-4 mt-1 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-600 shrink-0" 
           onchange="
             const textSpan = this.nextElementSibling;
             if (this.checked) {
@@ -73,19 +99,41 @@ function DocToolbar({ onFormat }: { onFormat: () => void }) {
         />
         <span 
           contenteditable="true" 
-          class="outline-none border-b border-transparent focus:border-emerald-400 text-[#1e293b] flex-1 transition-colors"
-        >${lineText}</span>
+          class="outline-none border-b border-transparent focus:border-emerald-400 text-[#1e293b] flex-1 transition-colors min-h-[1.6em]"
+        >${lineText || '<br/>'}</span>
       `;
+      if (!firstSpan) firstSpan = wrapper.querySelector('span');
       fragment.appendChild(wrapper);
     });
 
-    range.deleteContents();
-    range.insertNode(fragment);
+    // Check if we are in an empty line and replace it, otherwise insert
+    let block = selection.anchorNode as HTMLElement;
+    while (block && block.nodeType !== Node.ELEMENT_NODE) {
+      block = block.parentNode as HTMLElement;
+    }
+    
+    if (block && block.tagName === 'DIV' && block.textContent?.trim() === '' && !block.classList.contains('samsung-task-item')) {
+      block.parentNode?.replaceChild(fragment, block);
+    } else {
+      range.deleteContents();
+      range.insertNode(fragment);
+    }
+    
+    if (firstSpan) {
+      const newRange = document.createRange();
+      newRange.selectNodeContents(firstSpan);
+      newRange.collapse(false);
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+    }
     onFormat();
   };
 
   return (
     <div className="flex flex-wrap items-center gap-1.5 bg-slate-50 border border-slate-200 p-2 rounded-lg text-slate-700 shadow-sm sticky top-0 z-20">
+      <button type="button" onClick={() => execCmd('undo')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Undo"><Undo2 className="w-4 h-4" /></button>
+      <button type="button" onClick={() => execCmd('redo')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Redo"><Redo2 className="w-4 h-4" /></button>
+      <div className="h-4 w-[1px] bg-slate-300 mx-1" />
       <button type="button" onClick={() => execCmd('bold')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Bold"><Bold className="w-4 h-4" /></button>
       <button type="button" onClick={() => execCmd('italic')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Italic"><Italic className="w-4 h-4" /></button>
       <button type="button" onClick={() => execCmd('strikeThrough')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Strikethrough"><Strikethrough className="w-4 h-4" /></button>
@@ -100,7 +148,7 @@ function DocToolbar({ onFormat }: { onFormat: () => void }) {
       <div className="h-4 w-[1px] bg-slate-300 mx-1" />
       <button type="button" onClick={() => execCmd('insertUnorderedList')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Bullet List"><List className="w-4 h-4" /></button>
       <button type="button" onClick={() => execCmd('insertOrderedList')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Numbered List"><ListOrdered className="w-4 h-4" /></button>
-      <button type="button" onClick={insertSamsungCheckbox} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Insert Checklist"><CheckSquare className="w-4 h-4" /></button>
+      <button type="button" onClick={insertSamsungCheckbox} className="p-1.5 hover:bg-slate-200 rounded transition-colors bg-white border border-slate-200 shadow-sm" title="Insert Checklist"><CheckSquare className="w-4 h-4" /></button>
       <div className="h-4 w-[1px] bg-slate-300 mx-1" />
       <select onChange={(e) => execCmd('fontName', e.target.value)} className="bg-white border border-slate-200 text-xs rounded px-2 py-1 outline-none hover:border-slate-300 cursor-pointer max-w-[90px] sm:max-w-none" defaultValue="Arial" title="Font Family">
         <option value="Arial">Arial</option>
@@ -315,13 +363,44 @@ function WordPaginatedEditor({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === "Enter") {
-      const selection = window.getSelection();
-      if (!selection || selection.rangeCount === 0) return;
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
 
+    // Handle Backspace at the very beginning of a checkbox line (toggle off format)
+    if (e.key === "Backspace" && selection.isCollapsed && selection.anchorOffset === 0) {
       let container: HTMLElement | null = selection.anchorNode as HTMLElement;
       
-      // Traverse up to find if we are inside a checkbox task span or wrapper
+      while (container && container !== editorRef.current) {
+        if (container.classList && container.classList.contains('samsung-task-item')) {
+          const span = container.querySelector('span');
+          // Verify we are actually at the beginning of the text
+          if (selection.anchorNode === span || selection.anchorNode === span?.firstChild) {
+            e.preventDefault();
+            const text = span ? span.innerHTML : '<br/>';
+            const normalDiv = document.createElement('div');
+            normalDiv.innerHTML = text;
+            
+            container.parentNode?.insertBefore(normalDiv, container);
+            container.remove();
+            
+            const range = document.createRange();
+            range.setStart(normalDiv, 0);
+            range.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(range);
+            
+            onChange(editorRef.current?.innerHTML || "");
+            return;
+          }
+        }
+        container = container.parentElement;
+      }
+    }
+
+    // Handle Enter inside a checkbox list
+    if (e.key === "Enter") {
+      let container: HTMLElement | null = selection.anchorNode as HTMLElement;
+      
       while (container && container !== editorRef.current) {
         if (container.classList && container.classList.contains('samsung-task-item')) {
           break;
@@ -329,16 +408,36 @@ function WordPaginatedEditor({
         container = container.parentElement;
       }
 
-      // If we are currently inside a checklist task item, handle custom Enter behavior
       if (container && container.classList && container.classList.contains('samsung-task-item')) {
         e.preventDefault();
 
+        const textSpan = container.querySelector('span');
+        const textValue = textSpan ? textSpan.innerText.trim() : "";
+
+        // If checkbox is empty and Enter is pressed, remove checkbox and make it a normal line (Escape list)
+        if (textValue === "") {
+          const normalDiv = document.createElement('div');
+          normalDiv.innerHTML = "<br/>";
+          container.parentNode?.insertBefore(normalDiv, container.nextSibling);
+          container.remove();
+
+          const range = document.createRange();
+          range.setStart(normalDiv, 0);
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(range);
+
+          onChange(editorRef.current?.innerHTML || "");
+          return;
+        }
+
+        // Otherwise, create a new checkbox item below
         const newTaskWrapper = document.createElement('div');
-        newTaskWrapper.className = 'flex items-center gap-2.5 my-1.5 group select-none samsung-task-item';
+        newTaskWrapper.className = 'flex items-start gap-2.5 my-1.5 group select-none samsung-task-item';
         newTaskWrapper.innerHTML = `
           <input 
             type="checkbox" 
-            class="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-600" 
+            class="w-4 h-4 mt-1 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-600 shrink-0" 
             onchange="
               const textSpan = this.nextElementSibling;
               if (this.checked) {
@@ -354,14 +453,12 @@ function WordPaginatedEditor({
           />
           <span 
             contenteditable="true" 
-            class="outline-none border-b border-transparent focus:border-emerald-400 text-[#1e293b] flex-1 transition-colors"
+            class="outline-none border-b border-transparent focus:border-emerald-400 text-[#1e293b] flex-1 transition-colors min-h-[1.6em]"
           ><br/></span>
         `;
 
-        // Insert the new checkbox item right after the current one
         container.parentNode?.insertBefore(newTaskWrapper, container.nextSibling);
 
-        // Move the cursor focus into the new checkbox text span
         const newSpan = newTaskWrapper.querySelector('span');
         if (newSpan) {
           const range = document.createRange();
