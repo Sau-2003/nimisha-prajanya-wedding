@@ -314,6 +314,15 @@ function WordPaginatedEditor({
     onChange(editor.innerHTML);
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Enter") {
+      // Allow default browser Enter behavior which correctly inserts a new line block in contentEditable
+      if (!isMobile) {
+        requestAnimationFrame(() => recalculatePages());
+      }
+    }
+  };
+
   const totalStackHeight = isMobile ? undefined : pageCount * pageStride;
 
   return (
@@ -327,6 +336,7 @@ function WordPaginatedEditor({
             ref={editorRef}
             contentEditable
             onInput={handleInput}
+            onKeyDown={handleKeyDown}
             suppressContentEditableWarning
             style={{
               fontFamily: "Arial, sans-serif",
@@ -377,6 +387,7 @@ function WordPaginatedEditor({
             ref={editorRef}
             contentEditable
             onInput={handleInput}
+            onKeyDown={handleKeyDown}
             suppressContentEditableWarning
             style={{
               fontFamily: "Arial, sans-serif",
@@ -563,7 +574,6 @@ export default function WeddingDocsPage() {
     setIsMobileDrawerOpen(false);
     setSearchQuery("");
     
-    // Focus cursor directly into editor after creating a new doc
     setTimeout(() => {
       editorRef.current?.focus();
     }, 50);
