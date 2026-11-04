@@ -493,22 +493,16 @@ export default function WeddingDocsPage() {
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         setDocs(data);
-        setSelectedDocId(data[0].id);
+        setSelectedDocId(data.length > 0 ? data[0].id : null);
       } else {
-        const defaultDoc = {
-          id: 'local-1',
-          title: 'Welcome Document',
-          content: '<div>Start typing your wedding notes and itineraries here...</div>',
-          created_at: new Date().toISOString()
-        };
-        setDocs([defaultDoc]);
-        setSelectedDocId(defaultDoc.id);
+        setDocs([]);
+        setSelectedDocId(null);
       }
       setDocLoading(false);
     };
-
+    
     fetchDocs();
 
     const channel = supabase
