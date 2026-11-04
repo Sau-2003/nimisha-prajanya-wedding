@@ -316,10 +316,68 @@ function WordPaginatedEditor({
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === "Enter") {
-      // Allow default browser Enter behavior which correctly inserts a new line block in contentEditable
-      if (!isMobile) {
-        requestAnimationFrame(() => recalculatePages());
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) return;
+
+      let container: HTMLElement | null = selection.anchorNode as HTMLElement;
+      
+      // Traverse up to find if we are inside a checkbox task span or wrapper
+      while (container && container !== editorRef.current) {
+        if (container.classList && container.classList.contains('samsung-task-item')) {
+          break;
+        }
+        container = container.parentElement;
       }
+
+      // If we are currently inside a checklist task item, handle custom Enter behavior
+      if (container && container.classList && container.classList.contains('samsung-task-item')) {
+        e.preventDefault();
+
+        const newTaskWrapper = document.createElement('div');
+        newTaskWrapper.className = 'flex items-center gap-2.5 my-1.5 group select-none samsung-task-item';
+        newTaskWrapper.innerHTML = `
+          <input 
+            type="checkbox" 
+            class="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-600" 
+            onchange="
+              const textSpan = this.nextElementSibling;
+              if (this.checked) {
+                this.setAttribute('checked', 'checked');
+                textSpan.style.textDecoration = 'line-through';
+                textSpan.style.color = '#94a3b8';
+              } else {
+                this.removeAttribute('checked');
+                textSpan.style.textDecoration = 'none';
+                textSpan.style.color = '#1e293b';
+              }
+            "
+          />
+          <span 
+            contenteditable="true" 
+            class="outline-none border-b border-transparent focus:border-emerald-400 text-[#1e293b] flex-1 transition-colors"
+          ><br/></span>
+        `;
+
+        // Insert the new checkbox item right after the current one
+        container.parentNode?.insertBefore(newTaskWrapper, container.nextSibling);
+
+        // Move the cursor focus into the new checkbox text span
+        const newSpan = newTaskWrapper.querySelector('span');
+        if (newSpan) {
+          const range = document.createRange();
+          range.setStart(newSpan, 0);
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+
+        onChange(editorRef.current?.innerHTML || "");
+        return;
+      }
+    }
+
+    if (!isMobile && e.key === "Enter") {
+      requestAnimationFrame(() => recalculatePages());
     }
   };
 
