@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { 
-  Trash2, FileText, BookOpen, X,  
+  Trash2, FileText, BookOpen, X,   
   Bold, Italic, Strikethrough, List, ListOrdered, CheckSquare, Printer, Search,
   AlignLeft, AlignCenter, AlignRight, AlignJustify, Indent, Outdent
 } from "lucide-react";
@@ -510,7 +510,7 @@ export default function WeddingDocsPage() {
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const isResizingRef = useRef(false);
 
-  // --- NEW: Debounce state for Supabase saves ---
+  // --- Realtime & Debounce Refs ---
   const pendingUpdates = useRef<Record<string, Partial<DocItem>>>({});
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -561,7 +561,7 @@ export default function WeddingDocsPage() {
 
     fetchDocs();
 
-    // --- NEW: Supabase Realtime Subscription ---
+    // --- Supabase Realtime Subscription for cross-device syncing ---
     const channel = supabase
       .channel('wedding-docs-sync')
       .on(
@@ -623,23 +623,23 @@ export default function WeddingDocsPage() {
     setTimeout(() => setIsNewDocCreated(true), 50);
   };
 
-  // --- UPDATED: Debounced Database Updates ---
+  // --- Debounced Database Update ---
   const updateDoc = (id: string, updates: Partial<DocItem>) => {
     if (updates.title !== undefined && isNewDocCreated) setIsNewDocCreated(false);
     
-    // 1. Update UI instantly so typing feels responsive
+    // 1. Update UI instantly
     setDocs(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d));
     
     if (id.startsWith('local-')) return;
 
-    // 2. Queue updates and debounce the database call (saves every 1 second of inactivity)
+    // 2. Queue updates and debounce database writes by 1 second
     pendingUpdates.current[id] = { ...pendingUpdates.current[id], ...updates };
 
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     
     saveTimeoutRef.current = setTimeout(async () => {
       const updatesToProcess = { ...pendingUpdates.current };
-      pendingUpdates.current = {}; // clear immediately
+      pendingUpdates.current = {};
       
       for (const docId of Object.keys(updatesToProcess)) {
         await supabase
@@ -663,8 +663,8 @@ export default function WeddingDocsPage() {
     setDocDeleteTarget(null);
   };
 
+  // Opens a Print Dialog containing the exact Document with the Header injected
   const handlePrint = () => {
-    // ... [Keep your exact existing handlePrint implementation here] ...
     if (!activeDoc) return;
     recalculateRef.current();
 
