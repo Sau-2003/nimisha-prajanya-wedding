@@ -502,7 +502,7 @@ export default function WeddingDocsPage() {
       }
       setDocLoading(false);
     };
-    
+
     fetchDocs();
 
     const channel = supabase
@@ -760,7 +760,7 @@ export default function WeddingDocsPage() {
           ) : (
             <div className="flex flex-col items-center justify-center h-[65vh] text-slate-400 italic text-center px-4">
               <FileText className="w-12 h-12 text-slate-300 mb-2" />
-              Select a document to begin or create a new one using the "New" button.
+              Create a new document using the "New" button.
             </div>
           )}
         </div>
