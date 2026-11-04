@@ -157,7 +157,6 @@ function WordPaginatedEditor({
   const [pageWidth, setPageWidth] = useState(A4_WIDTH_PX);
   const [isMobile, setIsMobile] = useState(false);
 
-  // Detect mobile screen to switch to Google Docs style fluid mobile view
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
@@ -199,7 +198,7 @@ function WordPaginatedEditor({
   }, [editorRef, isMobile]);
 
   const recalculatePages = useCallback(() => {
-    if (isMobile) return; // Google Docs mobile uses natural fluid scrolling without artificial page breaks
+    if (isMobile) return;
     const editor = editorRef.current;
     const stack = pageStackRef.current;
     if (!editor || !stack || pageHeight < 100) return;
@@ -322,7 +321,6 @@ function WordPaginatedEditor({
       onClick={() => editorRef.current?.focus()}
       className="h-[65vh] md:h-[70vh] w-full bg-white overflow-y-auto overflow-x-hidden cursor-text"
     >
-      {/* MOBILE VIEW: Google Docs Mobile Fluid Layout */}
       {isMobile ? (
         <div className="w-full min-h-full bg-white p-6">
           <div
@@ -350,7 +348,6 @@ function WordPaginatedEditor({
           />
         </div>
       ) : (
-        /* DESKTOP VIEW: Google Docs Desktop A4 Paginated Layout */
         <div
           ref={pageStackRef}
           style={{ minHeight: `${totalStackHeight}px` }}
@@ -413,12 +410,10 @@ function WordPaginatedEditor({
 function EditableTitle({ 
   value, 
   onChange, 
-  autoFocus = false,
   titleRef
 }: { 
   value: string; 
   onChange: (val: string) => void; 
-  autoFocus?: boolean;
   titleRef: React.RefObject<HTMLDivElement | null>;
 }) {
   useEffect(() => {
@@ -426,18 +421,6 @@ function EditableTitle({
       titleRef.current.innerText = value || "";
     }
   }, [value, titleRef]);
-
-  useEffect(() => {
-    if (autoFocus && titleRef.current) {
-      titleRef.current.focus();
-      const range = document.createRange();
-      const selection = window.getSelection();
-      range.selectNodeContents(titleRef.current);
-      range.collapse(false);
-      selection?.removeAllRanges();
-      selection?.addRange(range);
-    }
-  }, [autoFocus, titleRef]);
 
   return (
     <div
@@ -470,7 +453,6 @@ export default function WeddingDocsPage() {
   const [docLoading, setDocLoading] = useState(true);
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [isNewDocCreated, setIsNewDocCreated] = useState(false);
 
   const editorRef = useRef<HTMLDivElement | null>(null);
   const titleRef = useRef<HTMLDivElement | null>(null);
@@ -570,7 +552,6 @@ export default function WeddingDocsPage() {
   }, [docs, searchQuery]);
 
   const addDoc = async () => {
-    setIsNewDocCreated(false);
     const untitledCount = docs.filter(d => d.title === 'Untitled Document' || /^Untitled Document-\d+$/.test(d.title)).length;
     const newTitle = untitledCount === 0 ? 'Untitled Document' : `Untitled Document-${untitledCount}`;
 
@@ -587,12 +568,14 @@ export default function WeddingDocsPage() {
     }
     setIsMobileDrawerOpen(false);
     setSearchQuery("");
-    setTimeout(() => setIsNewDocCreated(true), 50);
+    
+    // Focus cursor directly into editor after creating a new doc
+    setTimeout(() => {
+      editorRef.current?.focus();
+    }, 50);
   };
 
   const updateDoc = (id: string, updates: Partial<DocItem>) => {
-    if (updates.title !== undefined && isNewDocCreated) setIsNewDocCreated(false);
-    
     setDocs(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d));
     
     if (id.startsWith('local-')) return;
@@ -758,7 +741,6 @@ export default function WeddingDocsPage() {
                     titleRef={titleRef}
                     value={activeDoc.title} 
                     onChange={(val) => updateDoc(activeDoc.id, { title: val })} 
-                    autoFocus={isNewDocCreated} 
                   />
                   <div className="text-[10px] md:text-[11px] text-slate-400 mt-1 truncate">
                     Last updated: {new Date(activeDoc.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
@@ -803,7 +785,14 @@ export default function WeddingDocsPage() {
           </div>
           <div className="flex-1 overflow-auto space-y-1 pr-1">
             {filteredDocs.map((doc) => (
-              <div key={doc.id} onClick={() => { if (selectedDocId !== doc.id) setIsNewDocCreated(false); setSelectedDocId(doc.id); }} className={`group flex items-center justify-between p-2.5 rounded-lg cursor-pointer text-sm transition-all ${selectedDocId === doc.id ? 'bg-emerald-50 text-emerald-900 font-semibold border border-emerald-200 shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
+              <div 
+                key={doc.id} 
+                onClick={() => { 
+                  setSelectedDocId(doc.id); 
+                  setTimeout(() => editorRef.current?.focus(), 50);
+                }} 
+                className={`group flex items-center justify-between p-2.5 rounded-lg cursor-pointer text-sm transition-all ${selectedDocId === doc.id ? 'bg-emerald-50 text-emerald-900 font-semibold border border-emerald-200 shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
+              >
                 <span className="truncate flex-1">{doc.title || 'Untitled Document'}</span>
                 <button onClick={(e) => { e.stopPropagation(); setDocDeleteTarget(doc.id); }} className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
               </div>
@@ -825,7 +814,15 @@ export default function WeddingDocsPage() {
               </div>
               <div className="flex-1 overflow-auto space-y-1 pr-1">
                 {filteredDocs.map((doc) => (
-                  <div key={doc.id} onClick={() => { if (selectedDocId !== doc.id) setIsNewDocCreated(false); setSelectedDocId(doc.id); setIsMobileDrawerOpen(false); }} className={`group flex items-center justify-between p-3 rounded-lg cursor-pointer text-sm transition-all ${selectedDocId === doc.id ? 'bg-emerald-50 text-emerald-900 font-semibold border border-emerald-200 shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
+                  <div 
+                    key={doc.id} 
+                    onClick={() => { 
+                      setSelectedDocId(doc.id); 
+                      setIsMobileDrawerOpen(false);
+                      setTimeout(() => editorRef.current?.focus(), 50);
+                    }} 
+                    className={`group flex items-center justify-between p-3 rounded-lg cursor-pointer text-sm transition-all ${selectedDocId === doc.id ? 'bg-emerald-50 text-emerald-900 font-semibold border border-emerald-200 shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
+                  >
                     <span className="truncate flex-1">{doc.title || 'Untitled Document'}</span>
                     <button onClick={(e) => { e.stopPropagation(); setDocDeleteTarget(doc.id); }} className="text-slate-400 hover:text-red-500 p-1"><Trash2 className="w-4 h-4" /></button>
                   </div>
