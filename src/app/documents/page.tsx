@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { 
   Trash2, FileText, BookOpen, X,   
   Bold, Italic, Strikethrough, List, ListOrdered, CheckSquare, Printer, Search,
-  AlignLeft, AlignCenter, AlignRight, AlignJustify, Indent, Outdent, Undo2, Redo2
+  AlignLeft, AlignCenter, AlignRight, AlignJustify, Indent, Outdent, Undo2, Redo2,
+  Mic, MicOff
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
@@ -35,10 +36,109 @@ function FilePlusCornerIcon({ className = "w-4 h-4" }: { className?: string }) {
   );
 }
 
-function DocToolbar({ onFormat }: { onFormat: () => void }) {
+function DocToolbar({ 
+  onFormat, 
+  editorRef, 
+  onContentChange 
+}: { 
+  onFormat: () => void;
+  editorRef: React.RefObject<HTMLDivElement | null>;
+  onContentChange: (html: string) => void;
+}) {
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
+
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, []);
+
   const execCmd = (command: string, value: string = '') => {
     document.execCommand(command, false, value);
     onFormat();
+    if (editorRef.current) {
+      onContentChange(editorRef.current.innerHTML);
+    }
+  };
+
+  const toggleVoiceToText = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      return;
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Voice to text is not supported in this browser. Please use Google Chrome, Edge, or Safari.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.lang = navigator.language || "en-US";
+
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
+
+    recognition.onresult = (event: any) => {
+      let finalTranscript = "";
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        }
+      }
+
+      if (finalTranscript && editorRef.current) {
+        const editor = editorRef.current;
+        const selection = window.getSelection();
+
+        // Ensure cursor is inside the editor before inserting text
+        if (!selection || selection.rangeCount === 0 || !editor.contains(selection.anchorNode)) {
+          editor.focus();
+          const range = document.createRange();
+          range.selectNodeContents(editor);
+          range.collapse(false);
+          selection?.removeAllRanges();
+          selection?.addRange(range);
+        }
+
+        const textToInsert = finalTranscript.trim() + " ";
+        const inserted = document.execCommand("insertText", false, textToInsert);
+
+        if (!inserted) {
+          const sel = window.getSelection();
+          if (sel && sel.rangeCount > 0) {
+            const range = sel.getRangeAt(0);
+            const textNode = document.createTextNode(textToInsert);
+            range.insertNode(textNode);
+            range.setStartAfter(textNode);
+            range.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(range);
+          }
+        }
+
+        onFormat();
+        onContentChange(editor.innerHTML);
+      }
+    };
+
+    recognition.onerror = () => {
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
   };
 
   const insertSamsungCheckbox = () => {
@@ -64,6 +164,7 @@ function DocToolbar({ onFormat }: { onFormat: () => void }) {
         selection.removeAllRanges();
         selection.addRange(newRange);
         onFormat();
+        if (editorRef.current) onContentChange(editorRef.current.innerHTML);
         return;
       }
       container = container.parentElement;
@@ -127,6 +228,7 @@ function DocToolbar({ onFormat }: { onFormat: () => void }) {
       selection.addRange(newRange);
     }
     onFormat();
+    if (editorRef.current) onContentChange(editorRef.current.innerHTML);
   };
 
   return (
@@ -149,6 +251,19 @@ function DocToolbar({ onFormat }: { onFormat: () => void }) {
       <button type="button" onClick={() => execCmd('insertUnorderedList')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Bullet List"><List className="w-4 h-4" /></button>
       <button type="button" onClick={() => execCmd('insertOrderedList')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Numbered List"><ListOrdered className="w-4 h-4" /></button>
       <button type="button" onClick={insertSamsungCheckbox} className="p-1.5 hover:bg-slate-200 rounded transition-colors bg-white border border-slate-200 shadow-sm" title="Insert Checklist"><CheckSquare className="w-4 h-4" /></button>
+      <button 
+        type="button" 
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={toggleVoiceToText} 
+        className={`p-1.5 rounded transition-colors border shadow-sm flex items-center gap-1 ${
+          isListening 
+            ? "bg-red-50 text-red-600 border-red-300 animate-pulse" 
+            : "bg-white hover:bg-slate-200 border-slate-200 text-slate-700"
+        }`} 
+        title={isListening ? "Stop Voice Typing" : "Start Voice Typing"}
+      >
+        {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+      </button>
       <div className="h-4 w-[1px] bg-slate-300 mx-1" />
       <select onChange={(e) => execCmd('fontName', e.target.value)} className="bg-white border border-slate-200 text-xs rounded px-2 py-1 outline-none hover:border-slate-300 cursor-pointer max-w-[90px] sm:max-w-none" defaultValue="Arial" title="Font Family">
         <option value="Arial">Arial</option>
@@ -166,6 +281,7 @@ function DocToolbar({ onFormat }: { onFormat: () => void }) {
           if (parentEl) {
             (parentEl as HTMLElement).style.fontSize = e.target.value;
             onFormat();
+            if (editorRef.current) onContentChange(editorRef.current.innerHTML);
           }
         }} 
         className="bg-white border border-slate-200 text-xs rounded px-2 py-1 outline-none hover:border-slate-300 cursor-pointer" 
@@ -373,7 +489,6 @@ function WordPaginatedEditor({
       while (container && container !== editorRef.current) {
         if (container.classList && container.classList.contains('samsung-task-item')) {
           const span = container.querySelector('span');
-          // Verify we are actually at the beginning of the text
           if (selection.anchorNode === span || selection.anchorNode === span?.firstChild) {
             e.preventDefault();
             const text = span ? span.innerHTML : '<br/>';
@@ -910,7 +1025,11 @@ export default function WeddingDocsPage() {
                 </Button>
               </div>
 
-              <DocToolbar onFormat={() => recalculateRef.current()} />
+              <DocToolbar 
+                onFormat={() => recalculateRef.current()} 
+                editorRef={editorRef}
+                onContentChange={(val) => updateDoc(activeDoc.id, { content: val })}
+              />
 
               <div className="w-full rounded-lg border border-slate-200 overflow-hidden bg-white">
                 <WordPaginatedEditor
