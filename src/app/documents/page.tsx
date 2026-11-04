@@ -784,7 +784,7 @@ export default function WeddingDocsPage() {
           ) : (
             <div className="flex flex-col items-center justify-center h-[65vh] text-slate-400 italic text-center px-4">
               <FileText className="w-12 h-12 text-slate-300 mb-2" />
-              Select a document to begin.
+              Select a document to beginor create a new one using the "New" button.
             </div>
           )}
         </div>
@@ -794,7 +794,7 @@ export default function WeddingDocsPage() {
             <div className="w-1 h-8 rounded-full bg-slate-200 group-hover:bg-emerald-500 transition-colors" />
           </div>
           <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-100">
-            <span className="font-serif font-bold text-emerald-900 text-sm flex items-center gap-2"><BookOpen className="w-4 h-4 text-emerald-700" /> Documents</span>
+            <span className="font-serif font-bold text-emerald-900 text-sm flex items-center gap-2"><BookOpen className="w-4 h-4 text-emerald-700" /> All Documents</span>
             <Button size="sm" onClick={addDoc} className="bg-emerald-600 hover:bg-emerald-700 text-white h-8 px-2.5"><FilePlusCornerIcon className="w-4 h-4 mr-1" /> New</Button>
           </div>
           <div className="relative mb-3">
