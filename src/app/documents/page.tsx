@@ -729,12 +729,12 @@ export default function WeddingDocsPage() {
 
   return (
     <div className="p-2 sm:p-4 md:p-8 max-w-7xl mx-auto min-h-screen space-y-4 md:space-y-6">
-      <div className="flex items-center justify-between pb-3 md:pb-4 border-b border-slate-200">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-serif font-bold text-emerald-900 flex items-center gap-2">
-            <FileText className="w-5 h-5 md:w-8 md:h-8 text-emerald-700" /> Wedding Documents
+          <h1 className="font-serif text-3xl font-bold text-emerald-900 flex items-center gap-3">
+            <FileText className="w-8 h-8 text-emerald-600" /> Wedding Documents
           </h1>
-          <p className="text-[11px] sm:text-xs md:text-sm text-slate-500 mt-0.5">
+          <p className="mt-2 text-slate-500">
             Manage itineraries, notes, and planning guides.
           </p>
           <div className="mt-2.5 flex items-center gap-2">
@@ -742,7 +742,7 @@ export default function WeddingDocsPage() {
               <FilePlusCornerIcon className="w-4 h-4 text-emerald-700" /> New Document
             </Button>
             <Button variant="outline" size="sm" onClick={() => setIsMobileDrawerOpen(true)} className="md:hidden border-emerald-200 text-emerald-800 gap-1.5 h-8 text-xs font-medium">
-              <BookOpen className="w-4 h-4 text-emerald-700" /> Documents
+              <BookOpen className="w-4 h-4 text-emerald-700" /> All Documents
             </Button>
           </div>
         </div>
@@ -784,7 +784,7 @@ export default function WeddingDocsPage() {
           ) : (
             <div className="flex flex-col items-center justify-center h-[65vh] text-slate-400 italic text-center px-4">
               <FileText className="w-12 h-12 text-slate-300 mb-2" />
-              Select a document to beginor create a new one using the "New" button.
+              Select a document to begin or create a new one using the "New" button.
             </div>
           )}
         </div>
@@ -816,7 +816,7 @@ export default function WeddingDocsPage() {
             <div className="flex-1" onClick={() => setIsMobileDrawerOpen(false)} />
             <div className="bg-white w-4/5 max-w-xs h-full p-4 flex flex-col shadow-2xl animate-in slide-in-from-right">
               <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-100">
-                <span className="font-serif font-bold text-emerald-900 text-base flex items-center gap-2"><BookOpen className="w-5 h-5 text-emerald-700" /> Documents</span>
+                <span className="font-serif font-bold text-emerald-900 text-base flex items-center gap-2"><BookOpen className="w-5 h-5 text-emerald-700" />All Documents</span>
                 <Button size="icon" variant="ghost" onClick={() => setIsMobileDrawerOpen(false)} className="h-8 w-8"><X className="w-5 h-5" /></Button>
               </div>
               <div className="relative mb-3">
