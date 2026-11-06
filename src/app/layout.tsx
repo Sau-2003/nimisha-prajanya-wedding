@@ -11,11 +11,12 @@ export const metadata = {
   themeColor: "#047857",
   icons: {
     icon: "/icon.png",
+    apple: "/apple-icon.png",
   },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    // title: "Wedding Planner",
+    title: "Wedding Planner",
   },
 };
 
