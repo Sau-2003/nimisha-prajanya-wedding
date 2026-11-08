@@ -74,7 +74,7 @@ function DocToolbar({
       document.execCommand('createLink', false, url);
     } else {
       const linkText = prompt("Enter link text:", url) || url;
-      const html = `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline hover:text-blue-800 cursor-pointer">${linkText}</a>`;
+      const html = `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline hover:text-blue-800">${linkText}</a>`;
       document.execCommand('insertHTML', false, html);
     }
 
@@ -83,7 +83,7 @@ function DocToolbar({
       links.forEach(link => {
         link.setAttribute('target', '_blank');
         link.setAttribute('rel', 'noopener noreferrer');
-        link.className = 'text-blue-600 underline hover:text-blue-800 cursor-pointer';
+        link.className = 'text-blue-600 underline hover:text-blue-800';
       });
       onFormat();
       onContentChange(editorRef.current.innerHTML);
@@ -511,32 +511,49 @@ function WordPaginatedEditor({
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    e.preventDefault();
     const clipboardData = e.clipboardData;
-    if (!clipboardData) return;
-
+    const htmlData = clipboardData.getData('text/html');
     const textData = clipboardData.getData('text/plain');
-    const trimmed = textData ? textData.trim() : '';
-    const isUrl = /^https?:\/\/[^\s]+$/.test(trimmed);
 
-    if (isUrl) {
-      e.preventDefault();
-      const html = `<a href="${trimmed}" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline hover:text-blue-800 cursor-pointer">${trimmed}</a>&nbsp;`;
-      document.execCommand('insertHTML', false, html);
-    } else {
-      const htmlData = clipboardData.getData('text/html');
-      if (htmlData) {
-        e.preventDefault();
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = htmlData;
-        tempDiv.querySelectorAll('a').forEach(a => {
-          a.setAttribute('target', '_blank');
-          a.setAttribute('rel', 'noopener noreferrer');
-          a.className = 'text-blue-600 underline hover:text-blue-800 cursor-pointer';
-        });
-        document.execCommand('insertHTML', false, tempDiv.innerHTML);
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    range.deleteContents();
+
+    if (htmlData) {
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = htmlData;
+      tempDiv.querySelectorAll('a').forEach(a => {
+        a.setAttribute('target', '_blank');
+        a.setAttribute('rel', 'noopener noreferrer');
+        a.className = 'text-blue-600 underline hover:text-blue-800 cursor-pointer';
+      });
+      const fragment = document.createDocumentFragment();
+      while (tempDiv.firstChild) {
+        fragment.appendChild(tempDiv.firstChild);
       }
-      // For normal plain text, let native mobile paste handle it smoothly without e.preventDefault()
+      range.insertNode(fragment);
+    } else if (textData) {
+      const trimmed = textData.trim();
+      const isUrl = /^https?:\/\/[^\s]+$/.test(trimmed);
+      if (isUrl) {
+        const a = document.createElement('a');
+        a.href = trimmed;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.className = 'text-blue-600 underline hover:text-blue-800 cursor-pointer';
+        a.textContent = trimmed;
+        range.insertNode(a);
+      } else {
+        const textNode = document.createTextNode(textData);
+        range.insertNode(textNode);
+      }
     }
+
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
 
     if (editorRef.current) {
       onChange(editorRef.current.innerHTML);
