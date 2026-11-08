@@ -6,7 +6,7 @@ import {
   Trash2, FileText, BookOpen, X,   
   Bold, Italic, Strikethrough, List, ListOrdered, CheckSquare, Printer, Search,
   AlignLeft, AlignCenter, AlignRight, AlignJustify, Indent, Outdent, Undo2, Redo2,
-  Mic, MicOff
+  Mic, MicOff, Link2
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
@@ -64,6 +64,33 @@ function DocToolbar({
     }
   };
 
+  const insertLink = () => {
+    const selection = window.getSelection();
+    const selectedText = selection ? selection.toString().trim() : '';
+    const url = prompt("Enter URL:", "https://");
+    if (!url) return;
+
+    if (selectedText) {
+      document.execCommand('createLink', false, url);
+    } else {
+      const linkText = prompt("Enter link text:", url) || url;
+      const html = `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline hover:text-blue-800">${linkText}</a>`;
+      document.execCommand('insertHTML', false, html);
+    }
+
+    // Ensure generated links have proper target and styling attributes
+    if (editorRef.current) {
+      const links = editorRef.current.querySelectorAll('a:not([target])');
+      links.forEach(link => {
+        link.setAttribute('target', '_blank');
+        link.setAttribute('rel', 'noopener noreferrer');
+        link.className = 'text-blue-600 underline hover:text-blue-800';
+      });
+      onFormat();
+      onContentChange(editorRef.current.innerHTML);
+    }
+  };
+
   const toggleVoiceToText = () => {
     if (isListening) {
       recognitionRef.current?.stop();
@@ -98,7 +125,6 @@ function DocToolbar({
         const editor = editorRef.current;
         const selection = window.getSelection();
 
-        // Ensure cursor is inside the editor before inserting text
         if (!selection || selection.rangeCount === 0 || !editor.contains(selection.anchorNode)) {
           editor.focus();
           const range = document.createRange();
@@ -145,7 +171,6 @@ function DocToolbar({
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return;
     
-    // 1. Check if we are already inside a checkbox item (TOGGLE OFF)
     let container: HTMLElement | null = selection.anchorNode as HTMLElement;
     while (container && container !== document.body) {
       if (container.nodeType === Node.ELEMENT_NODE && container.classList.contains('samsung-task-item')) {
@@ -170,7 +195,6 @@ function DocToolbar({
       container = container.parentElement;
     }
 
-    // 2. If not in a checkbox, convert current selection into one (TOGGLE ON)
     const range = selection.getRangeAt(0);
     const selectedText = selection.toString().trim();
     const lines = selectedText ? selectedText.split(/\r?\n/).filter(l => l.trim() !== "") : [""];
@@ -207,7 +231,6 @@ function DocToolbar({
       fragment.appendChild(wrapper);
     });
 
-    // Check if we are in an empty line and replace it, otherwise insert
     let block = selection.anchorNode as HTMLElement;
     while (block && block.nodeType !== Node.ELEMENT_NODE) {
       block = block.parentNode as HTMLElement;
@@ -239,6 +262,7 @@ function DocToolbar({
       <button type="button" onClick={() => execCmd('bold')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Bold"><Bold className="w-4 h-4" /></button>
       <button type="button" onClick={() => execCmd('italic')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Italic"><Italic className="w-4 h-4" /></button>
       <button type="button" onClick={() => execCmd('strikeThrough')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Strikethrough"><Strikethrough className="w-4 h-4" /></button>
+      <button type="button" onClick={insertLink} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Insert Link"><Link2 className="w-4 h-4" /></button>
       <div className="h-4 w-[1px] bg-slate-300 mx-1" />
       <button type="button" onClick={() => execCmd('justifyLeft')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Align Left"><AlignLeft className="w-4 h-4" /></button>
       <button type="button" onClick={() => execCmd('justifyCenter')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Align Center"><AlignCenter className="w-4 h-4" /></button>
@@ -300,7 +324,7 @@ function DocToolbar({
   );
 }
 
-// --- GOOGLE DOCS STYLE RESPONSIVE EDITOR ---
+// --- GOOGLE DOCS STYLE RESPONSIVE EDITOR WITH CLICK-TO-OPEN LINKS ---
 function WordPaginatedEditor({
   docId,
   content,
@@ -478,11 +502,21 @@ function WordPaginatedEditor({
     onChange(editor.innerHTML);
   };
 
+  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    const anchor = target.closest('a');
+    if (anchor && anchor.href) {
+      e.preventDefault();
+      window.open(anchor.href, '_blank', 'noopener,noreferrer');
+    } else {
+      editorRef.current?.focus();
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return;
 
-    // Handle Backspace at the very beginning of a checkbox line (toggle off format)
     if (e.key === "Backspace" && selection.isCollapsed && selection.anchorOffset === 0) {
       let container: HTMLElement | null = selection.anchorNode as HTMLElement;
       
@@ -512,7 +546,6 @@ function WordPaginatedEditor({
       }
     }
 
-    // Handle Enter inside a checkbox list
     if (e.key === "Enter") {
       let container: HTMLElement | null = selection.anchorNode as HTMLElement;
       
@@ -529,7 +562,6 @@ function WordPaginatedEditor({
         const textSpan = container.querySelector('span');
         const textValue = textSpan ? textSpan.innerText.trim() : "";
 
-        // If checkbox is empty and Enter is pressed, remove checkbox and make it a normal line (Escape list)
         if (textValue === "") {
           const normalDiv = document.createElement('div');
           normalDiv.innerHTML = "<br/>";
@@ -546,7 +578,6 @@ function WordPaginatedEditor({
           return;
         }
 
-        // Otherwise, create a new checkbox item below
         const newTaskWrapper = document.createElement('div');
         newTaskWrapper.className = 'flex items-start gap-2.5 my-1.5 group select-none samsung-task-item';
         newTaskWrapper.innerHTML = `
@@ -597,7 +628,7 @@ function WordPaginatedEditor({
 
   return (
     <div 
-      onClick={() => editorRef.current?.focus()}
+      onClick={handleClick}
       className="h-[65vh] md:h-[70vh] w-full bg-white overflow-y-auto overflow-x-hidden cursor-text"
     >
       {isMobile ? (
@@ -623,6 +654,7 @@ function WordPaginatedEditor({
               [&>div]:min-h-[1.6em] [&>p]:min-h-[1.6em] [&_li]:min-h-[1.6em]
               [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6
               [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_strike]:line-through [&_s]:line-through
+              [&_a]:text-blue-600 [&_a]:underline [&_a]:cursor-pointer hover:[&_a]:text-blue-800
             "
             data-placeholder="Start typing your document..."
           />
@@ -678,6 +710,7 @@ function WordPaginatedEditor({
               [&>div]:min-h-[1.6em] [&>p]:min-h-[1.6em] [&_li]:min-h-[1.6em]
               [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6
               [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_strike]:line-through [&_s]:line-through
+              [&_a]:text-blue-600 [&_a]:underline [&_a]:cursor-pointer hover:[&_a]:text-blue-800
             "
             data-placeholder="Start typing your document..."
           />
@@ -953,6 +986,7 @@ export default function WeddingDocsPage() {
             }
             .content ul { list-style-type: disc; padding-left: 24px; margin: 0; }
             .content ol { list-style-type: decimal; padding-left: 24px; margin: 0; }
+            .content a { color: #2563eb; text-decoration: underline; }
             input[type="checkbox"] { margin-right: 10px; transform: scale(1.1); accent-color: #059669; }
             .samsung-task-item { display: flex; align-items: center; margin: 6px 0; }
             [data-page-break="true"] {
