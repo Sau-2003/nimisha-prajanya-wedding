@@ -15,6 +15,144 @@ const A4_WIDTH_PX = 794;
 const A4_ASPECT_RATIO = 1.4142;
 const DESKTOP_MARGIN_PX = 76; 
 const BOTTOM_GREY_BAR_PX = 32; 
+const LAST_OPENED_STORAGE_KEY = "wedding_docs_last_opened";
+
+const URL_REGEX = /((?:https?:\/\/|www\.)[^\s<>"']+)/gi;
+
+function normalizeUrl(rawUrl: string): string {
+  const trimmed = rawUrl.trim();
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (/^www\./i.test(trimmed)) return `https://${trimmed}`;
+  return trimmed;
+}
+
+function openExternalLink(rawHref: string) {
+  const href = normalizeUrl(rawHref);
+  if (!href) return;
+
+  const tempLink = document.createElement("a");
+  tempLink.href = href;
+  tempLink.target = "_blank";
+  tempLink.rel = "noopener noreferrer";
+  tempLink.style.display = "none";
+  document.body.appendChild(tempLink);
+  tempLink.click();
+  document.body.removeChild(tempLink);
+}
+
+function createLinkElement(urlText: string, displayText?: string): HTMLAnchorElement {
+  const cleanUrl = urlText.replace(/[.,!?;:)]+$/, "");
+  const a = document.createElement("a");
+  a.href = normalizeUrl(cleanUrl);
+  a.target = "_blank";
+  a.rel = "noopener noreferrer";
+  a.className = "text-blue-600 underline hover:text-blue-800 cursor-pointer break-all";
+  a.textContent = displayText || cleanUrl;
+  return a;
+}
+
+function linkifyTextToFragment(text: string): DocumentFragment {
+  const fragment = document.createDocumentFragment();
+  const lines = text.split(/\r?\n/);
+
+  lines.forEach((line, lineIdx) => {
+    let lastIdx = 0;
+    let match: RegExpExecArray | null;
+    const regex = new RegExp(URL_REGEX.source, "gi");
+
+    while ((match = regex.exec(line)) !== null) {
+      const matchStart = match.index;
+      const rawMatch = match[0];
+      const cleanUrl = rawMatch.replace(/[.,!?;:)]+$/, "");
+      const trailingPunct = rawMatch.slice(cleanUrl.length);
+
+      if (matchStart > lastIdx) {
+        fragment.appendChild(document.createTextNode(line.slice(lastIdx, matchStart)));
+      }
+
+      const linkEl = createLinkElement(cleanUrl);
+      fragment.appendChild(linkEl);
+
+      if (trailingPunct) {
+        fragment.appendChild(document.createTextNode(trailingPunct));
+      }
+
+      lastIdx = matchStart + rawMatch.length;
+    }
+
+    if (lastIdx < line.length) {
+      fragment.appendChild(document.createTextNode(line.slice(lastIdx)));
+    } else if (lastIdx > 0 && lastIdx === line.length) {
+      fragment.appendChild(document.createTextNode(" "));
+    }
+
+    if (lineIdx < lines.length - 1) {
+      fragment.appendChild(document.createElement("br"));
+    }
+  });
+
+  return fragment;
+}
+
+function styleAndLinkifyContainer(container: HTMLElement | DocumentFragment): boolean {
+  let didModify = false;
+
+  const existingLinks = container.querySelectorAll("a");
+  existingLinks.forEach((a) => {
+    const rawHref = a.getAttribute("href") || a.textContent || "";
+    if (rawHref) {
+      a.setAttribute("href", normalizeUrl(rawHref));
+    }
+    a.setAttribute("target", "_blank");
+    a.setAttribute("rel", "noopener noreferrer");
+    a.className = "text-blue-600 underline hover:text-blue-800 cursor-pointer break-all";
+  });
+
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
+  const textNodesToProcess: Text[] = [];
+
+  let currentNode = walker.nextNode();
+  while (currentNode) {
+    const textNode = currentNode as Text;
+    const parentEl = textNode.parentElement;
+    if (
+      parentEl &&
+      !parentEl.closest("a") &&
+      new RegExp(URL_REGEX.source, "i").test(textNode.textContent || "")
+    ) {
+      textNodesToProcess.push(textNode);
+    }
+    currentNode = walker.nextNode();
+  }
+
+  textNodesToProcess.forEach((textNode) => {
+    const text = textNode.textContent || "";
+    const fragment = linkifyTextToFragment(text);
+    textNode.parentNode?.replaceChild(fragment, textNode);
+    didModify = true;
+  });
+
+  return didModify;
+}
+
+function getStoredLastOpenedMap(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(LAST_OPENED_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveLastOpenedTimestamp(docId: string, timestampMs: number = Date.now()) {
+  try {
+    const map = getStoredLastOpenedMap();
+    map[docId] = timestampMs;
+    localStorage.setItem(LAST_OPENED_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    // Ignore localStorage quota/privacy errors
+  }
+}
 
 function FilePlusCornerIcon({ className = "w-4 h-4" }: { className?: string }) {
   return (
@@ -67,24 +205,20 @@ function DocToolbar({
   const insertLink = () => {
     const selection = window.getSelection();
     const selectedText = selection ? selection.toString().trim() : '';
-    const url = prompt("Enter URL:", "https://");
-    if (!url) return;
+    const rawUrl = prompt("Enter URL:", "https://");
+    if (!rawUrl) return;
+    const url = normalizeUrl(rawUrl);
 
     if (selectedText) {
       document.execCommand('createLink', false, url);
     } else {
       const linkText = prompt("Enter link text:", url) || url;
-      const html = `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline hover:text-blue-800">${linkText}</a>`;
+      const html = `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline hover:text-blue-800 cursor-pointer break-all">${linkText}</a>&nbsp;`;
       document.execCommand('insertHTML', false, html);
     }
 
     if (editorRef.current) {
-      const links = editorRef.current.querySelectorAll('a:not([target])');
-      links.forEach(link => {
-        link.setAttribute('target', '_blank');
-        link.setAttribute('rel', 'noopener noreferrer');
-        link.className = 'text-blue-600 underline hover:text-blue-800';
-      });
+      styleAndLinkifyContainer(editorRef.current);
       onFormat();
       onContentChange(editorRef.current.innerHTML);
     }
@@ -323,7 +457,7 @@ function DocToolbar({
   );
 }
 
-// --- GOOGLE DOCS STYLE RESPONSIVE EDITOR WITH ROBUST PASTE HANDLING ---
+// --- GOOGLE DOCS STYLE RESPONSIVE EDITOR WITH ROBUST PASTE & MOBILE LINK SUPPORT ---
 function WordPaginatedEditor({
   docId,
   content,
@@ -339,6 +473,9 @@ function WordPaginatedEditor({
 }) {
   const pageStackRef = useRef<HTMLDivElement>(null);
   const loadedDocIdRef = useRef<string | null>(null);
+  const prevIsMobileRef = useRef<boolean | null>(null);
+  const touchStartPosRef = useRef<{ x: number; y: number } | null>(null);
+  const lastLinkOpenTimeRef = useRef<number>(0);
 
   const [pageCount, setPageCount] = useState(1);
   const [pageWidth, setPageWidth] = useState(A4_WIDTH_PX);
@@ -479,13 +616,22 @@ function WordPaginatedEditor({
     if (!editor) return;
 
     const isDifferentDoc = loadedDocIdRef.current !== docId;
-    if (isDifferentDoc || (content !== editor.innerHTML && document.activeElement !== editor)) {
+    const didModeSwitch = prevIsMobileRef.current !== isMobile;
+
+    if (
+      isDifferentDoc ||
+      didModeSwitch ||
+      editor.innerHTML === "" ||
+      (content !== editor.innerHTML && document.activeElement !== editor)
+    ) {
       loadedDocIdRef.current = docId;
+      prevIsMobileRef.current = isMobile;
       if (content && !content.trim().startsWith("<")) {
         editor.innerHTML = `<div>${content}</div>`;
       } else {
         editor.innerHTML = content || "<div><br/></div>";
       }
+      styleAndLinkifyContainer(editor);
       if (!isMobile) requestAnimationFrame(() => recalculatePages());
     }
   }, [docId, content, editorRef, recalculatePages, isMobile]);
@@ -494,19 +640,89 @@ function WordPaginatedEditor({
     if (!isMobile) requestAnimationFrame(() => recalculatePages());
   }, [pageWidth, recalculatePages, isMobile]);
 
-  const handleInput = () => {
+  const handleInput = (e: React.FormEvent<HTMLDivElement>) => {
     const editor = editorRef.current;
     if (!editor) return;
+
+    const nativeEvent = e.nativeEvent as InputEvent;
+    const inputData = nativeEvent?.data || "";
+    const inputType = nativeEvent?.inputType || "";
+
+    const isClipboardChipOrUrlInsert =
+      inputType === "insertFromPaste" ||
+      inputType === "insertReplacementText" ||
+      (inputData.length > 4 && new RegExp(URL_REGEX.source, "i").test(inputData));
+
+    if (isClipboardChipOrUrlInsert) {
+      const didLinkify = styleAndLinkifyContainer(editor);
+      if (didLinkify) {
+        const sel = window.getSelection();
+        if (sel && editor.lastChild) {
+          const range = document.createRange();
+          range.selectNodeContents(editor);
+          range.collapse(false);
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+      }
+    }
+
     if (!isMobile) recalculatePages();
     onChange(editor.innerHTML);
   };
 
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.touches.length === 1) {
+      touchStartPosRef.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY
+      };
+    } else {
+      touchStartPosRef.current = null;
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!touchStartPosRef.current || e.changedTouches.length !== 1) return;
+
+    const dx = Math.abs(e.changedTouches[0].clientX - touchStartPosRef.current.x);
+    const dy = Math.abs(e.changedTouches[0].clientY - touchStartPosRef.current.y);
+    touchStartPosRef.current = null;
+
+    if (dx > 10 || dy > 10) return;
+
+    const target = e.target as HTMLElement;
+    const anchor = target.closest("a") as HTMLAnchorElement | null;
+    if (anchor) {
+      const rawHref = anchor.getAttribute("href") || anchor.textContent || "";
+      if (rawHref) {
+        e.preventDefault();
+        e.stopPropagation();
+        lastLinkOpenTimeRef.current = Date.now();
+        editorRef.current?.blur();
+        openExternalLink(rawHref);
+      }
+    }
+  };
+
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
-    const anchor = target.closest('a');
-    if (anchor && anchor.href) {
+    if (target.tagName === "INPUT" && (target as HTMLInputElement).type === "checkbox") {
+      setTimeout(() => {
+        if (editorRef.current) onChange(editorRef.current.innerHTML);
+      }, 0);
+      return;
+    }
+
+    const anchor = target.closest("a") as HTMLAnchorElement | null;
+    if (anchor) {
       e.preventDefault();
-      window.open(anchor.href, '_blank', 'noopener,noreferrer');
+      e.stopPropagation();
+      if (Date.now() - lastLinkOpenTimeRef.current < 500) return;
+      const rawHref = anchor.getAttribute("href") || anchor.textContent || "";
+      if (rawHref) {
+        openExternalLink(rawHref);
+      }
     } else {
       editorRef.current?.focus();
     }
@@ -515,52 +731,73 @@ function WordPaginatedEditor({
   const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
     e.preventDefault();
     const clipboardData = e.clipboardData;
-    const htmlData = clipboardData.getData('text/html');
-    const textData = clipboardData.getData('text/plain');
+    const htmlData = clipboardData.getData("text/html");
+    const textData =
+      clipboardData.getData("text/plain") ||
+      clipboardData.getData("text/uri-list") ||
+      "";
 
-    const selection = window.getSelection();
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    let selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || !editor.contains(selection.anchorNode)) {
+      editor.focus();
+      selection = window.getSelection();
+      if (selection) {
+        const fallbackRange = document.createRange();
+        fallbackRange.selectNodeContents(editor);
+        fallbackRange.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(fallbackRange);
+      }
+    }
+
     if (!selection || selection.rangeCount === 0) return;
     const range = selection.getRangeAt(0);
     range.deleteContents();
 
-    if (htmlData) {
-      const tempDiv = document.createElement('div');
+    const trimmedText = textData.trim();
+    const isPlainSingleUrl = /^(https?:\/\/|www\.)[^\s]+$/i.test(trimmedText);
+
+    if (isPlainSingleUrl) {
+      const fragment = linkifyTextToFragment(trimmedText);
+      const lastInserted = fragment.lastChild;
+      range.insertNode(fragment);
+      if (lastInserted) {
+        range.setStartAfter(lastInserted);
+        range.collapse(true);
+      }
+    } else if (htmlData) {
+      const tempDiv = document.createElement("div");
       tempDiv.innerHTML = htmlData;
-      tempDiv.querySelectorAll('a').forEach(a => {
-        a.setAttribute('target', '_blank');
-        a.setAttribute('rel', 'noopener noreferrer');
-        a.className = 'text-blue-600 underline hover:text-blue-800';
-      });
+      styleAndLinkifyContainer(tempDiv);
+
       const fragment = document.createDocumentFragment();
       while (tempDiv.firstChild) {
         fragment.appendChild(tempDiv.firstChild);
       }
+      const lastInserted = fragment.lastChild;
       range.insertNode(fragment);
+      if (lastInserted) {
+        range.setStartAfter(lastInserted);
+        range.collapse(true);
+      }
     } else if (textData) {
-      const trimmed = textData.trim();
-      const isUrl = /^https?:\/\/[^\s]+$/.test(trimmed);
-      if (isUrl) {
-        const a = document.createElement('a');
-        a.href = trimmed;
-        a.target = '_blank';
-        a.rel = 'noopener noreferrer';
-        a.className = 'text-blue-600 underline hover:text-blue-800';
-        a.textContent = trimmed;
-        range.insertNode(a);
-      } else {
-        const textNode = document.createTextNode(textData);
-        range.insertNode(textNode);
+      const fragment = linkifyTextToFragment(textData);
+      const lastInserted = fragment.lastChild;
+      range.insertNode(fragment);
+      if (lastInserted) {
+        range.setStartAfter(lastInserted);
+        range.collapse(true);
       }
     }
 
-    range.collapse(false);
     selection.removeAllRanges();
     selection.addRange(range);
 
-    if (editorRef.current) {
-      onChange(editorRef.current.innerHTML);
-      if (!isMobile) recalculatePages();
-    }
+    onChange(editor.innerHTML);
+    if (!isMobile) recalculatePages();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -679,6 +916,8 @@ function WordPaginatedEditor({
   return (
     <div 
       onClick={handleClick}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
       className="h-[65vh] md:h-[70vh] w-full bg-white overflow-y-auto overflow-x-hidden cursor-text"
     >
       {isMobile ? (
@@ -810,6 +1049,8 @@ interface DocItem {
   title: string;
   content: string;
   created_at: string;
+  updated_at?: string;
+  last_opened_at?: string;
 }
 
 export default function WeddingDocsPage() {
@@ -860,8 +1101,30 @@ export default function WeddingDocsPage() {
         .order('created_at', { ascending: false });
 
       if (!error && data) {
-        setDocs(data);
-        setSelectedDocId(data.length > 0 ? data[0].id : null);
+        const openedMap = getStoredLastOpenedMap();
+
+        // Sort by latest opened first (localStorage -> DB last_opened_at -> updated_at -> created_at)
+        const sortedDocs = [...(data as DocItem[])].sort((a, b) => {
+          const aOpenTime = Math.max(
+            openedMap[a.id] || 0,
+            a.last_opened_at ? new Date(a.last_opened_at).getTime() : 0,
+            new Date(a.updated_at || a.created_at).getTime()
+          );
+          const bOpenTime = Math.max(
+            openedMap[b.id] || 0,
+            b.last_opened_at ? new Date(b.last_opened_at).getTime() : 0,
+            new Date(b.updated_at || b.created_at).getTime()
+          );
+          return bOpenTime - aOpenTime;
+        });
+
+        setDocs(sortedDocs);
+        if (sortedDocs.length > 0) {
+          setSelectedDocId(sortedDocs[0].id);
+          saveLastOpenedTimestamp(sortedDocs[0].id);
+        } else {
+          setSelectedDocId(null);
+        }
       } else {
         setDocs([]);
         setSelectedDocId(null);
@@ -898,6 +1161,34 @@ export default function WeddingDocsPage() {
     };
   }, []);
 
+  const handleSelectDoc = useCallback((docId: string) => {
+    const nowMs = Date.now();
+    const nowIso = new Date(nowMs).toISOString();
+
+    setSelectedDocId(docId);
+    saveLastOpenedTimestamp(docId, nowMs);
+
+    // Move the opened document to the top of the list without altering its "Last updated" timestamp
+    setDocs((prev) => {
+      const target = prev.find((d) => d.id === docId);
+      if (!target) return prev;
+      const updatedTarget: DocItem = {
+        ...target,
+        ...( "last_opened_at" in target ? { last_opened_at: nowIso } : {} )
+      };
+      return [updatedTarget, ...prev.filter((d) => d.id !== docId)];
+    });
+
+    const targetDoc = docs.find((d) => d.id === docId);
+    if (targetDoc && !docId.startsWith("local-") && "last_opened_at" in targetDoc) {
+      supabase
+        .from("wedding_docs")
+        .update({ last_opened_at: nowIso })
+        .eq("id", docId)
+        .then(() => {});
+    }
+  }, [docs]);
+
   const activeDoc = useMemo(() => {
     return docs.find(d => d.id === selectedDocId) || null;
   }, [docs, selectedDocId]);
@@ -914,17 +1205,22 @@ export default function WeddingDocsPage() {
   const addDoc = async () => {
     const untitledCount = docs.filter(d => d.title === 'Untitled Document' || /^Untitled Document-\d+$/.test(d.title)).length;
     const newTitle = untitledCount === 0 ? 'Untitled Document' : `Untitled Document-${untitledCount}`;
+    const nowMs = Date.now();
+    const now = new Date(nowMs).toISOString();
 
-    const newDoc = { title: newTitle, content: '<div><br/></div>', created_at: new Date().toISOString() };
+    const newDoc = { title: newTitle, content: '<div><br/></div>', created_at: now };
     const { data, error } = await supabase.from('wedding_docs').insert([newDoc]).select().single();
 
     if (!error && data) {
+      saveLastOpenedTimestamp(data.id, nowMs);
       setDocs(prev => [data, ...prev]);
       setSelectedDocId(data.id);
     } else {
-      const fallbackDoc = { id: `local-${Date.now()}`, ...newDoc };
+      const fallbackId = `local-${nowMs}`;
+      const fallbackDoc: DocItem = { id: fallbackId, ...newDoc, updated_at: now };
+      saveLastOpenedTimestamp(fallbackId, nowMs);
       setDocs(prev => [fallbackDoc, ...prev]);
-      setSelectedDocId(fallbackDoc.id);
+      setSelectedDocId(fallbackId);
     }
     setIsMobileDrawerOpen(false);
     setSearchQuery("");
@@ -935,11 +1231,39 @@ export default function WeddingDocsPage() {
   };
 
   const updateDoc = (id: string, updates: Partial<DocItem>) => {
-    setDocs(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d));
+    const nowMs = Date.now();
+    const now = new Date(nowMs).toISOString();
+    saveLastOpenedTimestamp(id, nowMs);
+
+    const targetDoc = docs.find(d => d.id === id);
+    const hasUpdatedAtColumn = targetDoc ? 'updated_at' in targetDoc : false;
+    const hasLastOpenedColumn = targetDoc ? 'last_opened_at' in targetDoc : false;
+
+    const dbTimestampUpdate: Partial<DocItem> = {
+      ...(hasUpdatedAtColumn ? { updated_at: now } : { created_at: now }),
+      ...(hasLastOpenedColumn ? { last_opened_at: now } : {})
+    };
+
+    // Update the document and keep it at the top of the list
+    setDocs(prev => {
+      const target = prev.find(d => d.id === id);
+      if (!target) return prev;
+      const updatedDoc: DocItem = {
+        ...target,
+        ...updates,
+        ...dbTimestampUpdate,
+        updated_at: now
+      };
+      return [updatedDoc, ...prev.filter(d => d.id !== id)];
+    });
     
     if (id.startsWith('local-')) return;
 
-    pendingUpdates.current[id] = { ...pendingUpdates.current[id], ...updates };
+    pendingUpdates.current[id] = {
+      ...pendingUpdates.current[id],
+      ...updates,
+      ...dbTimestampUpdate
+    };
 
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     
@@ -958,13 +1282,19 @@ export default function WeddingDocsPage() {
 
   const confirmDeleteDoc = async () => {
     if (!docDeleteTarget) return;
-    setDocs(prev => prev.filter(d => d.id !== docDeleteTarget));
+    const remaining = docs.filter(d => d.id !== docDeleteTarget);
+    setDocs(remaining);
+
     if (!docDeleteTarget.startsWith('local-')) {
       await supabase.from('wedding_docs').delete().eq('id', docDeleteTarget);
     }
     if (selectedDocId === docDeleteTarget) {
-      const remaining = docs.filter(d => d.id !== docDeleteTarget);
-      setSelectedDocId(remaining.length > 0 ? remaining[0].id : null);
+      if (remaining.length > 0) {
+        setSelectedDocId(remaining[0].id);
+        saveLastOpenedTimestamp(remaining[0].id);
+      } else {
+        setSelectedDocId(null);
+      }
     }
     setDocDeleteTarget(null);
   };
@@ -977,7 +1307,8 @@ export default function WeddingDocsPage() {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
-    const formattedDate = new Date(activeDoc.created_at).toLocaleDateString("en-US", {
+    const lastModified = activeDoc.updated_at || activeDoc.created_at;
+    const formattedDate = new Date(lastModified).toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
       year: "numeric"
@@ -1103,7 +1434,7 @@ export default function WeddingDocsPage() {
                     onChange={(val) => updateDoc(activeDoc.id, { title: val })} 
                   />
                   <div className="text-[10px] md:text-[11px] text-slate-400 mt-1 truncate">
-                    Last updated: {new Date(activeDoc.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    Last updated: {new Date(activeDoc.updated_at || activeDoc.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                   </div>
                 </div>
                 <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5 border-slate-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-300 shrink-0 h-8 text-xs font-medium transition-colors" title="Print & Preview">
@@ -1152,7 +1483,7 @@ export default function WeddingDocsPage() {
               <div 
                 key={doc.id} 
                 onClick={() => { 
-                  setSelectedDocId(doc.id); 
+                  handleSelectDoc(doc.id); 
                   setTimeout(() => editorRef.current?.focus(), 50);
                 }} 
                 className={`group flex items-center justify-between p-2.5 rounded-lg cursor-pointer text-sm transition-all ${selectedDocId === doc.id ? 'bg-emerald-50 text-emerald-900 font-semibold border border-emerald-200 shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
@@ -1181,7 +1512,7 @@ export default function WeddingDocsPage() {
                   <div 
                     key={doc.id} 
                     onClick={() => { 
-                      setSelectedDocId(doc.id); 
+                      handleSelectDoc(doc.id); 
                       setIsMobileDrawerOpen(false);
                       setTimeout(() => editorRef.current?.focus(), 50);
                     }} 

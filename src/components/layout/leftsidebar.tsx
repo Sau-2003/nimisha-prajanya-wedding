@@ -71,27 +71,23 @@ export default function Sidebar() {
   // --- Authentication / Admin Check & Event Fetching ---
   useEffect(() => {
     const getUserInfo = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      const userEmail = user?.email ?? "";
-      setEmail(userEmail);
-
-      if (ADMIN_EMAILS.includes(userEmail)) {
-        setHasBudgetAccess(true);
-      } else if (userEmail) {
-        const { data } = await supabase
-          .from("user_roles")
-          .select("can_view_budget")
-          .eq("email", userEmail)
-          .single();
-
-        if (data?.can_view_budget) {
-          setHasBudgetAccess(true);
-        }
+    try {
+      // 1. Fast local check first (doesn't fail when offline)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setEmail(session.user.email ?? "");
+        return;
       }
-    };
+
+      // 2. Fallback to network verification
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (!error && user) {
+        setEmail(user.email ?? "");
+      }
+    } catch {
+      setEmail("");
+    }
+  };
 
     const fetchEvents = async () => {
       const { data, error } = await supabase.from("events").select("*");

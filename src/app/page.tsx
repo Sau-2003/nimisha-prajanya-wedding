@@ -181,16 +181,25 @@ export default function Dashboard() {
 
   useEffect(() => {
     const checkUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        setIsAuthorized(true);
-        fetchEvents();
-      } else {
-        const savedEmail = localStorage.getItem("wedding_app_email");
-        if (savedEmail) setEmail(savedEmail);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          setIsAuthorized(true);
+          fetchEvents();
+          return;
+        }
+
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (!error && user) {
+          setIsAuthorized(true);
+          fetchEvents();
+        }
+      } catch {
+        // Prevents unhandled fetch rejection if offline
+        setIsAuthorized(false);
       }
-      setIsChecking(false);
     };
+
     checkUser();
   }, []);
 
