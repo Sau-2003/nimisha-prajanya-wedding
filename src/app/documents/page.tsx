@@ -254,31 +254,31 @@ function DocToolbar({
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 bg-slate-50 border border-slate-200 p-2 rounded-lg text-slate-700 shadow-sm sticky top-0 z-20">
-      <button type="button" onClick={() => execCmd('undo')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Undo"><Undo2 className="w-4 h-4" /></button>
-      <button type="button" onClick={() => execCmd('redo')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Redo"><Redo2 className="w-4 h-4" /></button>
-      <div className="h-4 w-[1px] bg-slate-300 mx-1" />
-      <button type="button" onClick={() => execCmd('bold')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Bold"><Bold className="w-4 h-4" /></button>
-      <button type="button" onClick={() => execCmd('italic')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Italic"><Italic className="w-4 h-4" /></button>
-      <button type="button" onClick={() => execCmd('strikeThrough')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Strikethrough"><Strikethrough className="w-4 h-4" /></button>
-      <button type="button" onClick={insertLink} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Insert Link"><Link2 className="w-4 h-4" /></button>
-      <div className="h-4 w-[1px] bg-slate-300 mx-1" />
-      <button type="button" onClick={() => execCmd('justifyLeft')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Align Left"><AlignLeft className="w-4 h-4" /></button>
-      <button type="button" onClick={() => execCmd('justifyCenter')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Align Center"><AlignCenter className="w-4 h-4" /></button>
-      <button type="button" onClick={() => execCmd('justifyRight')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Align Right"><AlignRight className="w-4 h-4" /></button>
-      <button type="button" onClick={() => execCmd('justifyFull')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Justify"><AlignJustify className="w-4 h-4" /></button>
-      <div className="h-4 w-[1px] bg-slate-300 mx-1" />
-      <button type="button" onClick={() => execCmd('outdent')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Decrease Indent"><Outdent className="w-4 h-4" /></button>
-      <button type="button" onClick={() => execCmd('indent')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Increase Indent"><Indent className="w-4 h-4" /></button>
-      <div className="h-4 w-[1px] bg-slate-300 mx-1" />
-      <button type="button" onClick={() => execCmd('insertUnorderedList')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Bullet List"><List className="w-4 h-4" /></button>
-      <button type="button" onClick={() => execCmd('insertOrderedList')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Numbered List"><ListOrdered className="w-4 h-4" /></button>
-      <button type="button" onClick={insertSamsungCheckbox} className="p-1.5 hover:bg-slate-200 rounded transition-colors bg-white border border-slate-200 shadow-sm" title="Insert Checklist"><CheckSquare className="w-4 h-4" /></button>
+    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 p-2 rounded-lg text-slate-700 shadow-sm sticky top-0 z-20 overflow-x-auto whitespace-nowrap scrollbar-thin">
+      <button type="button" onClick={() => execCmd('undo')} className="p-1.5 hover:bg-slate-200 rounded transition-colors shrink-0" title="Undo"><Undo2 className="w-4 h-4" /></button>
+      <button type="button" onClick={() => execCmd('redo')} className="p-1.5 hover:bg-slate-200 rounded transition-colors shrink-0" title="Redo"><Redo2 className="w-4 h-4" /></button>
+      <div className="h-4 w-[1px] bg-slate-300 mx-1 shrink-0" />
+      <button type="button" onClick={() => execCmd('bold')} className="p-1.5 hover:bg-slate-200 rounded transition-colors shrink-0" title="Bold"><Bold className="w-4 h-4" /></button>
+      <button type="button" onClick={() => execCmd('italic')} className="p-1.5 hover:bg-slate-200 rounded transition-colors shrink-0" title="Italic"><Italic className="w-4 h-4" /></button>
+      <button type="button" onClick={() => execCmd('strikeThrough')} className="p-1.5 hover:bg-slate-200 rounded transition-colors shrink-0" title="Strikethrough"><Strikethrough className="w-4 h-4" /></button>
+      <button type="button" onClick={insertLink} className="p-1.5 hover:bg-slate-200 rounded transition-colors shrink-0" title="Insert Link"><Link2 className="w-4 h-4" /></button>
+      <div className="h-4 w-[1px] bg-slate-300 mx-1 shrink-0" />
+      <button type="button" onClick={() => execCmd('justifyLeft')} className="p-1.5 hover:bg-slate-200 rounded transition-colors shrink-0" title="Align Left"><AlignLeft className="w-4 h-4" /></button>
+      <button type="button" onClick={() => execCmd('justifyCenter')} className="p-1.5 hover:bg-slate-200 rounded transition-colors shrink-0" title="Align Center"><AlignCenter className="w-4 h-4" /></button>
+      <button type="button" onClick={() => execCmd('justifyRight')} className="p-1.5 hover:bg-slate-200 rounded transition-colors shrink-0" title="Align Right"><AlignRight className="w-4 h-4" /></button>
+      <button type="button" onClick={() => execCmd('justifyFull')} className="p-1.5 hover:bg-slate-200 rounded transition-colors shrink-0" title="Justify"><AlignJustify className="w-4 h-4" /></button>
+      <div className="h-4 w-[1px] bg-slate-300 mx-1 shrink-0" />
+      <button type="button" onClick={() => execCmd('outdent')} className="p-1.5 hover:bg-slate-200 rounded transition-colors shrink-0" title="Decrease Indent"><Outdent className="w-4 h-4" /></button>
+      <button type="button" onClick={() => execCmd('indent')} className="p-1.5 hover:bg-slate-200 rounded transition-colors shrink-0" title="Increase Indent"><Indent className="w-4 h-4" /></button>
+      <div className="h-4 w-[1px] bg-slate-300 mx-1 shrink-0" />
+      <button type="button" onClick={() => execCmd('insertUnorderedList')} className="p-1.5 hover:bg-slate-200 rounded transition-colors shrink-0" title="Bullet List"><List className="w-4 h-4" /></button>
+      <button type="button" onClick={() => execCmd('insertOrderedList')} className="p-1.5 hover:bg-slate-200 rounded transition-colors shrink-0" title="Numbered List"><ListOrdered className="w-4 h-4" /></button>
+      <button type="button" onClick={insertSamsungCheckbox} className="p-1.5 hover:bg-slate-200 rounded transition-colors bg-white border border-slate-200 shadow-sm shrink-0" title="Insert Checklist"><CheckSquare className="w-4 h-4" /></button>
       <button 
         type="button" 
         onMouseDown={(e) => e.preventDefault()}
         onClick={toggleVoiceToText} 
-        className={`p-1.5 rounded transition-colors border shadow-sm flex items-center gap-1 ${
+        className={`p-1.5 rounded transition-colors border shadow-sm flex items-center gap-1 shrink-0 ${
           isListening 
             ? "bg-red-50 text-red-600 border-red-300 animate-pulse" 
             : "bg-white hover:bg-slate-200 border-slate-200 text-slate-700"
@@ -287,8 +287,8 @@ function DocToolbar({
       >
         {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
       </button>
-      <div className="h-4 w-[1px] bg-slate-300 mx-1" />
-      <select onChange={(e) => execCmd('fontName', e.target.value)} className="bg-white border border-slate-200 text-xs rounded px-2 py-1 outline-none hover:border-slate-300 cursor-pointer max-w-[90px] sm:max-w-none" defaultValue="Arial" title="Font Family">
+      <div className="h-4 w-[1px] bg-slate-300 mx-1 shrink-0" />
+      <select onChange={(e) => execCmd('fontName', e.target.value)} className="bg-white border border-slate-200 text-xs rounded px-2 py-1 outline-none hover:border-slate-300 cursor-pointer shrink-0" defaultValue="Arial" title="Font Family">
         <option value="Arial">Arial</option>
         <option value="Times New Roman">Times New Roman</option>
         <option value="Georgia">Georgia</option>
@@ -307,7 +307,7 @@ function DocToolbar({
             if (editorRef.current) onContentChange(editorRef.current.innerHTML);
           }
         }} 
-        className="bg-white border border-slate-200 text-xs rounded px-2 py-1 outline-none hover:border-slate-300 cursor-pointer" 
+        className="bg-white border border-slate-200 text-xs rounded px-2 py-1 outline-none hover:border-slate-300 cursor-pointer shrink-0" 
         defaultValue="16px" 
         title="Font Size"
       >
@@ -323,7 +323,7 @@ function DocToolbar({
   );
 }
 
-// --- GOOGLE DOCS STYLE RESPONSIVE EDITOR WITH ROBUST PASTE HANDLING ---
+// --- RESPONSIVE MOBILE & DESKTOP EDITOR ---
 function WordPaginatedEditor({
   docId,
   content,
@@ -513,6 +513,9 @@ function WordPaginatedEditor({
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    // On mobile browsers, allow native clipboard paste to ensure 100% compatibility across iOS Safari & Android Chrome
+    if (isMobile) return;
+
     e.preventDefault();
     const clipboardData = e.clipboardData;
     const htmlData = clipboardData.getData('text/html');
@@ -679,10 +682,10 @@ function WordPaginatedEditor({
   return (
     <div 
       onClick={handleClick}
-      className="h-[65vh] md:h-[70vh] w-full bg-white overflow-y-auto overflow-x-hidden cursor-text"
+      className="h-[72vh] md:h-[70vh] w-full bg-white overflow-y-auto overflow-x-hidden cursor-text"
     >
       {isMobile ? (
-        <div className="w-full min-h-full bg-white p-6">
+        <div className="w-full min-h-full bg-white p-4 sm:p-6">
           <div
             ref={editorRef}
             contentEditable
