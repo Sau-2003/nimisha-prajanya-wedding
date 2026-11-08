@@ -527,7 +527,7 @@ function WordPaginatedEditor({
       tempDiv.querySelectorAll('a').forEach(a => {
         a.setAttribute('target', '_blank');
         a.setAttribute('rel', 'noopener noreferrer');
-        a.className = 'text-blue-600 underline hover:text-blue-800';
+        a.className = 'text-blue-600 underline hover:text-blue-800 cursor-pointer';
       });
       const fragment = document.createDocumentFragment();
       while (tempDiv.firstChild) {
@@ -542,7 +542,7 @@ function WordPaginatedEditor({
         a.href = trimmed;
         a.target = '_blank';
         a.rel = 'noopener noreferrer';
-        a.className = 'text-blue-600 underline hover:text-blue-800';
+        a.className = 'text-blue-600 underline hover:text-blue-800 cursor-pointer';
         a.textContent = trimmed;
         range.insertNode(a);
       } else {
