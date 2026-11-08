@@ -507,15 +507,10 @@ function WordPaginatedEditor({
     if (anchor && anchor.href) {
       e.preventDefault();
       window.open(anchor.href, '_blank', 'noopener,noreferrer');
-    } else {
-      editorRef.current?.focus();
     }
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
-    // On mobile browsers, allow native clipboard paste to ensure 100% compatibility across iOS Safari & Android Chrome
-    if (isMobile) return;
-
     e.preventDefault();
     const clipboardData = e.clipboardData;
     const htmlData = clipboardData.getData('text/html');
