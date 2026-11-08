@@ -78,7 +78,6 @@ function DocToolbar({
       document.execCommand('insertHTML', false, html);
     }
 
-    // Ensure generated links have proper target and styling attributes
     if (editorRef.current) {
       const links = editorRef.current.querySelectorAll('a:not([target])');
       links.forEach(link => {
@@ -324,7 +323,7 @@ function DocToolbar({
   );
 }
 
-// --- GOOGLE DOCS STYLE RESPONSIVE EDITOR WITH CLICK-TO-OPEN LINKS ---
+// --- GOOGLE DOCS STYLE RESPONSIVE EDITOR WITH ROBUST PASTE HANDLING ---
 function WordPaginatedEditor({
   docId,
   content,
@@ -513,6 +512,57 @@ function WordPaginatedEditor({
     }
   };
 
+  const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const clipboardData = e.clipboardData;
+    const htmlData = clipboardData.getData('text/html');
+    const textData = clipboardData.getData('text/plain');
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    range.deleteContents();
+
+    if (htmlData) {
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = htmlData;
+      tempDiv.querySelectorAll('a').forEach(a => {
+        a.setAttribute('target', '_blank');
+        a.setAttribute('rel', 'noopener noreferrer');
+        a.className = 'text-blue-600 underline hover:text-blue-800';
+      });
+      const fragment = document.createDocumentFragment();
+      while (tempDiv.firstChild) {
+        fragment.appendChild(tempDiv.firstChild);
+      }
+      range.insertNode(fragment);
+    } else if (textData) {
+      const trimmed = textData.trim();
+      const isUrl = /^https?:\/\/[^\s]+$/.test(trimmed);
+      if (isUrl) {
+        const a = document.createElement('a');
+        a.href = trimmed;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.className = 'text-blue-600 underline hover:text-blue-800';
+        a.textContent = trimmed;
+        range.insertNode(a);
+      } else {
+        const textNode = document.createTextNode(textData);
+        range.insertNode(textNode);
+      }
+    }
+
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+    if (editorRef.current) {
+      onChange(editorRef.current.innerHTML);
+      if (!isMobile) recalculatePages();
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return;
@@ -637,6 +687,7 @@ function WordPaginatedEditor({
             ref={editorRef}
             contentEditable
             onInput={handleInput}
+            onPaste={handlePaste}
             onKeyDown={handleKeyDown}
             suppressContentEditableWarning
             style={{
@@ -689,6 +740,7 @@ function WordPaginatedEditor({
             ref={editorRef}
             contentEditable
             onInput={handleInput}
+            onPaste={handlePaste}
             onKeyDown={handleKeyDown}
             suppressContentEditableWarning
             style={{
