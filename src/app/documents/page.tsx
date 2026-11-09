@@ -22,7 +22,7 @@ const URL_REGEX = /((?:https?:\/\/|www\.)[^\s<>"']+)/gi;
 function normalizeUrl(rawUrl: string): string {
   const trimmed = rawUrl.trim();
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  if (/^www\./i.test(trimmed)) return `https://${trimmed}`;
+  if (/^www\./i.test(trimmed)) return `${trimmed}`;
   return trimmed;
 }
 
@@ -205,7 +205,7 @@ function DocToolbar({
   const insertLink = () => {
     const selection = window.getSelection();
     const selectedText = selection ? selection.toString().trim() : '';
-    const rawUrl = prompt("Enter URL:", "https://");
+    const rawUrl = prompt("Enter URL:", "");
     if (!rawUrl) return;
     const url = normalizeUrl(rawUrl);
 

@@ -181,25 +181,16 @@ export default function Dashboard() {
 
   useEffect(() => {
     const checkUser = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          setIsAuthorized(true);
-          fetchEvents();
-          return;
-        }
-
-        const { data: { user }, error } = await supabase.auth.getUser();
-        if (!error && user) {
-          setIsAuthorized(true);
-          fetchEvents();
-        }
-      } catch {
-        // Prevents unhandled fetch rejection if offline
-        setIsAuthorized(false);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setIsAuthorized(true);
+        fetchEvents();
+      } else {
+        const savedEmail = localStorage.getItem("wedding_app_email");
+        if (savedEmail) setEmail(savedEmail);
       }
+      setIsChecking(false);
     };
-
     checkUser();
   }, []);
 
@@ -429,11 +420,10 @@ export default function Dashboard() {
         <div className="flex items-center gap-3 sm:gap-4 w-full md:w-auto">
           <button 
             onClick={() => setIsSearchOpen(true)}
-            className="hidden md:flex items-center gap-2.5 px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm text-slate-500 hover:border-emerald-500 hover:text-emerald-700 transition-all shadow-sm w-56 lg:w-72"
+            className="hidden md:flex items-center gap-2.5 px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm text-slate-500 hover:border-emerald-500 hover:text-emerald-700 transition-all shadow-sm w-56 lg:w-50"
           >
             <Search className="w-4 h-4 text-emerald-600 shrink-0" />
             <span className="truncate">Search entire app...</span>
-            <kbd className="ml-auto text-[10px] bg-slate-100 px-1.5 py-0.5 rounded font-sans text-slate-400">⌘K</kbd>
           </button>
           
           <button onClick={() => setIsSearchOpen(true)} className="md:hidden p-3.5 bg-white border border-slate-200 rounded-2xl text-emerald-700 shadow-sm shrink-0">
@@ -503,7 +493,7 @@ export default function Dashboard() {
             
             <div className="max-h-[65vh] overflow-y-auto p-3">
               {searchQuery.trim() === "" ? (
-                <div className="p-8 text-center text-slate-500 text-sm">Type anything to search across all your tables and JSON columns.</div>
+                <div className="p-8 text-center text-slate-500 text-sm">Type anything to search across the app</div>
               ) : Object.keys(groupedResults).length > 0 ? (
                 <div className="space-y-4">
                   {Object.entries(groupedResults).map(([category, items]) => (
