@@ -5,7 +5,8 @@ import Link from "next/link";
 import { 
   CheckCircle2, CalendarDays, MapPin, Plus, X, Pencil, Trash2, 
   LayoutDashboard, Search, FileText, Users, Store, CheckSquare, 
-  Loader2, Wallet, ShoppingBag, Utensils, Gift, Layers, Sparkles
+  Loader2, Wallet, ShoppingBag, Utensils, Gift, Layers, Sparkles,
+  Eye, EyeOff
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { differenceInDays, differenceInWeeks, format, parseISO } from "date-fns";
@@ -93,7 +94,6 @@ function resolveExactRoute(tableName: string, row: Record<string, any>): { label
   const explicitLink = row.link || row.url || row.path || row.route;
 
   if (explicitLink) {
-    // If table has a pre-saved link (like /events/sangeet), use it directly
     return { label: getTableLabel(t), link: explicitLink };
   }
 
@@ -146,6 +146,7 @@ export default function Dashboard() {
   
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSuccess, setAuthSuccess] = useState<string | null>(null);
@@ -397,7 +398,23 @@ export default function Dashboard() {
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
-              <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-4 py-2.5 text-sm border rounded-xl" />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-4 py-2.5 pr-11 text-sm border rounded-xl"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+                >
+                  {showPassword ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
             <button type="submit" disabled={authLoading} className="w-full bg-emerald-600 text-white py-3 rounded-xl text-sm font-medium">{authLoading ? "Processing..." : "Sign In"}</button>
           </form>
