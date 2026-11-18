@@ -414,7 +414,7 @@ export default function Dashboard() {
           <h1 className="text-3xl font-serif font-bold text-emerald-900 flex items-center gap-3">
             <LayoutDashboard className="w-8 h-8 text-emerald-700 shrink-0" />Wedding Planner
           </h1>
-          <p className="text-sm text-slate-500 mt-1">January 31, 2027</p>
+          <p className="text-sm text-slate-500 mt-1">January 30 & 31, 2027</p>
         </div>
 
         <div className="flex items-center gap-3 sm:gap-4 w-full md:w-auto">
