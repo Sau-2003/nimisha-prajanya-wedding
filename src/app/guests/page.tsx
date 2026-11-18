@@ -274,25 +274,38 @@ export default function GuestsPage() {
           </p>
         </div>
         
-        <div className="flex flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+<div className="flex flex-row flex-nowrap items-center justify-end gap-2 sm:gap-3 w-full md:w-auto md:ml-auto">
+          <a 
+            href="https://docs.google.com/spreadsheets/d/1rOtpROszk5fkS7QnznwCFOL6vtR1gkgGat4yGPiXEsQ/edit?gid=0#gid=0" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="flex-1 md:flex-initial"
+          >
+            <Button 
+              variant="outline"
+              className="bg-emerald-700 hover:bg-emerald-800 text-white hover:text-white flex items-center justify-center gap-1.5 sm:gap-2 w-full whitespace-nowrap px-2.5 sm:px-4 text-xs sm:text-sm"
+            >
+              <FileSpreadsheet className="w-4 h-4 shrink-0" /> Full Sheet
+            </Button>
+          </a>
           <a 
             href="https://docs.google.com/spreadsheets/d/1PnsOf0vpQs3I_S7ilQF7heiBwYvePVzsyz81I74czgA/edit?gid=421945919#gid=421945919" 
             target="_blank" 
             rel="noopener noreferrer"
-            className="flex-1"
+            className="flex-1 md:flex-initial"
           >
             <Button 
               variant="outline"
-              className="border-emerald-600 text-emerald-700 hover:bg-emerald-50 flex items-center justify-center gap-2 w-full"
+              className="border-emerald-600 text-emerald-700 hover:bg-emerald-50 flex items-center justify-center gap-1.5 sm:gap-2 w-full whitespace-nowrap px-2.5 sm:px-4 text-xs sm:text-sm"
             >
-              <FileSpreadsheet className="w-4 h-4" /> Open Sheet
+              <FileSpreadsheet className="w-4 h-4 shrink-0" /> Open Sheet
             </Button>
           </a>
           <Button 
             onClick={exportToGoogleSheets} 
-            className="bg-emerald-700 hover:bg-emerald-800 text-white flex items-center justify-center gap-2 flex-1"
+            className="bg-emerald-700 hover:bg-emerald-800 text-white flex items-center justify-center gap-1.5 sm:gap-2 flex-1 md:flex-initial whitespace-nowrap px-2.5 sm:px-4 text-xs sm:text-sm"
           >
-            <FileSpreadsheet className="w-4 h-4" /> Export to Sheet
+            <FileSpreadsheet className="w-4 h-4 shrink-0" /> Export to Sheet
           </Button>
         </div>
       </div>
