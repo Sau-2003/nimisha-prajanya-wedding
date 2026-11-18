@@ -6,23 +6,18 @@ import {
   Trash2, FileText, BookOpen, X,   
   Bold, Italic, Strikethrough, List, ListOrdered, CheckSquare, Printer, Search,
   AlignLeft, AlignCenter, AlignRight, AlignJustify, Indent, Outdent, Undo2, Redo2,
-  Mic, MicOff, Link2
+  Mic, MicOff, Link2, Pencil, Check, ChevronUp, ChevronDown
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
 
-const A4_WIDTH_PX = 794;
-const A4_ASPECT_RATIO = 1.4142;
-const DESKTOP_MARGIN_PX = 76; 
-const BOTTOM_GREY_BAR_PX = 32; 
 const LAST_OPENED_STORAGE_KEY = "wedding_docs_last_opened";
-
 const URL_REGEX = /((?:https?:\/\/|www\.)[^\s<>"']+)/gi;
 
 function normalizeUrl(rawUrl: string): string {
   const trimmed = rawUrl.trim();
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  if (/^www\./i.test(trimmed)) return `${trimmed}`;
+  if (/^www\./i.test(trimmed)) return `https://${trimmed}`;
   return trimmed;
 }
 
@@ -135,6 +130,33 @@ function styleAndLinkifyContainer(container: HTMLElement | DocumentFragment): bo
   return didModify;
 }
 
+function stripSearchHighlightsFromHtml(html: string): string {
+  if (!html || !html.includes("data-doc-search")) return html;
+  const temp = document.createElement("div");
+  temp.innerHTML = html;
+  temp.querySelectorAll('mark[data-doc-search="true"]').forEach((mark) => {
+    const parent = mark.parentNode;
+    if (parent) {
+      parent.replaceChild(document.createTextNode(mark.textContent || ""), mark);
+      parent.normalize();
+    }
+  });
+  return temp.innerHTML;
+}
+
+function clearSearchHighlightsInDom(container: HTMLElement | null) {
+  if (!container) return;
+  const marks = container.querySelectorAll('mark[data-doc-search="true"]');
+  if (marks.length === 0) return;
+  marks.forEach((mark) => {
+    const parent = mark.parentNode;
+    if (parent) {
+      parent.replaceChild(document.createTextNode(mark.textContent || ""), mark);
+    }
+  });
+  container.normalize();
+}
+
 function getStoredLastOpenedMap(): Record<string, number> {
   try {
     const raw = localStorage.getItem(LAST_OPENED_STORAGE_KEY);
@@ -152,6 +174,130 @@ function saveLastOpenedTimestamp(docId: string, timestampMs: number = Date.now()
   } catch {
     // Ignore localStorage quota/privacy errors
   }
+}
+
+// --- LIST INTERCHANGEABILITY HELPERS (CHECKBOX <-> BULLET <-> NUMBERED) ---
+function createTaskItemElement(innerHtml: string, checked = false): HTMLDivElement {
+  const wrapper = document.createElement("div");
+  wrapper.className = "flex items-start gap-2.5 my-1.5 group select-none samsung-task-item";
+  const textStyle = checked
+    ? 'style="text-decoration: line-through; color: #94a3b8;"'
+    : "";
+  wrapper.innerHTML = `
+    <input 
+      type="checkbox" 
+      ${checked ? 'checked="checked"' : ""}
+      class="w-4 h-4 mt-1 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-600 shrink-0" 
+      onchange="
+        const textSpan = this.nextElementSibling;
+        if (this.checked) {
+          this.setAttribute('checked', 'checked');
+          textSpan.style.textDecoration = 'line-through';
+          textSpan.style.color = '#94a3b8';
+        } else {
+          this.removeAttribute('checked');
+          textSpan.style.textDecoration = 'none';
+          textSpan.style.color = '#1e293b';
+        }
+      "
+    />
+    <span 
+      contenteditable="true" 
+      ${textStyle}
+      class="outline-none border-b border-transparent focus:border-emerald-400 text-[#1e293b] flex-1 transition-colors min-h-[1.6em]"
+    >${innerHtml && innerHtml.trim() !== "" ? innerHtml : "<br/>"}</span>
+  `;
+  return wrapper;
+}
+
+function getSelectedBlockElements(editor: HTMLElement): HTMLElement[] {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return [];
+  const range = selection.getRangeAt(0);
+
+  const blocks: HTMLElement[] = [];
+  const seen = new Set<HTMLElement>();
+
+  const resolveItemBlock = (node: Node | null): HTMLElement | null => {
+    let curr: Node | null = node;
+    while (curr && curr !== editor) {
+      if (curr instanceof HTMLElement) {
+        if (curr.classList.contains("samsung-task-item")) return curr;
+        if (curr.tagName === "LI") return curr;
+        if (curr.parentElement === editor && ["DIV", "P", "H1", "H2", "H3", "BLOCKQUOTE"].includes(curr.tagName)) {
+          return curr;
+        }
+      }
+      curr = curr.parentNode;
+    }
+    return null;
+  };
+
+  if (range.collapsed) {
+    const block = resolveItemBlock(range.startContainer);
+    if (block) return [block];
+    return [];
+  }
+
+  const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, null);
+  let node = walker.nextNode();
+  while (node) {
+    if (range.intersectsNode(node)) {
+      const block = resolveItemBlock(node);
+      if (block && !seen.has(block)) {
+        seen.add(block);
+        blocks.push(block);
+      }
+    }
+    node = walker.nextNode();
+  }
+
+  if (blocks.length === 0) {
+    const startBlock = resolveItemBlock(range.startContainer);
+    if (startBlock) blocks.push(startBlock);
+  }
+
+  return blocks;
+}
+
+function unwrapTaskItemToDiv(taskEl: HTMLElement): HTMLDivElement {
+  const span = taskEl.querySelector("span");
+  const div = document.createElement("div");
+  div.innerHTML = span ? span.innerHTML : "<br/>";
+  taskEl.parentNode?.replaceChild(div, taskEl);
+  return div;
+}
+
+function unwrapListItemToDiv(li: HTMLElement): HTMLDivElement {
+  const parentList = li.parentElement;
+  const div = document.createElement("div");
+  div.innerHTML = li.innerHTML || "<br/>";
+
+  if (!parentList || (parentList.tagName !== "UL" && parentList.tagName !== "OL")) {
+    li.parentNode?.replaceChild(div, li);
+    return div;
+  }
+
+  const siblings = Array.from(parentList.children) as HTMLElement[];
+  const idx = siblings.indexOf(li);
+
+  if (siblings.length === 1) {
+    parentList.parentNode?.replaceChild(div, parentList);
+  } else if (idx === 0) {
+    parentList.parentNode?.insertBefore(div, parentList);
+    li.remove();
+  } else if (idx === siblings.length - 1) {
+    parentList.parentNode?.insertBefore(div, parentList.nextSibling);
+    li.remove();
+  } else {
+    const afterList = document.createElement(parentList.tagName.toLowerCase());
+    siblings.slice(idx + 1).forEach((s) => afterList.appendChild(s));
+    parentList.parentNode?.insertBefore(div, parentList.nextSibling);
+    parentList.parentNode?.insertBefore(afterList, div.nextSibling);
+    li.remove();
+  }
+
+  return div;
 }
 
 function FilePlusCornerIcon({ className = "w-4 h-4" }: { className?: string }) {
@@ -174,16 +320,22 @@ function FilePlusCornerIcon({ className = "w-4 h-4" }: { className?: string }) {
   );
 }
 
+// --- GOOGLE DOCS TOOLBAR (DESKTOP TOP BAR + MOBILE KEYBOARD-DOCKED SINGLE-ROW BAR) ---
 function DocToolbar({ 
-  onFormat, 
   editorRef, 
-  onContentChange 
+  onContentChange,
+  isMobile,
+  isMobileEditing,
+  onFinishMobileEdit
 }: { 
-  onFormat: () => void;
   editorRef: React.RefObject<HTMLDivElement | null>;
   onContentChange: (html: string) => void;
+  isMobile: boolean;
+  isMobileEditing: boolean;
+  onFinishMobileEdit: () => void;
 }) {
   const [isListening, setIsListening] = useState(false);
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
   const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
@@ -194,20 +346,186 @@ function DocToolbar({
     };
   }, []);
 
+  useEffect(() => {
+    if (!isMobile || typeof window === "undefined" || !window.visualViewport) return;
+
+    const vv = window.visualViewport;
+    const handleViewportResize = () => {
+      const offset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      setKeyboardOffset(offset);
+    };
+
+    vv.addEventListener("resize", handleViewportResize);
+    vv.addEventListener("scroll", handleViewportResize);
+    handleViewportResize();
+
+    return () => {
+      vv.removeEventListener("resize", handleViewportResize);
+      vv.removeEventListener("scroll", handleViewportResize);
+    };
+  }, [isMobile]);
+
+  const keepFocus = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+  };
+
   const execCmd = (command: string, value: string = '') => {
     document.execCommand(command, false, value);
-    onFormat();
     if (editorRef.current) {
       onContentChange(editorRef.current.innerHTML);
     }
   };
 
+  // Interchangeable List Switcher: Checklist <-> Bullet List <-> Numbered List
+  const handleToggleListType = (targetType: "checklist" | "bullet" | "numbered") => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || !editor.contains(selection.anchorNode)) {
+      editor.focus();
+      const range = document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    }
+
+    const blocks = getSelectedBlockElements(editor);
+
+    // 1. Switching to BULLET or NUMBERED list
+    if (targetType === "bullet" || targetType === "numbered") {
+      const cmd = targetType === "bullet" ? "insertUnorderedList" : "insertOrderedList";
+      const taskBlocks = blocks.filter((b) => b.classList.contains("samsung-task-item"));
+
+      if (taskBlocks.length > 0) {
+        // Convert any selected checklist items directly into <ul> or <ol> list items
+        const listTag = targetType === "bullet" ? "ul" : "ol";
+        const newList = document.createElement(listTag);
+        let firstLi: HTMLLIElement | null = null;
+
+        taskBlocks.forEach((taskEl, index) => {
+          const span = taskEl.querySelector("span");
+          const li = document.createElement("li");
+          li.innerHTML = span ? span.innerHTML : "<br/>";
+          newList.appendChild(li);
+          if (!firstLi) firstLi = li;
+
+          if (index === 0) {
+            taskEl.parentNode?.insertBefore(newList, taskEl);
+          }
+          taskEl.remove();
+        });
+
+        if (firstLi && selection) {
+          const range = document.createRange();
+          range.selectNodeContents(firstLi);
+          range.collapse(false);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+
+        onContentChange(editor.innerHTML);
+        return;
+      }
+
+      // Standard toggle / switch between Bullet <-> Numbered <-> Plain text
+      document.execCommand(cmd, false, "");
+      onContentChange(editor.innerHTML);
+      return;
+    }
+
+    // 2. Switching to CHECKLIST (from plain text, bullet list, numbered list, or toggling off existing checklist)
+    if (blocks.length === 0) {
+      const taskEl = createTaskItemElement("<br/>", false);
+      editor.appendChild(taskEl);
+      const span = taskEl.querySelector("span");
+      if (span && selection) {
+        const range = document.createRange();
+        range.setStart(span, 0);
+        range.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+      onContentChange(editor.innerHTML);
+      return;
+    }
+
+    const allAreTasks = blocks.every((b) => b.classList.contains("samsung-task-item"));
+
+    if (allAreTasks) {
+      // Toggle OFF checklist -> revert cleanly to normal paragraphs (just like clicking Bullets twice)
+      let lastDiv: HTMLDivElement | null = null;
+      blocks.forEach((taskEl) => {
+        lastDiv = unwrapTaskItemToDiv(taskEl);
+      });
+      if (lastDiv && selection) {
+        const range = document.createRange();
+        range.selectNodeContents(lastDiv);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+      onContentChange(editor.innerHTML);
+      return;
+    }
+
+    // Convert plain blocks, <li> bullet items, or <li> numbered items into interactive checkboxes
+    let lastCreatedSpan: HTMLElement | null = null;
+
+    blocks.forEach((block) => {
+      if (block.classList.contains("samsung-task-item")) {
+        lastCreatedSpan = block.querySelector("span");
+        return;
+      }
+
+      let targetDiv: HTMLElement = block;
+      if (block.tagName === "LI") {
+        targetDiv = unwrapListItemToDiv(block);
+      }
+
+      const rawHtml = targetDiv.innerHTML;
+      const lines = rawHtml.split(/<br\s*\/?>/i);
+      const nonEmptyLines = lines.filter((l) => l.replace(/&nbsp;/g, " ").trim() !== "");
+      const itemsToMake = nonEmptyLines.length > 0 ? nonEmptyLines : ["<br/>"];
+
+      const frag = document.createDocumentFragment();
+      itemsToMake.forEach((lineHtml) => {
+        const taskEl = createTaskItemElement(lineHtml, false);
+        const span = taskEl.querySelector("span");
+        if (span) lastCreatedSpan = span;
+        frag.appendChild(taskEl);
+      });
+
+      targetDiv.parentNode?.replaceChild(frag, targetDiv);
+    });
+
+    if (lastCreatedSpan && selection) {
+      const range = document.createRange();
+      range.selectNodeContents(lastCreatedSpan);
+      range.collapse(false);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+
+    onContentChange(editor.innerHTML);
+  };
+
   const insertLink = () => {
     const selection = window.getSelection();
     const selectedText = selection ? selection.toString().trim() : '';
+    const savedRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0).cloneRange() : null;
+
     const rawUrl = prompt("Enter URL:", "");
     if (!rawUrl) return;
     const url = normalizeUrl(rawUrl);
+
+    if (editorRef.current && savedRange) {
+      editorRef.current.focus();
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(savedRange);
+    }
 
     if (selectedText) {
       document.execCommand('createLink', false, url);
@@ -219,7 +537,6 @@ function DocToolbar({
 
     if (editorRef.current) {
       styleAndLinkifyContainer(editorRef.current);
-      onFormat();
       onContentChange(editorRef.current.innerHTML);
     }
   };
@@ -283,7 +600,6 @@ function DocToolbar({
           }
         }
 
-        onFormat();
         onContentChange(editor.innerHTML);
       }
     };
@@ -300,119 +616,59 @@ function DocToolbar({
     recognition.start();
   };
 
-  const insertSamsungCheckbox = () => {
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return;
-    
-    let container: HTMLElement | null = selection.anchorNode as HTMLElement;
-    while (container && container !== document.body) {
-      if (container.nodeType === Node.ELEMENT_NODE && container.classList.contains('samsung-task-item')) {
-        const textSpan = container.querySelector('span');
-        const text = textSpan ? textSpan.innerHTML : '<br/>';
-        
-        const normalDiv = document.createElement('div');
-        normalDiv.innerHTML = text;
-        
-        container.parentNode?.insertBefore(normalDiv, container);
-        container.remove();
-        
-        const newRange = document.createRange();
-        newRange.selectNodeContents(normalDiv);
-        newRange.collapse(false);
-        selection.removeAllRanges();
-        selection.addRange(newRange);
-        onFormat();
-        if (editorRef.current) onContentChange(editorRef.current.innerHTML);
-        return;
-      }
-      container = container.parentElement;
-    }
-
-    const range = selection.getRangeAt(0);
-    const selectedText = selection.toString().trim();
-    const lines = selectedText ? selectedText.split(/\r?\n/).filter(l => l.trim() !== "") : [""];
-
-    const fragment = document.createDocumentFragment();
-    let firstSpan: HTMLElement | null = null;
-
-    lines.forEach((lineText) => {
-      const wrapper = document.createElement('div');
-      wrapper.className = 'flex items-start gap-2.5 my-1.5 group select-none samsung-task-item';
-      wrapper.innerHTML = `
-        <input 
-          type="checkbox" 
-          class="w-4 h-4 mt-1 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-600 shrink-0" 
-          onchange="
-            const textSpan = this.nextElementSibling;
-            if (this.checked) {
-              this.setAttribute('checked', 'checked');
-              textSpan.style.textDecoration = 'line-through';
-              textSpan.style.color = '#94a3b8';
-            } else {
-              this.removeAttribute('checked');
-              textSpan.style.textDecoration = 'none';
-              textSpan.style.color = '#1e293b';
-            }
-          "
-        />
-        <span 
-          contenteditable="true" 
-          class="outline-none border-b border-transparent focus:border-emerald-400 text-[#1e293b] flex-1 transition-colors min-h-[1.6em]"
-        >${lineText || '<br/>'}</span>
-      `;
-      if (!firstSpan) firstSpan = wrapper.querySelector('span');
-      fragment.appendChild(wrapper);
-    });
-
-    let block = selection.anchorNode as HTMLElement;
-    while (block && block.nodeType !== Node.ELEMENT_NODE) {
-      block = block.parentNode as HTMLElement;
-    }
-    
-    if (block && block.tagName === 'DIV' && block.textContent?.trim() === '' && !block.classList.contains('samsung-task-item')) {
-      block.parentNode?.replaceChild(fragment, block);
-    } else {
-      range.deleteContents();
-      range.insertNode(fragment);
-    }
-    
-    if (firstSpan) {
-      const newRange = document.createRange();
-      newRange.selectNodeContents(firstSpan);
-      newRange.collapse(false);
-      selection.removeAllRanges();
-      selection.addRange(newRange);
-    }
-    onFormat();
-    if (editorRef.current) onContentChange(editorRef.current.innerHTML);
-  };
+  if (isMobile && !isMobileEditing) {
+    return null;
+  }
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 bg-slate-50 border border-slate-200 p-2 rounded-lg text-slate-700 shadow-sm sticky top-0 z-20">
-      <button type="button" onClick={() => execCmd('undo')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Undo"><Undo2 className="w-4 h-4" /></button>
-      <button type="button" onClick={() => execCmd('redo')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Redo"><Redo2 className="w-4 h-4" /></button>
-      <div className="h-4 w-[1px] bg-slate-300 mx-1" />
-      <button type="button" onClick={() => execCmd('bold')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Bold"><Bold className="w-4 h-4" /></button>
-      <button type="button" onClick={() => execCmd('italic')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Italic"><Italic className="w-4 h-4" /></button>
-      <button type="button" onClick={() => execCmd('strikeThrough')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Strikethrough"><Strikethrough className="w-4 h-4" /></button>
-      <button type="button" onClick={insertLink} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Insert Link"><Link2 className="w-4 h-4" /></button>
-      <div className="h-4 w-[1px] bg-slate-300 mx-1" />
-      <button type="button" onClick={() => execCmd('justifyLeft')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Align Left"><AlignLeft className="w-4 h-4" /></button>
-      <button type="button" onClick={() => execCmd('justifyCenter')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Align Center"><AlignCenter className="w-4 h-4" /></button>
-      <button type="button" onClick={() => execCmd('justifyRight')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Align Right"><AlignRight className="w-4 h-4" /></button>
-      <button type="button" onClick={() => execCmd('justifyFull')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Justify"><AlignJustify className="w-4 h-4" /></button>
-      <div className="h-4 w-[1px] bg-slate-300 mx-1" />
-      <button type="button" onClick={() => execCmd('outdent')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Decrease Indent"><Outdent className="w-4 h-4" /></button>
-      <button type="button" onClick={() => execCmd('indent')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Increase Indent"><Indent className="w-4 h-4" /></button>
-      <div className="h-4 w-[1px] bg-slate-300 mx-1" />
-      <button type="button" onClick={() => execCmd('insertUnorderedList')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Bullet List"><List className="w-4 h-4" /></button>
-      <button type="button" onClick={() => execCmd('insertOrderedList')} className="p-1.5 hover:bg-slate-200 rounded transition-colors" title="Numbered List"><ListOrdered className="w-4 h-4" /></button>
-      <button type="button" onClick={insertSamsungCheckbox} className="p-1.5 hover:bg-slate-200 rounded transition-colors bg-white border border-slate-200 shadow-sm" title="Insert Checklist"><CheckSquare className="w-4 h-4" /></button>
+    <div
+      style={isMobile ? { bottom: `${keyboardOffset}px` } : undefined}
+      className={
+        isMobile
+          ? "fixed left-0 right-0 z-40 bg-slate-50/95 backdrop-blur-md border-t border-slate-200 px-2 py-1.5 shadow-[0_-4px_12px_rgba(0,0,0,0.08)] flex items-center gap-1 overflow-x-auto no-scrollbar"
+          : "flex flex-wrap items-center gap-1.5 bg-slate-50 border border-slate-200 p-2 rounded-lg text-slate-700 shadow-sm sticky top-0 z-20"
+      }
+    >
+      {isMobile && (
+        <>
+          <button
+            type="button"
+            onMouseDown={keepFocus}
+            onClick={onFinishMobileEdit}
+            className="p-2 bg-emerald-600 text-white rounded-md shrink-0 flex items-center gap-1 text-xs font-medium shadow-sm active:scale-95"
+            title="Done Editing"
+          >
+            <Check className="w-4 h-4" />
+          </button>
+          <div className="h-5 w-[1px] bg-slate-300 mx-1 shrink-0" />
+        </>
+      )}
+
+      <button type="button" onMouseDown={keepFocus} onClick={() => execCmd('undo')} className="p-2 md:p-1.5 hover:bg-slate-200 active:bg-slate-200 rounded transition-colors shrink-0" title="Undo"><Undo2 className="w-4 h-4" /></button>
+      <button type="button" onMouseDown={keepFocus} onClick={() => execCmd('redo')} className="p-2 md:p-1.5 hover:bg-slate-200 active:bg-slate-200 rounded transition-colors shrink-0" title="Redo"><Redo2 className="w-4 h-4" /></button>
+      <div className="h-4 w-[1px] bg-slate-300 mx-1 shrink-0" />
+      <button type="button" onMouseDown={keepFocus} onClick={() => execCmd('bold')} className="p-2 md:p-1.5 hover:bg-slate-200 active:bg-slate-200 rounded transition-colors shrink-0" title="Bold"><Bold className="w-4 h-4" /></button>
+      <button type="button" onMouseDown={keepFocus} onClick={() => execCmd('italic')} className="p-2 md:p-1.5 hover:bg-slate-200 active:bg-slate-200 rounded transition-colors shrink-0" title="Italic"><Italic className="w-4 h-4" /></button>
+      <button type="button" onMouseDown={keepFocus} onClick={() => execCmd('strikeThrough')} className="p-2 md:p-1.5 hover:bg-slate-200 active:bg-slate-200 rounded transition-colors shrink-0" title="Strikethrough"><Strikethrough className="w-4 h-4" /></button>
+      <button type="button" onMouseDown={keepFocus} onClick={insertLink} className="p-2 md:p-1.5 hover:bg-slate-200 active:bg-slate-200 rounded transition-colors shrink-0" title="Insert Link"><Link2 className="w-4 h-4" /></button>
+      <div className="h-4 w-[1px] bg-slate-300 mx-1 shrink-0" />
+      <button type="button" onMouseDown={keepFocus} onClick={() => handleToggleListType("checklist")} className="p-2 md:p-1.5 hover:bg-slate-200 active:bg-slate-200 rounded transition-colors shrink-0" title="Checklist"><CheckSquare className="w-4 h-4" /></button>
+      <button type="button" onMouseDown={keepFocus} onClick={() => handleToggleListType("bullet")} className="p-2 md:p-1.5 hover:bg-slate-200 active:bg-slate-200 rounded transition-colors shrink-0" title="Bullet List"><List className="w-4 h-4" /></button>
+      <button type="button" onMouseDown={keepFocus} onClick={() => handleToggleListType("numbered")} className="p-2 md:p-1.5 hover:bg-slate-200 active:bg-slate-200 rounded transition-colors shrink-0" title="Numbered List"><ListOrdered className="w-4 h-4" /></button>
+      <div className="h-4 w-[1px] bg-slate-300 mx-1 shrink-0" />
+      <button type="button" onMouseDown={keepFocus} onClick={() => execCmd('justifyLeft')} className="p-2 md:p-1.5 hover:bg-slate-200 active:bg-slate-200 rounded transition-colors shrink-0" title="Align Left"><AlignLeft className="w-4 h-4" /></button>
+      <button type="button" onMouseDown={keepFocus} onClick={() => execCmd('justifyCenter')} className="p-2 md:p-1.5 hover:bg-slate-200 active:bg-slate-200 rounded transition-colors shrink-0" title="Align Center"><AlignCenter className="w-4 h-4" /></button>
+      <button type="button" onMouseDown={keepFocus} onClick={() => execCmd('justifyRight')} className="p-2 md:p-1.5 hover:bg-slate-200 active:bg-slate-200 rounded transition-colors shrink-0" title="Align Right"><AlignRight className="w-4 h-4" /></button>
+      <button type="button" onMouseDown={keepFocus} onClick={() => execCmd('justifyFull')} className="p-2 md:p-1.5 hover:bg-slate-200 active:bg-slate-200 rounded transition-colors shrink-0" title="Justify"><AlignJustify className="w-4 h-4" /></button>
+      <div className="h-4 w-[1px] bg-slate-300 mx-1 shrink-0" />
+      <button type="button" onMouseDown={keepFocus} onClick={() => execCmd('outdent')} className="p-2 md:p-1.5 hover:bg-slate-200 active:bg-slate-200 rounded transition-colors shrink-0" title="Decrease Indent"><Outdent className="w-4 h-4" /></button>
+      <button type="button" onMouseDown={keepFocus} onClick={() => execCmd('indent')} className="p-2 md:p-1.5 hover:bg-slate-200 active:bg-slate-200 rounded transition-colors shrink-0" title="Increase Indent"><Indent className="w-4 h-4" /></button>
+      <div className="h-4 w-[1px] bg-slate-300 mx-1 shrink-0" />
       <button 
         type="button" 
-        onMouseDown={(e) => e.preventDefault()}
+        onMouseDown={keepFocus}
         onClick={toggleVoiceToText} 
-        className={`p-1.5 rounded transition-colors border shadow-sm flex items-center gap-1 ${
+        className={`p-2 md:p-1.5 rounded transition-colors border shadow-sm flex items-center gap-1 shrink-0 ${
           isListening 
             ? "bg-red-50 text-red-600 border-red-300 animate-pulse" 
             : "bg-white hover:bg-slate-200 border-slate-200 text-slate-700"
@@ -421,8 +677,8 @@ function DocToolbar({
       >
         {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
       </button>
-      <div className="h-4 w-[1px] bg-slate-300 mx-1" />
-      <select onChange={(e) => execCmd('fontName', e.target.value)} className="bg-white border border-slate-200 text-xs rounded px-2 py-1 outline-none hover:border-slate-300 cursor-pointer max-w-[90px] sm:max-w-none" defaultValue="Arial" title="Font Family">
+      <div className="h-4 w-[1px] bg-slate-300 mx-1 shrink-0" />
+      <select onChange={(e) => execCmd('fontName', e.target.value)} className="bg-white border border-slate-200 text-xs rounded px-2 py-1.5 md:py-1 outline-none hover:border-slate-300 cursor-pointer shrink-0" defaultValue="Arial" title="Font Family">
         <option value="Arial">Arial</option>
         <option value="Times New Roman">Times New Roman</option>
         <option value="Georgia">Georgia</option>
@@ -437,11 +693,10 @@ function DocToolbar({
           const parentEl = selection.anchorNode?.parentElement;
           if (parentEl) {
             (parentEl as HTMLElement).style.fontSize = e.target.value;
-            onFormat();
             if (editorRef.current) onContentChange(editorRef.current.innerHTML);
           }
         }} 
-        className="bg-white border border-slate-200 text-xs rounded px-2 py-1 outline-none hover:border-slate-300 cursor-pointer" 
+        className="bg-white border border-slate-200 text-xs rounded px-2 py-1.5 md:py-1 outline-none hover:border-slate-300 cursor-pointer shrink-0" 
         defaultValue="16px" 
         title="Font Size"
       >
@@ -457,188 +712,57 @@ function DocToolbar({
   );
 }
 
-// --- GOOGLE DOCS STYLE RESPONSIVE EDITOR WITH ROBUST PASTE & MOBILE LINK SUPPORT ---
-function WordPaginatedEditor({
+// --- SINGLE CONTINUOUS PAGELESS GOOGLE DOCS EDITOR ---
+function SinglePageDocEditor({
   docId,
   content,
   onChange,
   editorRef,
-  recalculateRef
+  isMobile,
+  isMobileEditing,
+  onMobileEditChange,
+  onClearSearchHighlights
 }: {
   docId: string;
   content: string;
   onChange: (html: string) => void;
   editorRef: React.RefObject<HTMLDivElement | null>;
-  recalculateRef: React.MutableRefObject<() => void>;
+  isMobile: boolean;
+  isMobileEditing: boolean;
+  onMobileEditChange: (editing: boolean) => void;
+  onClearSearchHighlights: () => void;
 }) {
-  const pageStackRef = useRef<HTMLDivElement>(null);
   const loadedDocIdRef = useRef<string | null>(null);
-  const prevIsMobileRef = useRef<boolean | null>(null);
-  const touchStartPosRef = useRef<{ x: number; y: number } | null>(null);
+  const touchStartPosRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const lastLinkOpenTimeRef = useRef<number>(0);
-
-  const [pageCount, setPageCount] = useState(1);
-  const [pageWidth, setPageWidth] = useState(A4_WIDTH_PX);
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
-  }, []);
-
-  const pageHeight = Math.round(pageWidth * A4_ASPECT_RATIO);
-  const pageMargin = Math.max(24, Math.round(pageWidth * (DESKTOP_MARGIN_PX / A4_WIDTH_PX)));
-  const pageStride = pageHeight + BOTTOM_GREY_BAR_PX;
-
-  const normalizeRootTextNodes = useCallback(() => {
-    const editor = editorRef.current;
-    if (!editor || isMobile) return;
-
-    const sel = window.getSelection();
-    const childNodes = Array.from(editor.childNodes);
-
-    childNodes.forEach((node) => {
-      if (node.nodeType === Node.TEXT_NODE && (node.textContent || "").length > 0) {
-        const isFocused = sel && sel.rangeCount > 0 && sel.anchorNode === node;
-        const offset = isFocused ? sel.anchorOffset : 0;
-
-        const div = document.createElement("div");
-        editor.insertBefore(div, node);
-        div.appendChild(node);
-
-        if (isFocused && sel) {
-          const range = document.createRange();
-          range.setStart(node, offset);
-          range.collapse(true);
-          sel.removeAllRanges();
-          sel.addRange(range);
-        }
-      }
-    });
-  }, [editorRef, isMobile]);
-
-  const recalculatePages = useCallback(() => {
-    if (isMobile) return;
-    const editor = editorRef.current;
-    const stack = pageStackRef.current;
-    if (!editor || !stack || pageHeight < 100) return;
-
-    normalizeRootTextNodes();
-
-    const prevPushed = editor.querySelectorAll<HTMLElement>('[data-page-break="true"]');
-    prevPushed.forEach((el) => {
-      el.style.removeProperty("margin-top");
-      el.removeAttribute("data-page-break");
-    });
-
-    const stackRect = stack.getBoundingClientRect();
-
-    const getBlocks = (): HTMLElement[] => {
-      const list: HTMLElement[] = [];
-      Array.from(editor.children).forEach((child) => {
-        const el = child as HTMLElement;
-        if (el.tagName === "UL" || el.tagName === "OL") {
-          Array.from(el.children).forEach((li) => {
-            if (li instanceof HTMLElement) list.push(li);
-          });
-        } else {
-          list.push(el);
-        }
-      });
-      return list;
-    };
-
-    let blocks = getBlocks();
-    let maxPageIdx = 0;
-
-    for (let i = 0; i < blocks.length; i++) {
-      const el = blocks[i];
-      const rect = el.getBoundingClientRect();
-      const elTop = rect.top - stackRect.top;
-      const elBottom = rect.bottom - stackRect.top;
-
-      const pageIdx = Math.max(0, Math.floor(elTop / pageStride));
-      const pagePrintableTop = pageIdx * pageStride + pageMargin;
-      const pagePrintableBottom = pageIdx * pageStride + (pageHeight - pageMargin);
-
-      if (elBottom > pagePrintableBottom) {
-        if (elTop > pagePrintableTop + 32) {
-          const nextPageIdx = pageIdx + 1;
-          const nextPagePrintableTop = nextPageIdx * pageStride + pageMargin;
-          const pushAmount = Math.ceil(nextPagePrintableTop - elTop);
-
-          el.style.marginTop = `${pushAmount}px`;
-          el.setAttribute("data-page-break", "true");
-          maxPageIdx = Math.max(maxPageIdx, nextPageIdx);
-        }
-      } else {
-        maxPageIdx = Math.max(maxPageIdx, pageIdx);
-      }
-    }
-
-    if (blocks.length > 0) {
-      const lastEl = blocks[blocks.length - 1];
-      const lastBottom = lastEl.getBoundingClientRect().bottom - stackRect.top;
-      const lastPageIdx = Math.max(0, Math.floor((lastBottom - 4) / pageStride));
-      maxPageIdx = Math.max(maxPageIdx, lastPageIdx);
-    }
-
-    setPageCount(maxPageIdx + 1);
-  }, [editorRef, normalizeRootTextNodes, pageHeight, pageMargin, pageStride, isMobile]);
-
-  useEffect(() => {
-    recalculateRef.current = recalculatePages;
-  }, [recalculatePages, recalculateRef]);
-
-  useEffect(() => {
-    const stack = pageStackRef.current;
-    if (!stack) return;
-
-    const updateWidth = () => {
-      const w = stack.clientWidth;
-      if (w > 0) {
-        setPageWidth(Math.min(A4_WIDTH_PX, w));
-      }
-    };
-
-    updateWidth();
-    const ro = new ResizeObserver(updateWidth);
-    ro.observe(stack);
-    return () => ro.disconnect();
-  }, []);
 
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor) return;
 
     const isDifferentDoc = loadedDocIdRef.current !== docId;
-    const didModeSwitch = prevIsMobileRef.current !== isMobile;
+    const currentCleanHtml = stripSearchHighlightsFromHtml(editor.innerHTML);
 
     if (
       isDifferentDoc ||
-      didModeSwitch ||
       editor.innerHTML === "" ||
-      (content !== editor.innerHTML && document.activeElement !== editor)
+      (content !== currentCleanHtml && document.activeElement !== editor)
     ) {
       loadedDocIdRef.current = docId;
-      prevIsMobileRef.current = isMobile;
       if (content && !content.trim().startsWith("<")) {
         editor.innerHTML = `<div>${content}</div>`;
       } else {
         editor.innerHTML = content || "<div><br/></div>";
       }
-      styleAndLinkifyContainer(editor);
-      if (!isMobile) requestAnimationFrame(() => recalculatePages());
-    }
-  }, [docId, content, editorRef, recalculatePages, isMobile]);
 
-  useEffect(() => {
-    if (!isMobile) requestAnimationFrame(() => recalculatePages());
-  }, [pageWidth, recalculatePages, isMobile]);
+      editor.querySelectorAll<HTMLElement>('[data-page-break="true"]').forEach((el) => {
+        el.style.removeProperty("margin-top");
+        el.removeAttribute("data-page-break");
+      });
+
+      styleAndLinkifyContainer(editor);
+    }
+  }, [docId, content, editorRef]);
 
   const handleInput = (e: React.FormEvent<HTMLDivElement>) => {
     const editor = editorRef.current;
@@ -667,7 +791,6 @@ function WordPaginatedEditor({
       }
     }
 
-    if (!isMobile) recalculatePages();
     onChange(editor.innerHTML);
   };
 
@@ -675,7 +798,8 @@ function WordPaginatedEditor({
     if (e.touches.length === 1) {
       touchStartPosRef.current = {
         x: e.touches[0].clientX,
-        y: e.touches[0].clientY
+        y: e.touches[0].clientY,
+        time: Date.now()
       };
     } else {
       touchStartPosRef.current = null;
@@ -687,11 +811,17 @@ function WordPaginatedEditor({
 
     const dx = Math.abs(e.changedTouches[0].clientX - touchStartPosRef.current.x);
     const dy = Math.abs(e.changedTouches[0].clientY - touchStartPosRef.current.y);
+    const duration = Date.now() - touchStartPosRef.current.time;
     touchStartPosRef.current = null;
 
-    if (dx > 10 || dy > 10) return;
+    if (dx > 10 || dy > 10 || duration > 450) return;
 
     const target = e.target as HTMLElement;
+
+    if (target.tagName === "INPUT" && (target as HTMLInputElement).type === "checkbox") {
+      return;
+    }
+
     const anchor = target.closest("a") as HTMLAnchorElement | null;
     if (anchor) {
       const rawHref = anchor.getAttribute("href") || anchor.textContent || "";
@@ -700,8 +830,18 @@ function WordPaginatedEditor({
         e.stopPropagation();
         lastLinkOpenTimeRef.current = Date.now();
         editorRef.current?.blur();
+        onMobileEditChange(false);
         openExternalLink(rawHref);
       }
+      return;
+    }
+
+    if (isMobile && !isMobileEditing) {
+      onClearSearchHighlights();
+      onMobileEditChange(true);
+      requestAnimationFrame(() => {
+        editorRef.current?.focus();
+      });
     }
   };
 
@@ -723,7 +863,7 @@ function WordPaginatedEditor({
       if (rawHref) {
         openExternalLink(rawHref);
       }
-    } else {
+    } else if (!isMobile) {
       editorRef.current?.focus();
     }
   };
@@ -797,7 +937,6 @@ function WordPaginatedEditor({
     selection.addRange(range);
 
     onChange(editor.innerHTML);
-    if (!isMobile) recalculatePages();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -812,12 +951,7 @@ function WordPaginatedEditor({
           const span = container.querySelector('span');
           if (selection.anchorNode === span || selection.anchorNode === span?.firstChild) {
             e.preventDefault();
-            const text = span ? span.innerHTML : '<br/>';
-            const normalDiv = document.createElement('div');
-            normalDiv.innerHTML = text;
-            
-            container.parentNode?.insertBefore(normalDiv, container);
-            container.remove();
+            const normalDiv = unwrapTaskItemToDiv(container);
             
             const range = document.createRange();
             range.setStart(normalDiv, 0);
@@ -850,10 +984,7 @@ function WordPaginatedEditor({
         const textValue = textSpan ? textSpan.innerText.trim() : "";
 
         if (textValue === "") {
-          const normalDiv = document.createElement('div');
-          normalDiv.innerHTML = "<br/>";
-          container.parentNode?.insertBefore(normalDiv, container.nextSibling);
-          container.remove();
+          const normalDiv = unwrapTaskItemToDiv(container);
 
           const range = document.createRange();
           range.setStart(normalDiv, 0);
@@ -865,31 +996,7 @@ function WordPaginatedEditor({
           return;
         }
 
-        const newTaskWrapper = document.createElement('div');
-        newTaskWrapper.className = 'flex items-start gap-2.5 my-1.5 group select-none samsung-task-item';
-        newTaskWrapper.innerHTML = `
-          <input 
-            type="checkbox" 
-            class="w-4 h-4 mt-1 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-600 shrink-0" 
-            onchange="
-              const textSpan = this.nextElementSibling;
-              if (this.checked) {
-                this.setAttribute('checked', 'checked');
-                textSpan.style.textDecoration = 'line-through';
-                textSpan.style.color = '#94a3b8';
-              } else {
-                this.removeAttribute('checked');
-                textSpan.style.textDecoration = 'none';
-                textSpan.style.color = '#1e293b';
-              }
-            "
-          />
-          <span 
-            contenteditable="true" 
-            class="outline-none border-b border-transparent focus:border-emerald-400 text-[#1e293b] flex-1 transition-colors min-h-[1.6em]"
-          ><br/></span>
-        `;
-
+        const newTaskWrapper = createTaskItemElement("<br/>", false);
         container.parentNode?.insertBefore(newTaskWrapper, container.nextSibling);
 
         const newSpan = newTaskWrapper.querySelector('span');
@@ -902,111 +1009,54 @@ function WordPaginatedEditor({
         }
 
         onChange(editorRef.current?.innerHTML || "");
-        return;
       }
     }
-
-    if (!isMobile && e.key === "Enter") {
-      requestAnimationFrame(() => recalculatePages());
-    }
   };
-
-  const totalStackHeight = isMobile ? undefined : pageCount * pageStride;
 
   return (
     <div 
       onClick={handleClick}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
-      className="h-[65vh] md:h-[70vh] w-full bg-white overflow-y-auto overflow-x-hidden cursor-text"
+      className={
+        isMobile
+          ? "min-h-[calc(100dvh-180px)] w-full bg-white overflow-x-hidden pb-24"
+          : "h-[70vh] w-full bg-white overflow-y-auto overflow-x-hidden cursor-text"
+      }
     >
-      {isMobile ? (
-        <div className="w-full min-h-full bg-white p-6">
-          <div
-            ref={editorRef}
-            contentEditable
-            onInput={handleInput}
-            onPaste={handlePaste}
-            onKeyDown={handleKeyDown}
-            suppressContentEditableWarning
-            style={{
-              fontFamily: "Arial, sans-serif",
-              fontSize: "16px",
-              lineHeight: "1.6",
-              color: "#1e293b",
-              WebkitTextSizeAdjust: "100%",
-              textSizeAdjust: "100%",
-              minHeight: "100%"
-            }}
-            className="
-              w-full outline-none text-[#1e293b] cursor-text break-words
-              empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400/60
-              [&>div]:min-h-[1.6em] [&>p]:min-h-[1.6em] [&_li]:min-h-[1.6em]
-              [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6
-              [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_strike]:line-through [&_s]:line-through
-              [&_a]:text-blue-600 [&_a]:underline [&_a]:cursor-pointer hover:[&_a]:text-blue-800
-            "
-            data-placeholder="Start typing your document..."
-          />
-        </div>
-      ) : (
+      <div className="w-full min-h-full bg-white px-4 py-4 md:px-14 md:py-10 max-w-[820px] mx-auto">
         <div
-          ref={pageStackRef}
-          style={{ minHeight: `${totalStackHeight}px` }}
-          className="relative mx-auto w-full max-w-[794px] bg-white"
-        >
-          <div className="absolute inset-0 pointer-events-none z-0 flex flex-col">
-            {Array.from({ length: pageCount }).map((_, idx) => (
-              <div key={idx} className="w-full shrink-0 flex flex-col">
-                <div
-                  style={{ height: `${pageHeight}px` }}
-                  className="w-full bg-white relative border-x border-slate-200/80"
-                >
-                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[11px] font-sans text-slate-400 select-none">
-                    Page {idx + 1} of {pageCount}
-                  </div>
-                </div>
-
-                <div
-                  style={{ height: `${BOTTOM_GREY_BAR_PX}px` }}
-                  className="w-full bg-slate-200/80 border-t border-b border-slate-300 shadow-[inset_0_3px_5px_-2px_rgba(0,0,0,0.12)]"
-                />
-              </div>
-            ))}
-          </div>
-
-          <div
-            ref={editorRef}
-            contentEditable
-            onInput={handleInput}
-            onPaste={handlePaste}
-            onKeyDown={handleKeyDown}
-            suppressContentEditableWarning
-            style={{
-              fontFamily: "Arial, sans-serif",
-              fontSize: "16px",
-              lineHeight: "1.6",
-              color: "#1e293b",
-              WebkitTextSizeAdjust: "100%",
-              textSizeAdjust: "100%",
-              paddingTop: `${pageMargin}px`,
-              paddingBottom: `${pageMargin + BOTTOM_GREY_BAR_PX}px`,
-              paddingLeft: `${pageMargin}px`,
-              paddingRight: `${pageMargin}px`,
-              minHeight: `${totalStackHeight}px`
-            }}
-            className="
-              relative z-10 w-full outline-none text-[#1e293b] cursor-text break-words
-              empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400/60
-              [&>div]:min-h-[1.6em] [&>p]:min-h-[1.6em] [&_li]:min-h-[1.6em]
-              [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6
-              [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_strike]:line-through [&_s]:line-through
-              [&_a]:text-blue-600 [&_a]:underline [&_a]:cursor-pointer hover:[&_a]:text-blue-800
-            "
-            data-placeholder="Start typing your document..."
-          />
-        </div>
-      )}
+          ref={editorRef}
+          contentEditable
+          inputMode={isMobile && !isMobileEditing ? "none" : "text"}
+          onFocus={() => {
+            onClearSearchHighlights();
+            if (isMobile) onMobileEditChange(true);
+          }}
+          onInput={handleInput}
+          onPaste={handlePaste}
+          onKeyDown={handleKeyDown}
+          suppressContentEditableWarning
+          style={{
+            fontFamily: "Arial, sans-serif",
+            fontSize: "16px",
+            lineHeight: "1.65",
+            color: "#1e293b",
+            WebkitTextSizeAdjust: "100%",
+            textSizeAdjust: "100%",
+            minHeight: "60vh"
+          }}
+          className="
+            w-full outline-none text-[#1e293b] cursor-text break-words
+            empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400/60
+            [&>div]:min-h-[1.65em] [&>p]:min-h-[1.65em] [&_li]:min-h-[1.65em]
+            [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6
+            [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_strike]:line-through [&_s]:line-through
+            [&_a]:text-blue-600 [&_a]:underline [&_a]:cursor-pointer hover:[&_a]:text-blue-800 [&_a]:py-0.5
+          "
+          data-placeholder={isMobile ? "Tap to start typing..." : "Start typing your document..."}
+        />
+      </div>
     </div>
   );
 }
@@ -1060,16 +1110,164 @@ export default function WeddingDocsPage() {
   const [docLoading, setDocLoading] = useState(true);
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isMobile, setIsMobile] = useState(false);
+  const [isMobileEditing, setIsMobileEditing] = useState(false);
+
+  const [isDocSearchOpen, setIsDocSearchOpen] = useState(false);
+  const [docSearchTerm, setDocSearchTerm] = useState("");
+  const [matchCount, setMatchCount] = useState(0);
+  const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
+  const docSearchInputRef = useRef<HTMLInputElement | null>(null);
 
   const editorRef = useRef<HTMLDivElement | null>(null);
   const titleRef = useRef<HTMLDivElement | null>(null);
-  const recalculateRef = useRef<() => void>(() => {});
 
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const isResizingRef = useRef(false);
 
   const pendingUpdates = useRef<Record<string, Partial<DocItem>>>({});
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        setIsDocSearchOpen(true);
+        setIsMobileEditing(false);
+        setTimeout(() => {
+          docSearchInputRef.current?.focus();
+          docSearchInputRef.current?.select();
+        }, 50);
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, []);
+
+  const highlightActiveMatch = useCallback((index: number) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const marks = Array.from(editor.querySelectorAll<HTMLElement>('mark[data-doc-search="true"]'));
+    marks.forEach((mark, idx) => {
+      if (idx === index) {
+        mark.style.backgroundColor = "#f59e0b";
+        mark.style.color = "#ffffff";
+        mark.style.borderRadius = "3px";
+        mark.style.padding = "0 2px";
+        mark.scrollIntoView({ behavior: "smooth", block: "center" });
+      } else {
+        mark.style.backgroundColor = "#fef08a";
+        mark.style.color = "#1e293b";
+        mark.style.borderRadius = "3px";
+        mark.style.padding = "0 2px";
+      }
+    });
+  }, []);
+
+  const runInDocSearch = useCallback((term: string) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    clearSearchHighlightsInDom(editor);
+
+    const trimmed = term.trim();
+    if (!trimmed) {
+      setMatchCount(0);
+      setCurrentMatchIndex(0);
+      return;
+    }
+
+    const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(escaped, "gi");
+
+    const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT, null);
+    const textNodes: Text[] = [];
+    let current = walker.nextNode();
+    while (current) {
+      if ((current.textContent || "").trim().length > 0) {
+        textNodes.push(current as Text);
+      }
+      current = walker.nextNode();
+    }
+
+    let totalMatches = 0;
+
+    textNodes.forEach((textNode) => {
+      const text = textNode.textContent || "";
+      regex.lastIndex = 0;
+      if (!regex.test(text)) return;
+
+      regex.lastIndex = 0;
+      const frag = document.createDocumentFragment();
+      let lastIndex = 0;
+      let match: RegExpExecArray | null;
+
+      while ((match = regex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+          frag.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
+        }
+        const mark = document.createElement("mark");
+        mark.setAttribute("data-doc-search", "true");
+        mark.textContent = match[0];
+        frag.appendChild(mark);
+        totalMatches++;
+        lastIndex = match.index + match[0].length;
+      }
+
+      if (lastIndex < text.length) {
+        frag.appendChild(document.createTextNode(text.slice(lastIndex)));
+      }
+
+      textNode.parentNode?.replaceChild(frag, textNode);
+    });
+
+    setMatchCount(totalMatches);
+    if (totalMatches > 0) {
+      setCurrentMatchIndex(0);
+      highlightActiveMatch(0);
+    } else {
+      setCurrentMatchIndex(0);
+    }
+  }, [highlightActiveMatch]);
+
+  useEffect(() => {
+    if (!isDocSearchOpen) {
+      clearSearchHighlightsInDom(editorRef.current);
+      setMatchCount(0);
+      setCurrentMatchIndex(0);
+      return;
+    }
+    runInDocSearch(docSearchTerm);
+  }, [docSearchTerm, isDocSearchOpen, selectedDocId, runInDocSearch]);
+
+  const goToNextMatch = () => {
+    if (matchCount === 0) return;
+    const nextIdx = (currentMatchIndex + 1) % matchCount;
+    setCurrentMatchIndex(nextIdx);
+    highlightActiveMatch(nextIdx);
+  };
+
+  const goToPrevMatch = () => {
+    if (matchCount === 0) return;
+    const prevIdx = (currentMatchIndex - 1 + matchCount) % matchCount;
+    setCurrentMatchIndex(prevIdx);
+    highlightActiveMatch(prevIdx);
+  };
+
+  const closeDocSearch = () => {
+    setIsDocSearchOpen(false);
+    setDocSearchTerm("");
+    clearSearchHighlightsInDom(editorRef.current);
+  };
 
   const startResizing = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -1103,7 +1301,6 @@ export default function WeddingDocsPage() {
       if (!error && data) {
         const openedMap = getStoredLastOpenedMap();
 
-        // Sort by latest opened first (localStorage -> DB last_opened_at -> updated_at -> created_at)
         const sortedDocs = [...(data as DocItem[])].sort((a, b) => {
           const aOpenTime = Math.max(
             openedMap[a.id] || 0,
@@ -1165,10 +1362,11 @@ export default function WeddingDocsPage() {
     const nowMs = Date.now();
     const nowIso = new Date(nowMs).toISOString();
 
+    clearSearchHighlightsInDom(editorRef.current);
     setSelectedDocId(docId);
+    setIsMobileEditing(false);
     saveLastOpenedTimestamp(docId, nowMs);
 
-    // Move the opened document to the top of the list without altering its "Last updated" timestamp
     setDocs((prev) => {
       const target = prev.find((d) => d.id === docId);
       if (!target) return prev;
@@ -1208,6 +1406,7 @@ export default function WeddingDocsPage() {
     const nowMs = Date.now();
     const now = new Date(nowMs).toISOString();
 
+    closeDocSearch();
     const newDoc = { title: newTitle, content: '<div><br/></div>', created_at: now };
     const { data, error } = await supabase.from('wedding_docs').insert([newDoc]).select().single();
 
@@ -1224,6 +1423,7 @@ export default function WeddingDocsPage() {
     }
     setIsMobileDrawerOpen(false);
     setSearchQuery("");
+    setIsMobileEditing(true);
     
     setTimeout(() => {
       editorRef.current?.focus();
@@ -1231,6 +1431,11 @@ export default function WeddingDocsPage() {
   };
 
   const updateDoc = (id: string, updates: Partial<DocItem>) => {
+    const cleanUpdates: Partial<DocItem> = { ...updates };
+    if (typeof cleanUpdates.content === "string") {
+      cleanUpdates.content = stripSearchHighlightsFromHtml(cleanUpdates.content);
+    }
+
     const nowMs = Date.now();
     const now = new Date(nowMs).toISOString();
     saveLastOpenedTimestamp(id, nowMs);
@@ -1244,13 +1449,12 @@ export default function WeddingDocsPage() {
       ...(hasLastOpenedColumn ? { last_opened_at: now } : {})
     };
 
-    // Update the document and keep it at the top of the list
     setDocs(prev => {
       const target = prev.find(d => d.id === id);
       if (!target) return prev;
       const updatedDoc: DocItem = {
         ...target,
-        ...updates,
+        ...cleanUpdates,
         ...dbTimestampUpdate,
         updated_at: now
       };
@@ -1261,7 +1465,7 @@ export default function WeddingDocsPage() {
 
     pendingUpdates.current[id] = {
       ...pendingUpdates.current[id],
-      ...updates,
+      ...cleanUpdates,
       ...dbTimestampUpdate
     };
 
@@ -1301,9 +1505,9 @@ export default function WeddingDocsPage() {
 
   const handlePrint = () => {
     if (!activeDoc) return;
-    recalculateRef.current();
 
-    const liveHtml = editorRef.current ? editorRef.current.innerHTML : (activeDoc.content || '');
+    const rawLiveHtml = editorRef.current ? editorRef.current.innerHTML : (activeDoc.content || '');
+    const cleanLiveHtml = stripSearchHighlightsFromHtml(rawLiveHtml);
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
@@ -1321,12 +1525,12 @@ export default function WeddingDocsPage() {
           <style>
             @page { 
               size: A4 portrait; 
-              margin: 20mm;
+              margin: 20mm 20mm 22mm 20mm;
               @bottom-center {
                 content: "Page " counter(page) " of " counter(pages);
                 font-family: Arial, sans-serif;
                 font-size: 11px;
-                color: #94a3b8;
+                color: #64748b;
               }
             }
             * {
@@ -1372,11 +1576,6 @@ export default function WeddingDocsPage() {
             .content a { color: #2563eb; text-decoration: underline; }
             input[type="checkbox"] { margin-right: 10px; transform: scale(1.1); accent-color: #059669; }
             .samsung-task-item { display: flex; align-items: center; margin: 6px 0; }
-            [data-page-break="true"] {
-              page-break-before: always !important;
-              break-before: page !important;
-              margin-top: 0 !important;
-            }
           </style>
         </head>
         <body>
@@ -1384,7 +1583,7 @@ export default function WeddingDocsPage() {
             <h1>${activeDoc.title || 'Untitled Document'}</h1>
             <div class="date">Last updated: ${formattedDate}</div>
           </div>
-          <div class="content">${liveHtml}</div>
+          <div class="content">${cleanLiveHtml}</div>
           <script>
             window.onload = () => { 
               setTimeout(() => {
@@ -1402,61 +1601,185 @@ export default function WeddingDocsPage() {
   if (docLoading) return <div className="p-12 text-center text-emerald-600 font-bold">Loading Documents...</div>;
 
   return (
-    <div className="p-2 sm:p-4 md:p-8 max-w-7xl mx-auto min-h-screen space-y-4 md:space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-        <div>
-          <h1 className="font-serif text-3xl font-bold text-emerald-900 flex items-center gap-3">
-            <FileText className="w-8 h-8 text-emerald-600" /> Wedding Documents
-          </h1>
-          <p className="mt-2 text-slate-500">
-            Manage itineraries, notes, and planning guides.
-          </p>
-          <div className="mt-2.5 flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => addDoc()} className="md:hidden border-emerald-200 text-emerald-800 gap-1.5 h-8 text-xs font-medium">
-              <FilePlusCornerIcon className="w-4 h-4 text-emerald-700" /> New Document
+    <div className="p-0 sm:p-4 md:p-8 max-w-7xl mx-auto min-h-screen space-y-2 md:space-y-6 bg-white md:bg-transparent">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 md:gap-4 px-4 pt-3 pb-2 md:p-0 md:mb-8 border-b md:border-none border-slate-100">
+        <div className="w-full md:w-auto flex items-center justify-between md:block">
+          <div>
+            <h1 className="font-serif text-xl md:text-3xl font-bold text-emerald-900 flex items-center gap-2 md:gap-3">
+              <FileText className="w-5 h-5 md:w-8 md:h-8 text-emerald-600" /> Wedding Documents
+            </h1>
+            <p className="hidden md:block mt-2 text-slate-500">
+              Manage itineraries, notes, and planning guides.
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 md:hidden">
+            <Button variant="outline" size="sm" onClick={() => addDoc()} className="border-emerald-200 text-emerald-800 gap-1 h-8 px-2.5 text-xs font-medium">
+              <FilePlusCornerIcon className="w-3.5 h-3.5 text-emerald-700" /> New
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setIsMobileDrawerOpen(true)} className="md:hidden border-emerald-200 text-emerald-800 gap-1.5 h-8 text-xs font-medium">
-              <BookOpen className="w-4 h-4 text-emerald-700" /> All Documents
+            <Button variant="outline" size="sm" onClick={() => setIsMobileDrawerOpen(true)} className="border-emerald-200 text-emerald-800 gap-1 h-8 px-2.5 text-xs font-medium">
+              <BookOpen className="w-3.5 h-3.5 text-emerald-700" /> Docs
             </Button>
           </div>
         </div>
       </div>
 
       <div className="flex flex-col md:flex-row gap-4 md:gap-6 relative items-start">
-        <div className="flex-1 min-w-0 w-full bg-white rounded-xl shadow-md border border-slate-200 p-2 sm:p-4 md:p-6 flex flex-col">
+        <div className="flex-1 min-w-0 w-full bg-white md:rounded-xl md:shadow-md md:border md:border-slate-200 p-0 md:p-6 flex flex-col">
           {activeDoc ? (
-            <div className="flex flex-col space-y-3">
-              <div className="flex items-start justify-between pb-2 border-b border-slate-100 gap-2">
+            <div className="flex flex-col md:space-y-3">
+              <div className="flex items-start justify-between px-4 py-2.5 md:px-0 md:py-0 md:pb-2 border-b border-slate-100 gap-2 sticky top-0 bg-white/95 backdrop-blur-sm z-20 md:static">
                 <div className="flex-1 min-w-0">
                   <EditableTitle 
                     titleRef={titleRef}
                     value={activeDoc.title} 
                     onChange={(val) => updateDoc(activeDoc.id, { title: val })} 
                   />
-                  <div className="text-[10px] md:text-[11px] text-slate-400 mt-1 truncate">
+                  <div className="text-[10px] md:text-[11px] text-slate-400 mt-0.5 md:mt-1 truncate">
                     Last updated: {new Date(activeDoc.updated_at || activeDoc.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                   </div>
                 </div>
-                <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5 border-slate-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-300 shrink-0 h-8 text-xs font-medium transition-colors" title="Print & Preview">
-                  <Printer className="w-3.5 h-3.5 text-emerald-600" /> Print
-                </Button>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (isDocSearchOpen) {
+                        closeDocSearch();
+                      } else {
+                        setIsDocSearchOpen(true);
+                        setIsMobileEditing(false);
+                        setTimeout(() => {
+                          docSearchInputRef.current?.focus();
+                        }, 50);
+                      }
+                    }}
+                    className={`gap-1.5 border-slate-200 h-8 px-2.5 text-xs font-medium transition-colors ${
+                      isDocSearchOpen
+                        ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                        : "text-slate-700 hover:bg-slate-50"
+                    }`}
+                    title="Find in Document"
+                  >
+                    <Search className="w-3.5 h-3.5 text-emerald-600" />
+                    <span className="hidden sm:inline">Find</span>
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5 border-slate-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-300 shrink-0 h-8 px-2.5 text-xs font-medium transition-colors" title="Print & Preview">
+                    <Printer className="w-3.5 h-3.5 text-emerald-600" /> <span className="hidden sm:inline">Print</span>
+                  </Button>
+                </div>
               </div>
+
+              {isDocSearchOpen && (
+                <div className="flex items-center gap-2 px-4 py-2 md:px-3 md:py-2 bg-emerald-50/70 border-b md:border border-emerald-200 md:rounded-lg sticky top-[58px] md:static z-20">
+                  <Search className="w-4 h-4 text-emerald-700 shrink-0" />
+                  <input
+                    ref={docSearchInputRef}
+                    type="text"
+                    value={docSearchTerm}
+                    onChange={(e) => setDocSearchTerm(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        if (e.shiftKey) {
+                          goToPrevMatch();
+                        } else {
+                          goToNextMatch();
+                        }
+                      } else if (e.key === "Escape") {
+                        closeDocSearch();
+                      }
+                    }}
+                    placeholder="Find in this document..."
+                    className="flex-1 min-w-0 bg-white border border-emerald-200 rounded px-2.5 py-1 text-xs md:text-sm text-slate-800 outline-none focus:border-emerald-500"
+                  />
+                  <span className="text-[11px] font-medium text-slate-500 shrink-0 min-w-[54px] text-center">
+                    {docSearchTerm.trim()
+                      ? matchCount > 0
+                        ? `${currentMatchIndex + 1} of ${matchCount}`
+                        : "0 of 0"
+                      : ""}
+                  </span>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={goToPrevMatch}
+                      disabled={matchCount === 0}
+                      className="p-1 rounded hover:bg-emerald-100 disabled:opacity-40 text-slate-700"
+                      title="Previous Match"
+                    >
+                      <ChevronUp className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={goToNextMatch}
+                      disabled={matchCount === 0}
+                      className="p-1 rounded hover:bg-emerald-100 disabled:opacity-40 text-slate-700"
+                      title="Next Match"
+                    >
+                      <ChevronDown className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={closeDocSearch}
+                      className="p-1 rounded hover:bg-emerald-100 text-slate-600 ml-0.5"
+                      title="Close Search"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <DocToolbar 
-                onFormat={() => recalculateRef.current()} 
                 editorRef={editorRef}
                 onContentChange={(val) => updateDoc(activeDoc.id, { content: val })}
+                isMobile={isMobile}
+                isMobileEditing={isMobileEditing}
+                onFinishMobileEdit={() => {
+                  setIsMobileEditing(false);
+                  editorRef.current?.blur();
+                }}
               />
 
-              <div className="w-full rounded-lg border border-slate-200 overflow-hidden bg-white">
-                <WordPaginatedEditor
+              <div className="w-full md:rounded-lg md:border md:border-slate-200 overflow-hidden bg-white">
+                <SinglePageDocEditor
                   docId={activeDoc.id}
                   editorRef={editorRef}
-                  recalculateRef={recalculateRef}
                   content={activeDoc.content || ""}
                   onChange={(val) => updateDoc(activeDoc.id, { content: val })}
+                  isMobile={isMobile}
+                  isMobileEditing={isMobileEditing}
+                  onMobileEditChange={setIsMobileEditing}
+                  onClearSearchHighlights={() => {
+                    if (isDocSearchOpen) closeDocSearch();
+                  }}
                 />
               </div>
+
+              {isMobile && !isMobileEditing && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isDocSearchOpen) closeDocSearch();
+                    setIsMobileEditing(true);
+                    requestAnimationFrame(() => {
+                      const editor = editorRef.current;
+                      if (!editor) return;
+                      editor.focus();
+                      const range = document.createRange();
+                      range.selectNodeContents(editor);
+                      range.collapse(false);
+                      const sel = window.getSelection();
+                      sel?.removeAllRanges();
+                      sel?.addRange(range);
+                    });
+                  }}
+                  className="fixed bottom-6 right-5 z-30 w-13 h-13 p-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white shadow-lg flex items-center justify-center transition-all"
+                  title="Edit Document"
+                >
+                  <Pencil className="w-5 h-5" />
+                </button>
+              )}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-[65vh] text-slate-400 italic text-center px-4">
@@ -1476,7 +1799,7 @@ export default function WeddingDocsPage() {
           </div>
           <div className="relative mb-3">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
-            <input type="text" placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-700 focus:outline-none focus:border-emerald-400" />
+            <input type="text" placeholder="Search all docs..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-700 focus:outline-none focus:border-emerald-400" />
           </div>
           <div className="flex-1 overflow-auto space-y-1 pr-1">
             {filteredDocs.map((doc) => (
@@ -1505,7 +1828,7 @@ export default function WeddingDocsPage() {
               </div>
               <div className="relative mb-3">
                 <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
-                <input type="text" placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-700 focus:outline-none focus:border-emerald-400" />
+                <input type="text" placeholder="Search all docs..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-700 focus:outline-none focus:border-emerald-400" />
               </div>
               <div className="flex-1 overflow-auto space-y-1 pr-1">
                 {filteredDocs.map((doc) => (
@@ -1514,7 +1837,6 @@ export default function WeddingDocsPage() {
                     onClick={() => { 
                       handleSelectDoc(doc.id); 
                       setIsMobileDrawerOpen(false);
-                      setTimeout(() => editorRef.current?.focus(), 50);
                     }} 
                     className={`group flex items-center justify-between p-3 rounded-lg cursor-pointer text-sm transition-all ${selectedDocId === doc.id ? 'bg-emerald-50 text-emerald-900 font-semibold border border-emerald-200 shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
                   >
