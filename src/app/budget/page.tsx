@@ -72,7 +72,7 @@ export default function BudgetPage() {
         <div>
           <h1 className="font-serif text-3xl font-bold text-emerald-900 flex items-center gap-3">
             <IndianRupee className="w-8 h-8 text-emerald-600" />
-            Budget & Expenses
+            Budget & Exp.
           </h1>
           <p className="text-slate-500 mt-1">Live overview of your wedding expenses.</p>
         </div>
