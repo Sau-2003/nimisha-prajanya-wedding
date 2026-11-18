@@ -262,6 +262,7 @@ export default function EventWorkspacePage() {
 
     if (!targetCategory || !plainTextContent || isUploading) return;
     
+    const now = new Date().toISOString();
     const payload = {
       content: newItemText.trim(),
       dueDate: newItemDate || null, 
@@ -270,8 +271,9 @@ export default function EventWorkspacePage() {
       is_pinned: false,
       is_private: false, 
       allowed_users: [], 
-      created_at: new Date().toISOString() 
-    } as any; 
+      created_at: now,
+      updated_at: now
+    } as any;
 
     await addItem(targetCategory as CategoryId, payload);
 
@@ -297,16 +299,16 @@ export default function EventWorkspacePage() {
 
     if (!targetItem || currentItem.is_pinned !== targetItem.is_pinned) return;
 
-    const currentCreatedAt = new Date(currentItem.created_at || currentItem.createdAt).getTime();
-    let targetCreatedAt = new Date(targetItem.created_at || targetItem.createdAt).getTime();
+    const currentUpdatedAt = new Date(currentItem.updated_at || currentItem.updatedAt || currentItem.created_at || currentItem.createdAt).getTime();
+    let targetUpdatedAt = new Date(targetItem.updated_at || targetItem.updatedAt || targetItem.created_at || targetItem.createdAt).getTime();
 
-    if (currentCreatedAt === targetCreatedAt) {
-      targetCreatedAt += (direction === 'up' ? 1 : -1);
+    if (currentUpdatedAt === targetUpdatedAt) {
+      targetUpdatedAt += (direction === 'up' ? 1 : -1);
     }
 
     await Promise.all([
-      updateItem(currentItem.id, { created_at: new Date(targetCreatedAt).toISOString() } as any),
-      updateItem(targetItem.id, { created_at: new Date(currentCreatedAt).toISOString() } as any)
+      updateItem(currentItem.id, { updated_at: new Date(targetUpdatedAt).toISOString() } as any),
+      updateItem(targetItem.id, { updated_at: new Date(currentUpdatedAt).toISOString() } as any)
     ]);
   };
 
@@ -362,7 +364,8 @@ export default function EventWorkspacePage() {
       mediaAttachments: editingMediaList,
       imageUrl: null,
       mediaType: null,
-      imageCaption: null 
+      imageCaption: null,
+      updated_at: new Date().toISOString()
     } as any; 
 
     await updateItem(itemId, payload);
@@ -623,7 +626,9 @@ export default function EventWorkspacePage() {
     const sortedList = [...visibleList].sort((a: any, b: any) => {
       if (a.is_pinned && !b.is_pinned) return -1;
       if (!a.is_pinned && b.is_pinned) return 1;
-      return new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime();
+      const timeA = new Date(a.updated_at || a.updatedAt || a.created_at || a.createdAt || 0).getTime();
+      const timeB = new Date(b.updated_at || b.updatedAt || b.created_at || b.createdAt || 0).getTime();
+      return timeB - timeA;
     });
 
     const preview = sortedList.slice(0, 2);
@@ -1365,7 +1370,9 @@ export default function EventWorkspacePage() {
                 .sort((a: any, b: any) => {
                   if (a.is_pinned && !b.is_pinned) return -1;
                   if (!a.is_pinned && b.is_pinned) return 1;
-                  return new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime();
+                  const timeA = new Date(a.updated_at || a.updatedAt || a.created_at || a.createdAt || 0).getTime();
+                  const timeB = new Date(b.updated_at || b.updatedAt || b.created_at || b.createdAt || 0).getTime();
+                  return timeB - timeA;
                 });
 
               return (
@@ -1491,9 +1498,9 @@ export default function EventWorkspacePage() {
                             <>
                               <div className="flex-1 min-w-0">
                                 <div className="flex flex-col mb-1.5">
-                                  <span className="text-[10px] text-slate-400 font-bold tracking-widest uppercase flex items-center gap-1.5">
+                                  <span className="text-[7px] text-slate-400 font-bold tracking-widest uppercase flex items-center gap-1.5">
                                     {item.is_pinned && <Pin className="w-3 h-3 text-emerald-500 fill-emerald-500 inline-block -mt-0.5" />}
-                                    {item.created_at ? formatDate(item.created_at) : formatDate(new Date().toISOString())}
+                                    Updated On {formatDate((item as any).updated_at || (item as any).updatedAt || item.created_at || (item as any).createdAt || new Date().toISOString())}
                                   </span>
                                   {item.is_private && (
                                     <div className="mt-1">

@@ -18,9 +18,10 @@ export type WorkspaceItem = {
   imageCaption?: string | null;
   mediaAttachments?: MediaItem[];
   created_at: string;
+  updated_at: string;
   is_private?: boolean;       
   allowed_users?: string[];
-  is_pinned?: boolean; // <-- Added is_pinned type
+  is_pinned?: boolean;
 };
 
 type GroupedItems = Record<CategoryId, WorkspaceItem[]>;
@@ -37,7 +38,8 @@ export function useEventItems(eventName: string) {
     const { data, error } = await supabase
       .from('event_items')
       .select('*')
-      .eq('event_name', eventName);
+      .eq('event_name', eventName)
+      .order('updated_at', { ascending: false, nullsFirst: false });
 
     if (error) {
       console.error("Error fetching items:", error);
@@ -62,9 +64,10 @@ export function useEventItems(eventName: string) {
           imageCaption: row.image_caption || undefined,
           mediaAttachments: row.media_attachments || [],
           created_at: row.created_at || "",
+          updated_at: row.updated_at || row.created_at || "",
           is_private: row.is_private || false,
           allowed_users: row.allowed_users || [],
-          is_pinned: row.is_pinned || false, // <-- Map from database
+          is_pinned: row.is_pinned || false,
         });
       }
     });
@@ -76,6 +79,7 @@ export function useEventItems(eventName: string) {
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
   const addItem = async (category: CategoryId, payload: Omit<WorkspaceItem, "id">) => {
+    const now = new Date().toISOString();
     const { error } = await supabase
       .from("event_items")
       .insert([
@@ -90,7 +94,9 @@ export function useEventItems(eventName: string) {
           media_attachments: payload.mediaAttachments || [],
           is_private: payload.is_private || false,
           allowed_users: payload.allowed_users || [],
-          is_pinned: payload.is_pinned || false, // <-- Insert into database
+          is_pinned: payload.is_pinned || false,
+          created_at: payload.created_at || now,
+          updated_at: payload.updated_at || now,
         },
       ]);
 
@@ -112,10 +118,14 @@ export function useEventItems(eventName: string) {
     if (updates.imageCaption !== undefined) dbUpdates.image_caption = updates.imageCaption; 
     if (updates.mediaAttachments !== undefined) dbUpdates.media_attachments = updates.mediaAttachments;
     if (updates.is_private !== undefined) dbUpdates.is_private = updates.is_private;       
-    if (updates.is_pinned !== undefined) dbUpdates.is_pinned = updates.is_pinned; // <-- Handle patch updates
+    if (updates.is_pinned !== undefined) dbUpdates.is_pinned = updates.is_pinned;
     if (updates.created_at !== undefined) dbUpdates.created_at = updates.created_at;
-    if (updates.allowed_users !== undefined) {dbUpdates.allowed_users = updates.allowed_users; 
-    }
+    if (updates.allowed_users !== undefined) dbUpdates.allowed_users = updates.allowed_users;
+
+    // Preserve explicit updated_at (used during arrow reordering), otherwise bump to now
+    dbUpdates.updated_at = updates.updated_at !== undefined 
+      ? updates.updated_at 
+      : new Date().toISOString();
 
     const { error } = await supabase
       .from('event_items')
@@ -131,7 +141,13 @@ export function useEventItems(eventName: string) {
   };
 
   const moveItem = async (id: string, newCategory: CategoryId) => {
-    await supabase.from('event_items').update({ category: newCategory }).eq('id', id);
+    await supabase
+      .from('event_items')
+      .update({ 
+        category: newCategory, 
+        updated_at: new Date().toISOString() 
+      })
+      .eq('id', id);
     await fetchItems();
   };
 
