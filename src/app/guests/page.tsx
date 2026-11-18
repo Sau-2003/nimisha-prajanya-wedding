@@ -285,7 +285,7 @@ export default function GuestsPage() {
               variant="outline"
               className="bg-emerald-700 hover:bg-emerald-800 text-white hover:text-white flex items-center justify-center gap-1.5 sm:gap-2 w-full whitespace-nowrap px-2.5 sm:px-4 text-xs sm:text-sm"
             >
-              <FileSpreadsheet className="w-4 h-4 shrink-0" /> Full Sheet
+              <FileSpreadsheet className="w-4 h-4 shrink-0" /> Full List
             </Button>
           </a>
           <a 
